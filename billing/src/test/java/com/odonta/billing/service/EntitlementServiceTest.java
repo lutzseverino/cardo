@@ -2,9 +2,11 @@ package com.odonta.billing.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.odonta.billing.mapper.EntitlementMapperImpl;
+import com.odonta.billing.model.Entitlement;
 import com.odonta.billing.model.EntitlementProjection;
 import com.odonta.billing.model.EntitlementStatus;
 import com.odonta.billing.repository.EntitlementRepository;
@@ -14,6 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -42,6 +45,26 @@ class EntitlementServiceTest {
     assertThatThrownBy(() -> service.require(subjectId, "clinic"))
         .isInstanceOf(ApiException.class)
         .hasMessage("Entitlement is not active.");
+  }
+
+  @Test
+  void activatesEntitlement() {
+    UUID subjectId = UUID.randomUUID();
+    OffsetDateTime currentPeriodEndsAt = OffsetDateTime.now().plusMonths(1);
+    EntitlementService service = new EntitlementService(new EntitlementMapperImpl(), entitlements);
+    when(entitlements.findBySubjectIdAndProduct(subjectId, "clinic")).thenReturn(Optional.empty());
+
+    service.activate(subjectId, "clinic", 1, 5, currentPeriodEndsAt);
+
+    ArgumentCaptor<Entitlement> captor = ArgumentCaptor.forClass(Entitlement.class);
+    verify(entitlements).save(captor.capture());
+    Entitlement entitlement = captor.getValue();
+    assertThat(entitlement.getSubjectId()).isEqualTo(subjectId);
+    assertThat(entitlement.getProduct()).isEqualTo("clinic");
+    assertThat(entitlement.getStatus()).isEqualTo(EntitlementStatus.ACTIVE);
+    assertThat(entitlement.getTenantLimit()).isEqualTo(1);
+    assertThat(entitlement.getSeatLimit()).isEqualTo(5);
+    assertThat(entitlement.getCurrentPeriodEndsAt()).isEqualTo(currentPeriodEndsAt);
   }
 
   private EntitlementProjection entitlement(UUID subjectId, EntitlementStatus status) {

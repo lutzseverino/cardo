@@ -60,4 +60,11 @@ public class Entitlement {
 
   @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
   private OffsetDateTime updatedAt;
+
+  public static Entitlement create(UUID subjectId, String product) {
+    Entitlement entitlement = new Entitlement();
+    entitlement.subjectId = subjectId;
+    entitlement.product = product;
+    return entitlement;
+  }
 }

@@ -44,6 +44,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(basePath + "/billing")
                     .permitAll()
+                    .requestMatchers(basePath + "/billing/webhooks/stripe")
+                    .permitAll()
                     .anyRequest()
                     .authenticated())
         .oauth2ResourceServer(

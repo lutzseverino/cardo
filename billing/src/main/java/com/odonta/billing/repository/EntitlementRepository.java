@@ -10,4 +10,6 @@ public interface EntitlementRepository extends JpaRepository<Entitlement, UUID> 
 
   Optional<EntitlementProjection> findProjectedBySubjectIdAndProduct(
       UUID subjectId, String product);
+
+  Optional<Entitlement> findBySubjectIdAndProduct(UUID subjectId, String product);
 }

@@ -1,12 +1,16 @@
 package com.odonta.billing.service;
 
 import com.odonta.billing.mapper.EntitlementMapper;
+import com.odonta.billing.model.Entitlement;
 import com.odonta.billing.model.EntitlementProjection;
 import com.odonta.billing.model.EntitlementResponse;
+import com.odonta.billing.model.EntitlementStatus;
 import com.odonta.billing.repository.EntitlementRepository;
 import com.odonta.common.api.ApiException;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EntitlementService {
@@ -29,6 +33,24 @@ public class EntitlementService {
       throw ApiException.forbidden("entitlement_inactive", "Entitlement is not active.");
     }
     return mapper.toResponse(entitlement);
+  }
+
+  @Transactional
+  public void activate(
+      UUID subjectId,
+      String product,
+      Integer tenantLimit,
+      Integer seatLimit,
+      OffsetDateTime currentPeriodEndsAt) {
+    Entitlement entitlement =
+        entitlements
+            .findBySubjectIdAndProduct(subjectId, product)
+            .orElseGet(() -> Entitlement.create(subjectId, product));
+    entitlement.setStatus(EntitlementStatus.ACTIVE);
+    entitlement.setTenantLimit(tenantLimit);
+    entitlement.setSeatLimit(seatLimit);
+    entitlement.setCurrentPeriodEndsAt(currentPeriodEndsAt);
+    entitlements.save(entitlement);
   }
 
   private EntitlementProjection projection(UUID subjectId, String product) {
