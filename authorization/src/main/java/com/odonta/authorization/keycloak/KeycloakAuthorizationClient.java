@@ -1,0 +1,229 @@
+package com.odonta.authorization.keycloak;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.odonta.authorization.AuthorizationAdminClient;
+import com.odonta.authorization.grant.AuthorityGrant;
+import com.odonta.authorization.grant.GrantedResourceAction;
+import com.odonta.authorization.grant.ResourceActionGrant;
+import com.odonta.authorization.grant.ResourceGrantQuery;
+import com.odonta.authorization.resource.AuthorizationResource;
+import com.odonta.authorization.resource.CreatedAuthorizationResource;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+
+public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
+
+  private final String realm;
+  private final KeycloakRealmAdminClient admin;
+  private final RestClient rest;
+  private final Supplier<String> protectionApiToken;
+
+  public KeycloakAuthorizationClient(
+      String baseUrl, String realm, RestClient.Builder rest, Supplier<String> protectionApiToken) {
+    this.realm = realm;
+    this.admin = new KeycloakRealmAdminClient(baseUrl, realm, rest, protectionApiToken);
+    this.rest = rest.baseUrl(baseUrl).build();
+    this.protectionApiToken = protectionApiToken;
+  }
+
+  @Override
+  public CreatedAuthorizationResource createResource(AuthorizationResource authorizationResource) {
+    ResourceSetResponse resource =
+        rest.post()
+            .uri("/realms/{realm}/authz/protection/resource_set", realm)
+            .header(HttpHeaders.AUTHORIZATION, authorization())
+            .body(
+                new ResourceSetCreateRequest(
+                    authorizationResource.name(),
+                    authorizationResource.type(),
+                    authorizationResource.ownerSubject(),
+                    authorizationResource.actions()))
+            .retrieve()
+            .body(ResourceSetResponse.class);
+    if (resource == null || resource.id() == null) {
+      throw new KeycloakAuthorizationException(
+          "Keycloak did not return an authorization resource.");
+    }
+    return new CreatedAuthorizationResource(resource.id(), resource.name());
+  }
+
+  @Override
+  public Optional<CreatedAuthorizationResource> findResourceByName(
+      String resourceServerClientId, String resourceName) {
+    ResourceSetResponse[] resources =
+        rest.get()
+            .uri(
+                uri ->
+                    uri.path("/realms/{realm}/authz/protection/resource_set")
+                        .queryParam("name", resourceName)
+                        .build(realm))
+            .header(HttpHeaders.AUTHORIZATION, authorization())
+            .retrieve()
+            .body(ResourceSetResponse[].class);
+    if (resources == null) {
+      return Optional.empty();
+    }
+    return Arrays.stream(resources)
+        .filter(resource -> resourceName.equals(resource.name()))
+        .findFirst()
+        .map(resource -> new CreatedAuthorizationResource(resource.id(), resource.name()));
+  }
+
+  @Override
+  public void grantResourceActions(ResourceActionGrant grant) {
+    grant
+        .actions()
+        .forEach(
+            action ->
+                rest.post()
+                    .uri("/realms/{realm}/authz/protection/permission/ticket", realm)
+                    .header(HttpHeaders.AUTHORIZATION, authorization())
+                    .body(
+                        new PermissionTicketCreateRequest(
+                            grant.resourceId(), grant.requesterSubject(), action))
+                    .retrieve()
+                    .toBodilessEntity());
+  }
+
+  @Override
+  public List<GrantedResourceAction> findResourceActionGrants(ResourceGrantQuery query) {
+    PermissionTicketRepresentation[] tickets =
+        rest.get()
+            .uri(
+                uri -> {
+                  var builder =
+                      uri.path("/realms/{realm}/authz/protection/permission/ticket")
+                          .queryParam("returnNames", true);
+                  if (query.resourceId() != null) {
+                    builder.queryParam("resourceId", query.resourceId());
+                  }
+                  if (query.requesterSubject() != null) {
+                    builder.queryParam("requester", query.requesterSubject());
+                  }
+                  if (query.granted() != null) {
+                    builder.queryParam("granted", query.granted());
+                  }
+                  return builder.build(realm);
+                })
+            .header(HttpHeaders.AUTHORIZATION, authorization())
+            .retrieve()
+            .body(PermissionTicketRepresentation[].class);
+    if (tickets == null) {
+      return List.of();
+    }
+    return Arrays.stream(tickets).map(this::toGrantedResourceAction).toList();
+  }
+
+  @Override
+  public void revokeResourceActionGrant(String ticketId) {
+    rest.delete()
+        .uri("/realms/{realm}/authz/protection/permission/ticket/{ticketId}", realm, ticketId)
+        .header(HttpHeaders.AUTHORIZATION, authorization())
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  @Override
+  public void ensureClientRolesAssigned(AuthorityGrant grant) {
+    String clientUuid = clientUuid(grant.resourceServerClientId());
+    List<RoleRepresentation> roles =
+        grant.authorities().stream().map(roleName -> role(clientUuid, roleName)).toList();
+    rest.post()
+        .uri(
+            "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUuid}",
+            realm,
+            grant.requesterSubject(),
+            clientUuid)
+        .header(HttpHeaders.AUTHORIZATION, authorization())
+        .body(roles)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  private RoleRepresentation role(String clientUuid, String roleName) {
+    try {
+      return rest.get()
+          .uri(
+              "/admin/realms/{realm}/clients/{clientUuid}/roles/{roleName}",
+              realm,
+              clientUuid,
+              roleName)
+          .header(HttpHeaders.AUTHORIZATION, authorization())
+          .retrieve()
+          .body(RoleRepresentation.class);
+    } catch (RestClientResponseException exception) {
+      if (exception.getStatusCode().value() == 404) {
+        createRole(clientUuid, roleName);
+        return role(clientUuid, roleName);
+      }
+      throw exception;
+    }
+  }
+
+  private void createRole(String clientUuid, String roleName) {
+    rest.post()
+        .uri("/admin/realms/{realm}/clients/{clientUuid}/roles", realm, clientUuid)
+        .header(HttpHeaders.AUTHORIZATION, authorization())
+        .body(new RoleCreateRequest(roleName))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  private GrantedResourceAction toGrantedResourceAction(PermissionTicketRepresentation ticket) {
+    return new GrantedResourceAction(
+        ticket.id(),
+        ticket.resource(),
+        ticket.resourceName(),
+        ticket.requester(),
+        ticket.scopeName(),
+        Boolean.TRUE.equals(ticket.granted()));
+  }
+
+  private String clientUuid(String clientId) {
+    return admin.clientUuid(clientId);
+  }
+
+  private String authorization() {
+    return bearer(protectionApiToken.get());
+  }
+
+  private String bearer(String token) {
+    return "Bearer " + token;
+  }
+
+  private record RoleRepresentation(String id, String name) {}
+
+  private record RoleCreateRequest(String name) {}
+
+  private record PermissionTicketCreateRequest(
+      String resource, String requester, String scopeName) {
+
+    @JsonProperty("granted")
+    public boolean granted() {
+      return true;
+    }
+  }
+
+  private record PermissionTicketRepresentation(
+      String id,
+      String resource,
+      String resourceName,
+      String requester,
+      Boolean granted,
+      String scopeName) {}
+
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  private record ResourceSetCreateRequest(
+      String name,
+      String type,
+      String owner,
+      @JsonProperty("resource_scopes") List<String> resourceScopes) {}
+
+  private record ResourceSetResponse(@JsonProperty("_id") String id, String name) {}
+}
