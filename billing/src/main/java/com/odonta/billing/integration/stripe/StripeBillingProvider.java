@@ -23,10 +23,11 @@ public class StripeBillingProvider implements BillingProvider {
   static final String PROVIDER = "stripe";
 
   private final CustomerService customers;
-  private final StripePriceCatalog prices;
+  private final StripeCheckoutCatalog prices;
   private final StripeClient stripe;
 
-  StripeBillingProvider(CustomerService customers, StripePriceCatalog prices, StripeClient stripe) {
+  StripeBillingProvider(
+      CustomerService customers, StripeCheckoutCatalog prices, StripeClient stripe) {
     this.customers = customers;
     this.prices = prices;
     this.stripe = stripe;
@@ -36,7 +37,7 @@ public class StripeBillingProvider implements BillingProvider {
   public BillingSessionResult createCheckoutSession(
       UUID subjectId, CheckoutSessionCommand command) {
     Customer customer = customers.getOrCreate(subjectId, PROVIDER, () -> createCustomer(subjectId));
-    StripeProperties.Price price = prices.findByProduct(command.product());
+    StripeProperties.CheckoutPrice price = prices.findByProduct(command.product());
 
     try {
       Session session =

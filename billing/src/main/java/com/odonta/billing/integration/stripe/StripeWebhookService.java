@@ -2,7 +2,7 @@ package com.odonta.billing.integration.stripe;
 
 import com.odonta.billing.config.StripeProperties;
 import com.odonta.billing.model.Customer;
-import com.odonta.billing.model.EntitlementStatus;
+import com.odonta.billing.model.EntitlementSyncItem;
 import com.odonta.billing.model.ProviderEvent;
 import com.odonta.billing.repository.ProviderEventRepository;
 import com.odonta.billing.service.CustomerService;
@@ -10,15 +10,14 @@ import com.odonta.billing.service.EntitlementService;
 import com.odonta.common.api.ApiException;
 import com.stripe.StripeClient;
 import com.stripe.exception.SignatureVerificationException;
+import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
-import com.stripe.model.Price;
 import com.stripe.model.StripeObject;
-import com.stripe.model.Subscription;
-import com.stripe.model.checkout.Session;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.UUID;
+import com.stripe.model.entitlements.ActiveEntitlement;
+import com.stripe.model.entitlements.ActiveEntitlementSummary;
+import com.stripe.param.entitlements.ActiveEntitlementListParams;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -29,7 +28,6 @@ public class StripeWebhookService {
   private final CustomerService customers;
   private final EntitlementService entitlements;
   private final ProviderEventRepository events;
-  private final StripePriceCatalog prices;
   private final StripeProperties properties;
   private final StripeClient stripe;
 
@@ -37,13 +35,11 @@ public class StripeWebhookService {
       CustomerService customers,
       EntitlementService entitlements,
       ProviderEventRepository events,
-      StripePriceCatalog prices,
       StripeProperties properties,
       StripeClient stripe) {
     this.customers = customers;
     this.entitlements = entitlements;
     this.events = events;
-    this.prices = prices;
     this.properties = properties;
     this.stripe = stripe;
   }
@@ -70,77 +66,72 @@ public class StripeWebhookService {
 
   private void handleEvent(Event event) {
     switch (event.getType()) {
-      case "checkout.session.completed" -> handleCheckoutSessionCompleted(event);
-      case "customer.subscription.created",
-          "customer.subscription.updated",
-          "customer.subscription.deleted" ->
-          handleSubscriptionChanged(event);
+      case "entitlements.active_entitlement_summary.updated" ->
+          handleActiveEntitlementSummaryUpdated(event);
       default -> {}
     }
   }
 
-  private void handleCheckoutSessionCompleted(Event event) {
-    Session session = object(event, Session.class);
-    String subjectId = session.getMetadata().get("subject_id");
-    String product = session.getMetadata().get("product");
-    if (!StringUtils.hasText(subjectId) || !StringUtils.hasText(product)) {
+  private void handleActiveEntitlementSummaryUpdated(Event event) {
+    ActiveEntitlementSummary summary = object(event, ActiveEntitlementSummary.class);
+    if (!StringUtils.hasText(summary.getCustomer())) {
       throw invalidEvent();
     }
-    var price = prices.findByProduct(product);
-    entitlements.sync(
-        UUID.fromString(subjectId),
-        price.product(),
-        EntitlementStatus.ACTIVE,
-        price.tenantLimit(),
-        price.seatLimit(),
-        null,
-        null);
+    syncActiveEntitlements(summary.getCustomer());
   }
 
-  private void handleSubscriptionChanged(Event event) {
-    Subscription subscription = object(event, Subscription.class);
-    if (!StringUtils.hasText(subscription.getCustomer())) {
-      throw invalidEvent();
-    }
+  private void syncActiveEntitlements(String providerCustomerId) {
     Customer customer =
-        customers.getByProviderCustomerId(
-            StripeBillingProvider.PROVIDER, subscription.getCustomer());
-    var price = prices.findById(priceId(subscription));
-    entitlements.sync(
-        customer.getSubjectId(),
-        price.product(),
-        status(subscription.getStatus()),
-        price.tenantLimit(),
-        price.seatLimit(),
-        instant(subscription.getTrialEnd()),
-        null);
+        customers.getByProviderCustomerId(StripeBillingProvider.PROVIDER, providerCustomerId);
+    entitlements.replaceActive(customer.getSubjectId(), activeEntitlements(providerCustomerId));
   }
 
-  private String priceId(Subscription subscription) {
-    if (subscription.getItems() == null || subscription.getItems().getData().isEmpty()) {
-      throw invalidEvent();
+  private List<EntitlementSyncItem> activeEntitlements(String providerCustomerId) {
+    try {
+      Iterable<ActiveEntitlement> entitlements =
+          stripe
+              .v1()
+              .entitlements()
+              .activeEntitlements()
+              .list(
+                  ActiveEntitlementListParams.builder()
+                      .setCustomer(providerCustomerId)
+                      .addExpand("data.feature")
+                      .build())
+              .autoPagingIterable();
+      List<EntitlementSyncItem> items = new ArrayList<>();
+      for (ActiveEntitlement entitlement : entitlements) {
+        if (StringUtils.hasText(entitlement.getLookupKey())) {
+          items.add(item(entitlement));
+        }
+      }
+      return items;
+    } catch (StripeException exception) {
+      throw ApiException.of(
+          502, "billing_entitlements_sync_failed", "Entitlements could not be synchronized.");
     }
-    Price price = subscription.getItems().getData().getFirst().getPrice();
-    if (price == null || !StringUtils.hasText(price.getId())) {
-      throw invalidEvent();
-    }
-    return price.getId();
   }
 
-  private EntitlementStatus status(String status) {
-    return switch (status) {
-      case "active" -> EntitlementStatus.ACTIVE;
-      case "trialing" -> EntitlementStatus.TRIALING;
-      case "past_due", "unpaid", "incomplete" -> EntitlementStatus.PAST_DUE;
-      default -> EntitlementStatus.CANCELED;
-    };
+  private EntitlementSyncItem item(ActiveEntitlement entitlement) {
+    var metadata =
+        entitlement.getFeatureObject() == null
+            ? null
+            : entitlement.getFeatureObject().getMetadata();
+    return new EntitlementSyncItem(
+        entitlement.getLookupKey(),
+        integer(metadata == null ? null : metadata.get("tenant_limit")),
+        integer(metadata == null ? null : metadata.get("seat_limit")));
   }
 
-  private OffsetDateTime instant(Long epochSecond) {
-    if (epochSecond == null) {
+  private Integer integer(String value) {
+    if (!StringUtils.hasText(value)) {
       return null;
     }
-    return OffsetDateTime.ofInstant(Instant.ofEpochSecond(epochSecond), ZoneOffset.UTC);
+    try {
+      return Integer.valueOf(value);
+    } catch (NumberFormatException exception) {
+      throw invalidEvent();
+    }
   }
 
   private <T extends StripeObject> T object(Event event, Class<T> type) {

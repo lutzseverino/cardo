@@ -22,11 +22,9 @@ odonta:
     stripe:
       secret-key: ${STRIPE_SECRET_KEY:}
       webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
-      prices:
+      checkout-prices:
         - id: ${STRIPE_CLINIC_PRICE_ID:}
           product: clinic
-          tenant-limit: ${STRIPE_CLINIC_TENANT_LIMIT:1}
-          seat-limit: ${STRIPE_CLINIC_SEAT_LIMIT:5}
 
 server:
   port: ${BILLING_PORT:8085}

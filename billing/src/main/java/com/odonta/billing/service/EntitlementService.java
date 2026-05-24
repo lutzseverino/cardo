@@ -5,9 +5,12 @@ import com.odonta.billing.model.Entitlement;
 import com.odonta.billing.model.EntitlementProjection;
 import com.odonta.billing.model.EntitlementResponse;
 import com.odonta.billing.model.EntitlementStatus;
+import com.odonta.billing.model.EntitlementSyncItem;
 import com.odonta.billing.repository.EntitlementRepository;
 import com.odonta.common.api.ApiException;
-import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,24 +39,40 @@ public class EntitlementService {
   }
 
   @Transactional
-  public void sync(
-      UUID subjectId,
-      String product,
-      EntitlementStatus status,
-      Integer tenantLimit,
-      Integer seatLimit,
-      OffsetDateTime trialEndsAt,
-      OffsetDateTime currentPeriodEndsAt) {
-    Entitlement entitlement =
-        entitlements
-            .findBySubjectIdAndProduct(subjectId, product)
-            .orElseGet(() -> Entitlement.create(subjectId, product));
-    entitlement.setStatus(status);
-    entitlement.setTenantLimit(tenantLimit);
-    entitlement.setSeatLimit(seatLimit);
-    entitlement.setTrialEndsAt(trialEndsAt);
-    entitlement.setCurrentPeriodEndsAt(currentPeriodEndsAt);
-    entitlements.save(entitlement);
+  public void replaceActive(UUID subjectId, Collection<EntitlementSyncItem> activeItems) {
+    Map<String, EntitlementSyncItem> activeByProduct = activeByProduct(activeItems);
+
+    for (Entitlement entitlement : entitlements.findBySubjectId(subjectId)) {
+      EntitlementSyncItem active = activeByProduct.remove(entitlement.getProduct());
+      if (active == null) {
+        entitlement.setStatus(EntitlementStatus.CANCELED);
+      } else {
+        syncActive(entitlement, active);
+      }
+    }
+
+    for (EntitlementSyncItem active : activeByProduct.values()) {
+      Entitlement entitlement = Entitlement.create(subjectId, active.product());
+      syncActive(entitlement, active);
+      entitlements.save(entitlement);
+    }
+  }
+
+  private Map<String, EntitlementSyncItem> activeByProduct(
+      Collection<EntitlementSyncItem> activeItems) {
+    Map<String, EntitlementSyncItem> activeByProduct = new LinkedHashMap<>();
+    for (EntitlementSyncItem active : activeItems) {
+      activeByProduct.put(active.product(), active);
+    }
+    return activeByProduct;
+  }
+
+  private void syncActive(Entitlement entitlement, EntitlementSyncItem active) {
+    entitlement.setStatus(EntitlementStatus.ACTIVE);
+    entitlement.setTenantLimit(active.tenantLimit());
+    entitlement.setSeatLimit(active.seatLimit());
+    entitlement.setTrialEndsAt(null);
+    entitlement.setCurrentPeriodEndsAt(null);
   }
 
   private EntitlementProjection projection(UUID subjectId, String product) {

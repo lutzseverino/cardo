@@ -9,9 +9,11 @@ import com.odonta.billing.mapper.EntitlementMapperImpl;
 import com.odonta.billing.model.Entitlement;
 import com.odonta.billing.model.EntitlementProjection;
 import com.odonta.billing.model.EntitlementStatus;
+import com.odonta.billing.model.EntitlementSyncItem;
 import com.odonta.billing.repository.EntitlementRepository;
 import com.odonta.common.api.ApiException;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -48,13 +50,12 @@ class EntitlementServiceTest {
   }
 
   @Test
-  void syncsEntitlement() {
+  void replacesActiveEntitlements() {
     UUID subjectId = UUID.randomUUID();
-    OffsetDateTime currentPeriodEndsAt = OffsetDateTime.now().plusMonths(1);
     EntitlementService service = new EntitlementService(new EntitlementMapperImpl(), entitlements);
-    when(entitlements.findBySubjectIdAndProduct(subjectId, "clinic")).thenReturn(Optional.empty());
+    when(entitlements.findBySubjectId(subjectId)).thenReturn(List.of());
 
-    service.sync(subjectId, "clinic", EntitlementStatus.ACTIVE, 1, 5, null, currentPeriodEndsAt);
+    service.replaceActive(subjectId, List.of(new EntitlementSyncItem("clinic", 1, 5)));
 
     ArgumentCaptor<Entitlement> captor = ArgumentCaptor.forClass(Entitlement.class);
     verify(entitlements).save(captor.capture());
@@ -64,7 +65,6 @@ class EntitlementServiceTest {
     assertThat(entitlement.getStatus()).isEqualTo(EntitlementStatus.ACTIVE);
     assertThat(entitlement.getTenantLimit()).isEqualTo(1);
     assertThat(entitlement.getSeatLimit()).isEqualTo(5);
-    assertThat(entitlement.getCurrentPeriodEndsAt()).isEqualTo(currentPeriodEndsAt);
   }
 
   private EntitlementProjection entitlement(UUID subjectId, EntitlementStatus status) {
