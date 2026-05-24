@@ -1,4 +1,4 @@
-package com.odonta.billing.service;
+package com.odonta.billing.integration.stripe;
 
 import com.odonta.billing.config.StripeProperties;
 import com.odonta.common.api.ApiException;
@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
-public class StripePriceCatalog {
+class StripePriceCatalog {
 
   private final List<StripeProperties.Price> prices;
 
@@ -19,6 +19,17 @@ public class StripePriceCatalog {
     return prices.stream()
         .filter(price -> product.equals(price.product()))
         .filter(price -> StringUtils.hasText(price.id()))
+        .findFirst()
+        .orElseThrow(
+            () ->
+                ApiException.badRequest(
+                    "billing_price_not_configured",
+                    "No billing price is configured for this product."));
+  }
+
+  StripeProperties.Price findById(String priceId) {
+    return prices.stream()
+        .filter(price -> priceId.equals(price.id()))
         .findFirst()
         .orElseThrow(
             () ->

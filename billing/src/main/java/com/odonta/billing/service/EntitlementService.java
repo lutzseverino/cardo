@@ -36,19 +36,22 @@ public class EntitlementService {
   }
 
   @Transactional
-  public void activate(
+  public void sync(
       UUID subjectId,
       String product,
+      EntitlementStatus status,
       Integer tenantLimit,
       Integer seatLimit,
+      OffsetDateTime trialEndsAt,
       OffsetDateTime currentPeriodEndsAt) {
     Entitlement entitlement =
         entitlements
             .findBySubjectIdAndProduct(subjectId, product)
             .orElseGet(() -> Entitlement.create(subjectId, product));
-    entitlement.setStatus(EntitlementStatus.ACTIVE);
+    entitlement.setStatus(status);
     entitlement.setTenantLimit(tenantLimit);
     entitlement.setSeatLimit(seatLimit);
+    entitlement.setTrialEndsAt(trialEndsAt);
     entitlement.setCurrentPeriodEndsAt(currentPeriodEndsAt);
     entitlements.save(entitlement);
   }

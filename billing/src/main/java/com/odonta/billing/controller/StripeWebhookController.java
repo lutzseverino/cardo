@@ -1,6 +1,6 @@
 package com.odonta.billing.controller;
 
-import com.odonta.billing.service.StripeWebhookService;
+import com.odonta.billing.integration.stripe.StripeWebhookService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

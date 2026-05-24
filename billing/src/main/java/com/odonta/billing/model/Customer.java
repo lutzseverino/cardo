@@ -18,8 +18,12 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "billing_customers",
     uniqueConstraints = {
-      @UniqueConstraint(name = "uq_billing_customers_subject", columnNames = "subject_id"),
-      @UniqueConstraint(name = "uq_billing_customers_stripe", columnNames = "stripe_customer_id")
+      @UniqueConstraint(
+          name = "uq_billing_customers_subject_provider",
+          columnNames = {"subject_id", "provider"}),
+      @UniqueConstraint(
+          name = "uq_billing_customers_provider_customer",
+          columnNames = {"provider", "provider_customer_id"})
     })
 public class Customer {
 
@@ -28,8 +32,11 @@ public class Customer {
   @Column(name = "subject_id", nullable = false)
   private UUID subjectId;
 
-  @Column(name = "stripe_customer_id", nullable = false)
-  private String stripeCustomerId;
+  @Column(nullable = false)
+  private String provider;
+
+  @Column(name = "provider_customer_id", nullable = false)
+  private String providerCustomerId;
 
   @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
   private OffsetDateTime createdAt;
@@ -37,10 +44,11 @@ public class Customer {
   @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
   private OffsetDateTime updatedAt;
 
-  public static Customer create(UUID subjectId, String stripeCustomerId) {
+  public static Customer create(UUID subjectId, String provider, String providerCustomerId) {
     Customer customer = new Customer();
     customer.subjectId = subjectId;
-    customer.stripeCustomerId = stripeCustomerId;
+    customer.provider = provider;
+    customer.providerCustomerId = providerCustomerId;
     return customer;
   }
 }

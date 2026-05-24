@@ -48,13 +48,13 @@ class EntitlementServiceTest {
   }
 
   @Test
-  void activatesEntitlement() {
+  void syncsEntitlement() {
     UUID subjectId = UUID.randomUUID();
     OffsetDateTime currentPeriodEndsAt = OffsetDateTime.now().plusMonths(1);
     EntitlementService service = new EntitlementService(new EntitlementMapperImpl(), entitlements);
     when(entitlements.findBySubjectIdAndProduct(subjectId, "clinic")).thenReturn(Optional.empty());
 
-    service.activate(subjectId, "clinic", 1, 5, currentPeriodEndsAt);
+    service.sync(subjectId, "clinic", EntitlementStatus.ACTIVE, 1, 5, null, currentPeriodEndsAt);
 
     ArgumentCaptor<Entitlement> captor = ArgumentCaptor.forClass(Entitlement.class);
     verify(entitlements).save(captor.capture());

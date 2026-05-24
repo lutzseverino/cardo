@@ -1,4 +1,4 @@
-package com.odonta.billing.service;
+package com.odonta.billing.integration.stripe;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,6 +24,20 @@ class StripePriceCatalogTest {
     assertThat(price.id()).isEqualTo("price_clinic");
     assertThat(price.tenantLimit()).isEqualTo(1);
     assertThat(price.seatLimit()).isEqualTo(5);
+  }
+
+  @Test
+  void findsConfiguredPriceId() {
+    StripePriceCatalog catalog =
+        new StripePriceCatalog(
+            new StripeProperties(
+                "sk_test_123",
+                "whsec_123",
+                List.of(new StripeProperties.Price("price_clinic", "clinic", 1, 5))));
+
+    StripeProperties.Price price = catalog.findById("price_clinic");
+
+    assertThat(price.product()).isEqualTo("clinic");
   }
 
   @Test
