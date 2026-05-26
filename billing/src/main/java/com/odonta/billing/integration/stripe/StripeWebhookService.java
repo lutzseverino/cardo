@@ -18,11 +18,13 @@ import com.stripe.model.entitlements.ActiveEntitlementSummary;
 import com.stripe.param.entitlements.ActiveEntitlementListParams;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
+@RequiredArgsConstructor
 public class StripeWebhookService {
 
   private final CustomerService customers;
@@ -30,19 +32,6 @@ public class StripeWebhookService {
   private final ProviderEventRepository events;
   private final StripeProperties properties;
   private final StripeClient stripe;
-
-  StripeWebhookService(
-      CustomerService customers,
-      EntitlementService entitlements,
-      ProviderEventRepository events,
-      StripeProperties properties,
-      StripeClient stripe) {
-    this.customers = customers;
-    this.entitlements = entitlements;
-    this.events = events;
-    this.properties = properties;
-    this.stripe = stripe;
-  }
 
   @Transactional
   public void handle(String payload, String signature) {

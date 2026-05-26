@@ -1,7 +1,5 @@
 package com.odonta.billing.service;
 
-import com.odonta.billing.api.model.EntitlementResponse;
-import com.odonta.billing.mapper.EntitlementMapper;
 import com.odonta.billing.model.Entitlement;
 import com.odonta.billing.model.EntitlementProjection;
 import com.odonta.billing.model.EntitlementStatus;
@@ -12,30 +10,26 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class EntitlementService {
 
-  private final EntitlementMapper mapper;
   private final EntitlementRepository entitlements;
 
-  EntitlementService(EntitlementMapper mapper, EntitlementRepository entitlements) {
-    this.mapper = mapper;
-    this.entitlements = entitlements;
+  public EntitlementProjection get(UUID subjectId, String product) {
+    return projection(subjectId, product);
   }
 
-  public EntitlementResponse get(UUID subjectId, String product) {
-    return mapper.toResponse(projection(subjectId, product));
-  }
-
-  public EntitlementResponse require(UUID subjectId, String product) {
+  public EntitlementProjection require(UUID subjectId, String product) {
     EntitlementProjection entitlement = projection(subjectId, product);
     if (!entitlement.getStatus().usable()) {
       throw ApiException.forbidden("entitlement_inactive", "Entitlement is not active.");
     }
-    return mapper.toResponse(entitlement);
+    return entitlement;
   }
 
   @Transactional

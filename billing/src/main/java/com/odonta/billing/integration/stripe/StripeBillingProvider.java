@@ -15,9 +15,11 @@ import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.billingportal.SessionCreateParams;
 import com.stripe.param.checkout.SessionCreateParams.SubscriptionData;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class StripeBillingProvider implements BillingProvider {
 
   static final String PROVIDER = "stripe";
@@ -25,13 +27,6 @@ public class StripeBillingProvider implements BillingProvider {
   private final CustomerService customers;
   private final StripeCheckoutCatalog prices;
   private final StripeClient stripe;
-
-  StripeBillingProvider(
-      CustomerService customers, StripeCheckoutCatalog prices, StripeClient stripe) {
-    this.customers = customers;
-    this.prices = prices;
-    this.stripe = stripe;
-  }
 
   @Override
   public BillingSessionResult createCheckoutSession(
