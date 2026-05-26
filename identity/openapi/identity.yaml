@@ -254,35 +254,15 @@ components:
         format: uuid
   responses:
     BadRequest:
-      description: Invalid request.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/BadRequest"
     Unauthorized:
-      description: Authentication is required or credentials are invalid.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/Unauthorized"
     Forbidden:
-      description: The authenticated principal does not have the required permission.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/Forbidden"
     NotFound:
-      description: Resource not found.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/NotFound"
     Conflict:
-      description: Resource conflicts with current state.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/Conflict"
   schemas:
     ServiceStatus:
       type: object
@@ -387,18 +367,3 @@ components:
         expiresAt:
           type: [string, "null"]
           format: date-time
-    ErrorResponse:
-      type: object
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code:
-              type: string
-            message:
-              type: string
-            details:
-              type: object
-              additionalProperties: true

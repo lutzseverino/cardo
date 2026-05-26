@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: Odonta Common API Errors
+  version: 0.1.0
+  description: Shared HTTP error envelope used by Odonta services.
+paths: {}
+components:
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Unauthorized:
+      description: Authentication is required or credentials are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Forbidden:
+      description: The authenticated principal does not have the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Conflict:
+      description: Resource conflicts with current state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Gone:
+      description: Resource is no longer available.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+  schemas:
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ApiErrorBody"
+    ApiErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

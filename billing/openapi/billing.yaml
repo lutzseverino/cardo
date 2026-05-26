@@ -176,23 +176,11 @@ components:
         example: clinic
   responses:
     BadRequest:
-      description: Bad request.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/BadRequest"
     Forbidden:
-      description: Forbidden.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/Forbidden"
     NotFound:
-      description: Not found.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+      $ref: "../../common/openapi/errors.yaml#/components/responses/NotFound"
   schemas:
     ServiceStatusResponse:
       type: object
@@ -285,20 +273,3 @@ components:
         updatedAt:
           type: string
           format: date-time
-    ErrorEnvelope:
-      type: object
-      required: [error]
-      properties:
-        error:
-          $ref: "#/components/schemas/ErrorDetail"
-    ErrorDetail:
-      type: object
-      required: [code, message, details]
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-        details:
-          type: object
-          additionalProperties: true
