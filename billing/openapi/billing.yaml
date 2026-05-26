@@ -1,0 +1,304 @@
+openapi: 3.0.3
+info:
+  title: Odonta Billing API
+  version: 0.1.0
+  description: Entitlement and commercial access checks.
+servers:
+  - url: /api/v1
+tags:
+  - name: Billing
+    description: Billing service status.
+  - name: Checkout Sessions
+    description: Hosted checkout session creation.
+  - name: Portal Sessions
+    description: Hosted billing management session creation.
+  - name: Entitlements
+    description: Entitlement reads and access checks.
+  - name: Stripe Webhooks
+    description: Stripe event ingestion.
+paths:
+  /billing:
+    get:
+      tags: [Billing]
+      operationId: getBillingStatus
+      summary: Get billing service status.
+      responses:
+        "200":
+          description: Billing service is reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceStatusResponse"
+  /billing/checkout/sessions:
+    post:
+      tags: [Checkout Sessions]
+      operationId: createCheckoutSession
+      summary: Create a hosted checkout session for the current user.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutSessionRequest"
+      responses:
+        "201":
+          description: Checkout session created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSessionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /billing/portal/sessions:
+    post:
+      tags: [Portal Sessions]
+      operationId: createPortalSession
+      summary: Create a hosted billing portal session for the current user.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalSessionRequest"
+      responses:
+        "201":
+          description: Portal session created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalSessionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /billing/entitlements/{product}:
+    get:
+      tags: [Entitlements]
+      operationId: getCurrentEntitlement
+      summary: Get the current user's entitlement for a product.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Product"
+      responses:
+        "200":
+          description: Entitlement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /billing/subjects/{subjectId}/entitlements/{product}:
+    get:
+      tags: [Entitlements]
+      operationId: getSubjectEntitlement
+      summary: Get a subject's entitlement for a product.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SubjectId"
+        - $ref: "#/components/parameters/Product"
+      responses:
+        "200":
+          description: Entitlement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /billing/subjects/{subjectId}/entitlements/{product}/access:
+    post:
+      tags: [Entitlements]
+      operationId: requireSubjectEntitlement
+      summary: Require an active subject entitlement for a product.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SubjectId"
+        - $ref: "#/components/parameters/Product"
+      responses:
+        "200":
+          description: Active or trialing entitlement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /billing/webhooks/stripe:
+    post:
+      tags: [Stripe Webhooks]
+      operationId: createStripeWebhookEvent
+      summary: Receive a Stripe webhook event.
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RawJsonPayload"
+      responses:
+        "204":
+          description: Event accepted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    SubjectId:
+      name: subjectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Product:
+      name: product
+      in: path
+      required: true
+      schema:
+        type: string
+        example: clinic
+  responses:
+    BadRequest:
+      description: Bad request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: Forbidden.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    ServiceStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    RawJsonPayload:
+      type: string
+      description: Raw JSON payload. The exact body is required for provider webhook signature verification.
+    CheckoutSessionRequest:
+      type: object
+      required: [product, successUrl, cancelUrl]
+      properties:
+        product:
+          type: string
+          example: clinic
+        successUrl:
+          type: string
+          format: uri
+          example: https://app.odonta.test/billing/success
+        cancelUrl:
+          type: string
+          format: uri
+          example: https://app.odonta.test/billing/cancel
+    CheckoutSessionResponse:
+      type: object
+      required: [id, url]
+      properties:
+        id:
+          type: string
+          example: cs_test_123
+        url:
+          type: string
+          format: uri
+    PortalSessionRequest:
+      type: object
+      required: [returnUrl]
+      properties:
+        returnUrl:
+          type: string
+          format: uri
+          example: https://app.odonta.test/billing
+    PortalSessionResponse:
+      type: object
+      required: [id, url]
+      properties:
+        id:
+          type: string
+          example: bps_123
+        url:
+          type: string
+          format: uri
+    EntitlementResponse:
+      type: object
+      required: [id, subjectId, product, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        product:
+          type: string
+          example: clinic
+        status:
+          type: string
+          enum: [active, trialing, past_due, canceled]
+        tenantLimit:
+          type: integer
+          nullable: true
+          example: 1
+        seatLimit:
+          type: integer
+          nullable: true
+          example: 5
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        currentPeriodEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+    ErrorDetail:
+      type: object
+      required: [code, message, details]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

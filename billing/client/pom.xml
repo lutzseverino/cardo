@@ -67,7 +67,7 @@
               <goal>generate</goal>
             </goals>
             <configuration>
-              <inputSpec>${project.basedir}/../../../../docs/openapi/billing.yaml</inputSpec>
+              <inputSpec>${project.basedir}/../openapi/billing.yaml</inputSpec>
               <generatorName>java</generatorName>
               <library>restclient</library>
               <apiPackage>com.odonta.billing.client.api</apiPackage>

@@ -104,7 +104,7 @@
               <goal>generate</goal>
             </goals>
             <configuration>
-              <inputSpec>${project.basedir}/../../../docs/openapi/billing.yaml</inputSpec>
+              <inputSpec>${project.basedir}/openapi/billing.yaml</inputSpec>
               <generatorName>spring</generatorName>
               <apiPackage>com.odonta.billing.api</apiPackage>
               <modelPackage>com.odonta.billing.api.model</modelPackage>

@@ -1,0 +1,404 @@
+openapi: 3.1.0
+info:
+  title: Odonta Identity API
+  version: 0.1.0
+  summary: Authentication and identity contract for Odonta services.
+  description: >
+    Identity owns users, authentication, and the authenticated principal exposed
+    to Odonta products. Future account-recovery and external-provider flows are
+    tracked outside this active contract until their Keycloak-backed shape is
+    designed.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /api/v1
+tags:
+  - name: Identity
+    description: Identity service metadata.
+  - name: Users
+    description: Identity-owned user records.
+  - name: Sessions
+    description: Login, current authenticated principal, and logout operations.
+paths:
+  /identity:
+    get:
+      tags: [Identity]
+      operationId: getIdentity
+      summary: Get identity service status.
+      responses:
+        "200":
+          description: Identity service status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceStatus"
+  /identity/users:
+    post:
+      tags: [Users]
+      operationId: createUser
+      summary: Create an identity user with password credentials.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Users]
+      operationId: getUserByEmail
+      summary: Get an identity user by email.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          description: User found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /identity/users/me:
+    get:
+      tags: [Users]
+      operationId: getCurrentUser
+      summary: Get the current authenticated identity user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current identity user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Users]
+      operationId: updateCurrentUser
+      summary: Update current identity-owned profile fields.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCurrentUserRequest"
+      responses:
+        "200":
+          description: User updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /identity/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [Users]
+      operationId: getUser
+      summary: Get an identity user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Users]
+      operationId: updateUser
+      summary: Update identity-owned profile fields.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /identity/sessions:
+    post:
+      tags: [Sessions]
+      operationId: createSession
+      summary: Sign in with email and password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Session created. Also sets an HTTP-only session cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedPrincipalResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /identity/sessions/current:
+    get:
+      tags: [Sessions]
+      operationId: getCurrentPrincipal
+      summary: Get the current authenticated principal.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current authenticated principal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedPrincipalResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Sessions]
+      operationId: deleteCurrentSession
+      summary: Sign out the current session.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Session deleted. Also clears the HTTP-only session cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication is required or credentials are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The authenticated principal does not have the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Resource conflicts with current state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    ServiceStatus:
+      type: object
+      required: [service, status]
+      properties:
+        service:
+          type: string
+          const: identity
+        status:
+          type: string
+          const: ok
+    UserStatus:
+      type: string
+      enum: [active, disabled]
+    UserResponse:
+      type: object
+      required: [id, authorizationSubject, email, name, status, emailVerified, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        authorizationSubject:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        avatarUrl:
+          type: [string, "null"]
+          format: uri
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        emailVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          minLength: 1
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        avatarUrl:
+          type: [string, "null"]
+          format: uri
+        status:
+          $ref: "#/components/schemas/UserStatus"
+    UpdateCurrentUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        avatarUrl:
+          type: [string, "null"]
+          format: uri
+    CreateSessionRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    AuthenticationMethod:
+      type: string
+      enum: [password, oidc, saml]
+    AuthenticatedPrincipalResponse:
+      type: object
+      required: [sessionId, user, authenticationMethod, authProviderId, expiresAt]
+      properties:
+        sessionId:
+          type: [string, "null"]
+        user:
+          $ref: "#/components/schemas/UserResponse"
+        authenticationMethod:
+          $ref: "#/components/schemas/AuthenticationMethod"
+        authProviderId:
+          type: [string, "null"]
+          format: uuid
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
