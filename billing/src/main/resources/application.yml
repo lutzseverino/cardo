@@ -5,6 +5,11 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/odonta}
     username: ${SPRING_DATASOURCE_USERNAME:odonta}
     password: ${SPRING_DATASOURCE_PASSWORD:odonta}
+  flyway:
+    table: flyway_schema_history_billing
+  jpa:
+    hibernate:
+      ddl-auto: validate
   security:
     oauth2:
       resourceserver:
