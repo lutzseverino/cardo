@@ -34,7 +34,7 @@ class EntitlementServiceTest {
     when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
         .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.TRIALING)));
 
-    assertThat(service.require(subjectId, "clinic").status()).isEqualTo("trialing");
+    assertThat(service.require(subjectId, "clinic").getStatus().getValue()).isEqualTo("trialing");
   }
 
   @Test

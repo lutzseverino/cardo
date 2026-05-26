@@ -1,9 +1,9 @@
 package com.odonta.billing.service;
 
+import com.odonta.billing.api.model.EntitlementResponse;
 import com.odonta.billing.mapper.EntitlementMapper;
 import com.odonta.billing.model.Entitlement;
 import com.odonta.billing.model.EntitlementProjection;
-import com.odonta.billing.model.EntitlementResponse;
 import com.odonta.billing.model.EntitlementStatus;
 import com.odonta.billing.model.EntitlementSyncItem;
 import com.odonta.billing.repository.EntitlementRepository;

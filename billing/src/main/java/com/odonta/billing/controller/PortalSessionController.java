@@ -1,21 +1,19 @@
 package com.odonta.billing.controller;
 
 import com.odonta.authorization.spring.AuthenticatedUserReader;
-import com.odonta.billing.model.PortalSessionRequest;
-import com.odonta.billing.model.PortalSessionResponse;
+import com.odonta.billing.api.PortalSessionsApi;
+import com.odonta.billing.api.model.PortalSessionRequest;
+import com.odonta.billing.api.model.PortalSessionResponse;
 import com.odonta.billing.service.PortalSessionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("${odonta.api.base-path}/billing/portal/sessions")
-public class PortalSessionController {
+@RequestMapping("${odonta.api.base-path}")
+public class PortalSessionController implements PortalSessionsApi {
 
   private final PortalSessionService portalSessions;
   private final AuthenticatedUserReader users;
@@ -25,10 +23,10 @@ public class PortalSessionController {
     this.users = users;
   }
 
-  @PostMapping
-  @ResponseStatus(HttpStatus.CREATED)
-  PortalSessionResponse create(
-      JwtAuthenticationToken authentication, @RequestBody @Valid PortalSessionRequest request) {
-    return portalSessions.create(users.currentUser(authentication).id(), request);
+  @Override
+  public ResponseEntity<PortalSessionResponse> createPortalSession(
+      @Valid PortalSessionRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(portalSessions.create(users.currentUser().id(), request));
   }
 }

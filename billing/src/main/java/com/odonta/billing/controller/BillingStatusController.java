@@ -1,16 +1,17 @@
 package com.odonta.billing.controller;
 
-import java.util.Map;
-import org.springframework.web.bind.annotation.GetMapping;
+import com.odonta.billing.api.BillingApi;
+import com.odonta.billing.api.model.ServiceStatusResponse;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("${odonta.api.base-path}/billing")
-public class BillingStatusController {
+@RequestMapping("${odonta.api.base-path}")
+public class BillingStatusController implements BillingApi {
 
-  @GetMapping
-  Map<String, String> status() {
-    return Map.of("status", "ok");
+  @Override
+  public ResponseEntity<ServiceStatusResponse> getBillingStatus() {
+    return ResponseEntity.ok(new ServiceStatusResponse("ok"));
   }
 }

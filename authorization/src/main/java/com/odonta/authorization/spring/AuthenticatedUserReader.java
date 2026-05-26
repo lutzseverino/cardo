@@ -1,11 +1,21 @@
 package com.odonta.authorization.spring;
 
 import java.util.UUID;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 public class AuthenticatedUserReader {
+
+  public AuthenticatedUser currentUser() {
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (authentication instanceof JwtAuthenticationToken jwt) {
+      return currentUser(jwt);
+    }
+    throw invalidToken("Missing Odonta JWT authentication.");
+  }
 
   public AuthenticatedUser currentUser(JwtAuthenticationToken authentication) {
     return new AuthenticatedUser(

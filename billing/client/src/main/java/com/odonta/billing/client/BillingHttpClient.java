@@ -24,17 +24,17 @@ public class BillingHttpClient {
     this.serviceTokens = serviceTokens;
   }
 
-  public Entitlement entitlement(UUID subjectId, String product) {
+  public EntitlementResponse entitlement(UUID subjectId, String product) {
     return call(
         () ->
             rest.get()
                 .uri("/billing/subjects/{subjectId}/entitlements/{product}", subjectId, product)
                 .headers(headers -> headers.setBearerAuth(serviceToken()))
                 .retrieve()
-                .body(Entitlement.class));
+                .body(EntitlementResponse.class));
   }
 
-  public Entitlement requireEntitlement(UUID subjectId, String product) {
+  public EntitlementResponse requireEntitlement(UUID subjectId, String product) {
     return call(
         () ->
             rest.post()
@@ -44,7 +44,7 @@ public class BillingHttpClient {
                     product)
                 .headers(headers -> headers.setBearerAuth(serviceToken()))
                 .retrieve()
-                .body(Entitlement.class));
+                .body(EntitlementResponse.class));
   }
 
   private <T> T call(BillingCall<T> call) {

@@ -1,10 +1,11 @@
 package com.odonta.billing.service;
 
+import com.odonta.billing.api.model.PortalSessionRequest;
+import com.odonta.billing.api.model.PortalSessionResponse;
 import com.odonta.billing.model.BillingSessionResult;
 import com.odonta.billing.model.PortalSessionCommand;
-import com.odonta.billing.model.PortalSessionRequest;
-import com.odonta.billing.model.PortalSessionResponse;
 import com.odonta.billing.provider.BillingProvider;
+import java.net.URI;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +21,6 @@ public class PortalSessionService {
   public PortalSessionResponse create(UUID subjectId, PortalSessionRequest request) {
     BillingSessionResult session =
         provider.createPortalSession(subjectId, PortalSessionCommand.from(request));
-    return new PortalSessionResponse(session.id(), session.url());
+    return new PortalSessionResponse(session.id(), URI.create(session.url()));
   }
 }
