@@ -5,8 +5,10 @@ import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.authorization.sync.AuthorizationSyncService;
 import com.odonta.common.api.ApiException;
 import com.odonta.common.model.EmailAddress;
-import com.odonta.identity.client.IdentityHttpClient;
-import com.odonta.identity.client.IdentityUser;
+import com.odonta.identity.client.CompleteProvisionalUserRequest;
+import com.odonta.identity.client.CreateProvisionalUserRequest;
+import com.odonta.identity.client.UserResponse;
+import com.odonta.identity.client.api.UsersApi;
 import com.odonta.invite.InvitePermissions;
 import com.odonta.invite.authorization.InvitationAccepted;
 import com.odonta.invite.config.InvitationProperties;
@@ -37,7 +39,7 @@ public class InvitationService {
   private final AccessProfileService accessProfiles;
   private final AuthorizationSyncService authorizationSync;
   private final EmailSender email;
-  private final IdentityHttpClient identity;
+  private final UsersApi identityUsers;
   private final InvitationMapper mapper;
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
@@ -46,14 +48,14 @@ public class InvitationService {
       AccessProfileService accessProfiles,
       AuthorizationSyncService authorizationSync,
       EmailSender email,
-      IdentityHttpClient identity,
+      UsersApi identityUsers,
       InvitationMapper mapper,
       InvitationProperties properties,
       InvitationRepository invitations) {
     this.accessProfiles = accessProfiles;
     this.authorizationSync = authorizationSync;
     this.email = email;
-    this.identity = identity;
+    this.identityUsers = identityUsers;
     this.mapper = mapper;
     this.properties = properties;
     this.invitations = invitations;
@@ -75,7 +77,9 @@ public class InvitationService {
         .availableProfile(request.accessProfileId(), product, request.tenantId())
         .orElseThrow(
             () -> ApiException.notFound("access_profile_not_found", "Access profile not found."));
-    IdentityUser invited = identity.createProvisionalUser(request.email());
+    UserResponse invited =
+        identityUsers.createProvisionalUser(
+            new CreateProvisionalUserRequest().email(request.email()));
     String token = generateInvitationToken();
     Invitation invitation =
         invitations.saveAndFlush(
@@ -84,8 +88,8 @@ public class InvitationService {
                 request.tenantResourceType(),
                 request.accessProfileId(),
                 EmailAddress.of(request.email()).value(),
-                invited.id(),
-                invited.authorizationSubject(),
+                invited.getId(),
+                invited.getAuthorizationSubject(),
                 inviter.id(),
                 token));
     String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
@@ -97,10 +101,11 @@ public class InvitationService {
   @Transactional
   public InvitationCompletionResponse complete(String token, CompleteInvitationRequest request) {
     InvitationProjection invitation = validInvitation(token);
-    IdentityUser completed =
-        identity.completeProvisionalUser(
-            invitation.getInvitedUserId(), request.name(), request.password());
-    accept(invitation, completed.id(), completed.authorizationSubject());
+    UserResponse completed =
+        identityUsers.completeProvisionalUser(
+            invitation.getInvitedUserId(),
+            new CompleteProvisionalUserRequest().name(request.name()).password(request.password()));
+    accept(invitation, completed.getId(), completed.getAuthorizationSubject());
     return new InvitationCompletionResponse(true);
   }
 
