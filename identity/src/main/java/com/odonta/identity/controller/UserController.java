@@ -64,6 +64,13 @@ public class UserController implements UsersApi {
   }
 
   @Override
+  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
+  public ResponseEntity<Void> cancelProvisionalUser(UUID userId) {
+    users.cancelProvisional(userId);
+    return ResponseEntity.noContent().build();
+  }
+
+  @Override
   @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_READ_AUTHORITY + "')")
   public ResponseEntity<UserResponse> getCurrentUser() {
     return ResponseEntity.ok(mapper.toResponse(users.getCurrent(currentJwt.current().getName())));

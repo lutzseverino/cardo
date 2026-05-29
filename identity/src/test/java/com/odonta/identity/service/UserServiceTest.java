@@ -122,6 +122,34 @@ class UserServiceTest {
     order.verify(identityProvider).completePasswordIdentity("kc-user-1", "password-1", "Employee");
   }
 
+  @Test
+  void cancelsOnlyProvisionalUsers() {
+    UUID userId = UUID.randomUUID();
+    User user = User.invited("kc-user-1", "employee@example.com");
+    UserService service = service();
+    when(users.findById(userId)).thenReturn(Optional.of(user));
+
+    service.cancelProvisional(userId);
+
+    InOrder order = inOrder(users, identityProvider);
+    order.verify(users).delete(user);
+    order.verify(users).flush();
+    order.verify(identityProvider).deleteIdentity("kc-user-1");
+  }
+
+  @Test
+  void rejectsCancellingCompletedUsers() {
+    UUID userId = UUID.randomUUID();
+    UserService service = service();
+    when(users.findById(userId)).thenReturn(Optional.of(new User("kc-user-1", "a@b.com", "A")));
+
+    assertThatThrownBy(() -> service.cancelProvisional(userId))
+        .isInstanceOf(ApiException.class)
+        .hasMessage("User is already complete.");
+
+    verify(identityProvider, never()).deleteIdentity(any());
+  }
+
   private UserService service() {
     return new UserService(users, identityProvider, authorizationSync);
   }

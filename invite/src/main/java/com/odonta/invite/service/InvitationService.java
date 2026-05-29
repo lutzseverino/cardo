@@ -73,21 +73,26 @@ public class InvitationService {
     UserResponse invited =
         identityUsers.createProvisionalUser(
             new CreateProvisionalUserRequest().email(command.email()));
-    String token = generateInvitationToken();
-    Invitation invitation =
-        invitations.saveAndFlush(
-            new Invitation(
-                command.tenantId(),
-                command.tenantResourceType(),
-                command.accessProfileId(),
-                EmailAddress.of(command.email()).value(),
-                invited.getId(),
-                invited.getAuthorizationSubject(),
-                inviter.id(),
-                token));
-    String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
-    email.sendInvitation(command.email(), acceptUrl);
-    return new CreateInvitationResult(projection(invitation.getId()), acceptUrl);
+    try {
+      String token = generateInvitationToken();
+      Invitation invitation =
+          invitations.saveAndFlush(
+              new Invitation(
+                  command.tenantId(),
+                  command.tenantResourceType(),
+                  command.accessProfileId(),
+                  EmailAddress.of(command.email()).value(),
+                  invited.getId(),
+                  invited.getAuthorizationSubject(),
+                  inviter.id(),
+                  token));
+      String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
+      email.sendInvitation(command.email(), acceptUrl);
+      return new CreateInvitationResult(projection(invitation.getId()), acceptUrl);
+    } catch (RuntimeException exception) {
+      cancelProvisionalUser(invited.getId(), exception);
+      throw exception;
+    }
   }
 
   @Transactional
@@ -159,5 +164,13 @@ public class InvitationService {
     byte[] bytes = new byte[32];
     random.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+  }
+
+  private void cancelProvisionalUser(UUID userId, RuntimeException original) {
+    try {
+      identityUsers.cancelProvisionalUser(userId);
+    } catch (RuntimeException compensationFailure) {
+      original.addSuppressed(compensationFailure);
+    }
   }
 }

@@ -186,6 +186,26 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /identity/users/{userId}/provisional:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      tags: [Users]
+      operationId: cancelProvisionalUser
+      summary: Cancel an incomplete invited identity user.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Provisional user cancelled.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /identity/users/{userId}:
     parameters:
       - $ref: "#/components/parameters/UserId"

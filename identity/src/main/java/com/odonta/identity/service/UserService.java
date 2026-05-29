@@ -82,6 +82,22 @@ public class UserService {
     return getProjection(user.getId());
   }
 
+  @Transactional
+  public void cancelProvisional(UUID id) {
+    User user =
+        users
+            .findById(id)
+            .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
+    if (!UserStatus.INVITED.equals(user.getStatus())) {
+      throw ApiException.conflict("user_already_complete", "User is already complete.");
+    }
+
+    String subject = user.getKeycloakSubject();
+    users.delete(user);
+    users.flush();
+    identityProvider.deleteIdentity(subject);
+  }
+
   public UserProjection get(UUID id) {
     return getProjection(id);
   }
