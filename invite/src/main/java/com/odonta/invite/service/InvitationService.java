@@ -12,14 +12,11 @@ import com.odonta.identity.client.api.UsersApi;
 import com.odonta.invite.InvitePermissions;
 import com.odonta.invite.authorization.InvitationAccepted;
 import com.odonta.invite.config.InvitationProperties;
-import com.odonta.invite.mapper.InvitationMapper;
-import com.odonta.invite.model.CompleteInvitationRequest;
-import com.odonta.invite.model.CreateInvitationRequest;
-import com.odonta.invite.model.CreateInvitationResponse;
+import com.odonta.invite.model.CompleteInvitationCommand;
+import com.odonta.invite.model.CreateInvitationCommand;
+import com.odonta.invite.model.CreateInvitationResult;
 import com.odonta.invite.model.Invitation;
-import com.odonta.invite.model.InvitationCompletionResponse;
 import com.odonta.invite.model.InvitationProjection;
-import com.odonta.invite.model.InvitationResponse;
 import com.odonta.invite.model.InvitationStatus;
 import com.odonta.invite.repository.InvitationRepository;
 import java.security.SecureRandom;
@@ -40,7 +37,6 @@ public class InvitationService {
   private final AuthorizationSyncService authorizationSync;
   private final EmailSender email;
   private final UsersApi identityUsers;
-  private final InvitationMapper mapper;
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
 
@@ -49,64 +45,59 @@ public class InvitationService {
       AuthorizationSyncService authorizationSync,
       EmailSender email,
       UsersApi identityUsers,
-      InvitationMapper mapper,
       InvitationProperties properties,
       InvitationRepository invitations) {
     this.accessProfiles = accessProfiles;
     this.authorizationSync = authorizationSync;
     this.email = email;
     this.identityUsers = identityUsers;
-    this.mapper = mapper;
     this.properties = properties;
     this.invitations = invitations;
   }
 
-  public InvitationResponse get(String token) {
-    return mapper.toResponse(validInvitation(token));
+  public InvitationProjection get(String token) {
+    return validInvitation(token);
   }
 
   @Transactional
   @PreAuthorize(
-      "hasPermission(#request.tenantId, #request.tenantResourceType, '"
+      "hasPermission(#command.tenantId, #command.tenantResourceType, '"
           + InvitePermissions.WRITE
           + "')")
-  public CreateInvitationResponse create(
-      AuthenticatedUser inviter, CreateInvitationRequest request) {
-    String product = product(request.tenantResourceType());
+  public CreateInvitationResult create(AuthenticatedUser inviter, CreateInvitationCommand command) {
+    String product = product(command.tenantResourceType());
     accessProfiles
-        .availableProfile(request.accessProfileId(), product, request.tenantId())
+        .availableProfile(command.accessProfileId(), product, command.tenantId())
         .orElseThrow(
             () -> ApiException.notFound("access_profile_not_found", "Access profile not found."));
     UserResponse invited =
         identityUsers.createProvisionalUser(
-            new CreateProvisionalUserRequest().email(request.email()));
+            new CreateProvisionalUserRequest().email(command.email()));
     String token = generateInvitationToken();
     Invitation invitation =
         invitations.saveAndFlush(
             new Invitation(
-                request.tenantId(),
-                request.tenantResourceType(),
-                request.accessProfileId(),
-                EmailAddress.of(request.email()).value(),
+                command.tenantId(),
+                command.tenantResourceType(),
+                command.accessProfileId(),
+                EmailAddress.of(command.email()).value(),
                 invited.getId(),
                 invited.getAuthorizationSubject(),
                 inviter.id(),
                 token));
     String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
-    email.sendInvitation(request.email(), acceptUrl);
-    return new CreateInvitationResponse(
-        mapper.toResponse(projection(invitation.getId())), acceptUrl);
+    email.sendInvitation(command.email(), acceptUrl);
+    return new CreateInvitationResult(projection(invitation.getId()), acceptUrl);
   }
 
   @Transactional
-  public InvitationCompletionResponse complete(String token, CompleteInvitationRequest request) {
+  public void complete(String token, CompleteInvitationCommand command) {
     InvitationProjection invitation = validInvitation(token);
     UserResponse completed =
         identityUsers.completeProvisionalUser(
             invitation.getInvitedUserId(),
-            new CompleteProvisionalUserRequest().name(request.name()).password(request.password()));
+            new CompleteProvisionalUserRequest().name(command.name()).password(command.password()));
     accept(invitation, completed.getId(), completed.getAuthorizationSubject());
-    return new InvitationCompletionResponse(true);
   }
 
   @Transactional
