@@ -3,86 +3,76 @@ package com.odonta.identity.client;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.odonta.common.api.ApiClientErrors;
 import com.odonta.common.api.ApiException;
+import com.odonta.identity.client.api.SessionsApi;
+import com.odonta.identity.client.api.UsersApi;
 import java.net.HttpCookie;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 public class IdentityHttpClient {
 
   private final ObjectMapper json;
-  private final RestClient rest;
+  private final SessionsApi sessions;
   private final String sessionCookieName;
   private final Supplier<String> serviceTokens;
+  private final UsersApi users;
 
   public IdentityHttpClient(
-      IdentityClientProperties properties,
-      String sessionCookieName,
-      ObjectMapper json,
-      RestClient.Builder rest) {
+      IdentityClientProperties properties, String sessionCookieName, ObjectMapper json) {
     this.json = json;
-    this.rest = rest.baseUrl(properties.baseUrl()).build();
     this.sessionCookieName = sessionCookieName;
     this.serviceTokens = null;
+    ApiClient apiClient = apiClient(properties, json);
+    this.users = new UsersApi(apiClient);
+    this.sessions = new SessionsApi(apiClient);
   }
 
   public IdentityHttpClient(
-      IdentityClientProperties properties,
-      Supplier<String> serviceTokens,
-      ObjectMapper json,
-      RestClient.Builder rest) {
+      IdentityClientProperties properties, Supplier<String> serviceTokens, ObjectMapper json) {
     this.json = json;
-    this.rest = rest.baseUrl(properties.baseUrl()).build();
     this.sessionCookieName = null;
     this.serviceTokens = serviceTokens;
+    ApiClient apiClient = apiClient(properties, json);
+    apiClient.setBearerToken(this::serviceToken);
+    this.users = new UsersApi(apiClient);
+    this.sessions = new SessionsApi(apiClient);
   }
 
   public CreatedIdentity createPasswordIdentity(String email, String password, String name) {
     IdentityUser user =
-        call(() ->
-                rest.post()
-                    .uri("/identity/users")
-                    .body(new CreateUser(email, password, name))
-                    .retrieve()
-                    .body(IdentityUserResponse.class))
-            .toIdentityUser();
+        call(
+            () ->
+                toIdentityUser(
+                    users.createUser(
+                        new CreateUserRequest().email(email).password(password).name(name))));
     IdentitySession session =
         call(
             () -> {
-              ResponseEntity<IdentitySessionResponse> response =
-                  rest.post()
-                      .uri("/identity/sessions")
-                      .body(new CreateSession(email, password))
-                      .retrieve()
-                      .toEntity(IdentitySessionResponse.class);
+              ResponseEntity<AuthenticatedPrincipalResponse> response =
+                  sessions.createSessionWithHttpInfo(
+                      new CreateSessionRequest().email(email).password(password));
               return new IdentitySession(sessionToken(response.getHeaders()));
             });
     return new CreatedIdentity(user, session);
   }
 
   public IdentityUser createProvisionalUser(String email) {
-    return call(() ->
-            rest.post()
-                .uri("/identity/users/provisional")
-                .headers(headers -> headers.setBearerAuth(serviceToken()))
-                .body(new CreateProvisionalUser(email))
-                .retrieve()
-                .body(IdentityUserResponse.class))
-        .toIdentityUser();
+    return call(
+        () ->
+            toIdentityUser(
+                users.createProvisionalUser(new CreateProvisionalUserRequest().email(email))));
   }
 
   public IdentityUser completeProvisionalUser(UUID userId, String name, String password) {
-    return call(() ->
-            rest.post()
-                .uri("/identity/users/{id}/completion", userId)
-                .headers(headers -> headers.setBearerAuth(serviceToken()))
-                .body(new CompleteProvisionalUser(name, password))
-                .retrieve()
-                .body(IdentityUserResponse.class))
-        .toIdentityUser();
+    return call(
+        () ->
+            toIdentityUser(
+                users.completeProvisionalUser(
+                    userId, new CompleteProvisionalUserRequest().name(name).password(password))));
   }
 
   private <T> T call(IdentityCall<T> call) {
@@ -124,25 +114,27 @@ public class IdentityHttpClient {
         exception, json, "identity_client_error", "Identity request failed.");
   }
 
+  private ApiClient apiClient(IdentityClientProperties properties, ObjectMapper json) {
+    return new ApiClient(
+            ApiClient.buildRestClientBuilder(json)
+                .defaultStatusHandler(
+                    HttpStatusCode::isError,
+                    (request, response) -> {
+                      throw ApiClientErrors.from(
+                          response, json, "identity_client_error", "Identity request failed.");
+                    })
+                .build(),
+            json,
+            ApiClient.createDefaultDateFormat())
+        .setBasePath(properties.baseUrl());
+  }
+
+  private IdentityUser toIdentityUser(UserResponse user) {
+    return new IdentityUser(
+        user.getId(), user.getAuthorizationSubject(), user.getEmail(), user.getName());
+  }
+
   private interface IdentityCall<T> {
     T run();
   }
-
-  private record CreateUser(String email, String password, String name) {}
-
-  private record CreateSession(String email, String password) {}
-
-  private record CreateProvisionalUser(String email) {}
-
-  private record CompleteProvisionalUser(String name, String password) {}
-
-  private record IdentityUserResponse(
-      UUID id, String authorizationSubject, String email, String name) {
-
-    IdentityUser toIdentityUser() {
-      return new IdentityUser(id, authorizationSubject, email, name);
-    }
-  }
-
-  private record IdentitySessionResponse() {}
 }

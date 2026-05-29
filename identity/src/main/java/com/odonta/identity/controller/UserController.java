@@ -1,102 +1,123 @@
 package com.odonta.identity.controller;
 
 import com.odonta.identity.IdentityPermissions;
-import com.odonta.identity.model.CompleteProvisionalUserRequest;
-import com.odonta.identity.model.CreateProvisionalUserRequest;
-import com.odonta.identity.model.CreateUserRequest;
-import com.odonta.identity.model.UpdateCurrentUserRequest;
-import com.odonta.identity.model.UpdateUserRequest;
-import com.odonta.identity.model.UserResponse;
+import com.odonta.identity.api.UsersApi;
+import com.odonta.identity.api.model.CompleteProvisionalUserRequest;
+import com.odonta.identity.api.model.CreateProvisionalUserRequest;
+import com.odonta.identity.api.model.CreateUserRequest;
+import com.odonta.identity.api.model.UpdateCurrentUserRequest;
+import com.odonta.identity.api.model.UpdateUserRequest;
+import com.odonta.identity.api.model.UserResponse;
+import com.odonta.identity.mapper.UserMapper;
+import com.odonta.identity.model.CompleteProvisionalUserCommand;
+import com.odonta.identity.model.CreateProvisionalUserCommand;
+import com.odonta.identity.model.CreateUserCommand;
+import com.odonta.identity.model.UpdateCurrentUserCommand;
+import com.odonta.identity.model.UpdateUserCommand;
+import com.odonta.identity.model.UserStatus;
+import com.odonta.identity.reader.CurrentJwtReader;
 import com.odonta.identity.service.UserService;
 import jakarta.validation.Valid;
+import java.net.URI;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("${odonta.api.base-path}/identity/users")
-public class UserController {
+@RequestMapping("${odonta.api.base-path}")
+@RequiredArgsConstructor
+public class UserController implements UsersApi {
 
+  private final UserMapper mapper;
+  private final CurrentJwtReader currentJwt;
   private final UserService users;
 
-  UserController(UserService users) {
-    this.users = users;
+  @Override
+  public ResponseEntity<UserResponse> createUser(@Valid CreateUserRequest request) {
+    CreateUserCommand command =
+        new CreateUserCommand(request.getEmail(), request.getPassword(), request.getName());
+    return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(users.create(command)));
   }
 
-  @PostMapping
-  @ResponseStatus(HttpStatus.CREATED)
-  UserResponse create(@RequestBody @Valid CreateUserRequest request) {
-    return users.create(request);
-  }
-
-  @PostMapping("/provisional")
+  @Override
   @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
-  @ResponseStatus(HttpStatus.CREATED)
-  UserResponse createProvisional(@RequestBody @Valid CreateProvisionalUserRequest request) {
-    return users.createProvisional(request);
+  public ResponseEntity<UserResponse> createProvisionalUser(
+      @Valid CreateProvisionalUserRequest request) {
+    CreateProvisionalUserCommand command = new CreateProvisionalUserCommand(request.getEmail());
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(mapper.toResponse(users.createProvisional(command)));
   }
 
-  @PostMapping("/{id}/completion")
+  @Override
   @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
-  @ResponseStatus(HttpStatus.CREATED)
-  UserResponse completeProvisional(
-      @PathVariable UUID id, @RequestBody @Valid CompleteProvisionalUserRequest request) {
-    return users.completeProvisional(id, request);
+  public ResponseEntity<UserResponse> completeProvisionalUser(
+      UUID userId, @Valid CompleteProvisionalUserRequest request) {
+    CompleteProvisionalUserCommand command =
+        new CompleteProvisionalUserCommand(request.getName(), request.getPassword());
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(mapper.toResponse(users.completeProvisional(userId, command)));
   }
 
-  @GetMapping("/me")
+  @Override
   @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_READ_AUTHORITY + "')")
-  UserResponse getMe(Authentication authentication) {
-    return users.getCurrent(authentication.getName());
+  public ResponseEntity<UserResponse> getCurrentUser() {
+    return ResponseEntity.ok(mapper.toResponse(users.getCurrent(currentJwt.current().getName())));
   }
 
-  @PatchMapping("/me")
+  @Override
   @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_WRITE_AUTHORITY + "')")
-  UserResponse updateMe(
-      Authentication authentication, @RequestBody @Valid UpdateCurrentUserRequest request) {
-    return users.updateCurrent(authentication.getName(), request);
+  public ResponseEntity<UserResponse> updateCurrentUser(@Valid UpdateCurrentUserRequest request) {
+    UpdateCurrentUserCommand command =
+        new UpdateCurrentUserCommand(request.getName(), string(request.getAvatarUrl()));
+    return ResponseEntity.ok(
+        mapper.toResponse(users.updateCurrent(currentJwt.current().getName(), command)));
   }
 
-  @GetMapping("/{id}")
+  @Override
   @PreAuthorize(
-      "hasPermission(#id, '"
+      "hasPermission(#userId, '"
           + IdentityPermissions.USER_RESOURCE
           + "', '"
           + IdentityPermissions.READ
           + "')")
-  UserResponse get(@PathVariable UUID id) {
-    return users.get(id);
+  public ResponseEntity<UserResponse> getUser(UUID userId) {
+    return ResponseEntity.ok(mapper.toResponse(users.get(userId)));
   }
 
-  @GetMapping
+  @Override
   @PreAuthorize(
       "hasPermission('*', '"
           + IdentityPermissions.USER_RESOURCE
           + "', '"
           + IdentityPermissions.READ
           + "')")
-  UserResponse getByEmail(@RequestParam String email) {
-    return users.getByEmail(email);
+  public ResponseEntity<UserResponse> getUserByEmail(String email) {
+    return ResponseEntity.ok(mapper.toResponse(users.getByEmail(email)));
   }
 
-  @PatchMapping("/{id}")
+  @Override
   @PreAuthorize(
-      "hasPermission(#id, '"
+      "hasPermission(#userId, '"
           + IdentityPermissions.USER_RESOURCE
           + "', '"
           + IdentityPermissions.WRITE
           + "')")
-  UserResponse update(@PathVariable UUID id, @RequestBody @Valid UpdateUserRequest request) {
-    return users.update(id, request);
+  public ResponseEntity<UserResponse> updateUser(UUID userId, @Valid UpdateUserRequest request) {
+    UpdateUserCommand command =
+        new UpdateUserCommand(
+            request.getName(), string(request.getAvatarUrl()), status(request.getStatus()));
+    return ResponseEntity.ok(mapper.toResponse(users.update(userId, command)));
+  }
+
+  private String string(URI value) {
+    return value == null ? null : value.toString();
+  }
+
+  private UserStatus status(com.odonta.identity.api.model.UserStatus status) {
+    return status == null ? null : UserStatus.fromWireValue(status.getValue());
   }
 }

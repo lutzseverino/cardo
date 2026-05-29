@@ -7,7 +7,6 @@ import com.odonta.identity.client.IdentityHttpClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.client.RestClient;
 
 @Configuration
 @EnableConfigurationProperties(IdentityClientProperties.class)
@@ -17,9 +16,8 @@ public class IdentityIntegrationConfig {
   IdentityHttpClient identityHttpClient(
       IdentityClientProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
-      ObjectMapper json,
-      RestClient.Builder rest) {
+      ObjectMapper json) {
     return new IdentityHttpClient(
-        properties, clientCredentialsTokens::clientCredentialsToken, json, rest);
+        properties, clientCredentialsTokens::clientCredentialsToken, json);
   }
 }

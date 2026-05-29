@@ -4,38 +4,26 @@ import com.odonta.authorization.token.RequestingPartyTokenClient;
 import com.odonta.authorization.token.RequestingPartyTokenRequest;
 import com.odonta.common.api.ApiException;
 import com.odonta.identity.IdentityPermissions;
-import com.odonta.identity.mapper.AuthenticatedPrincipalMapper;
 import com.odonta.identity.model.AuthenticatedPrincipal;
-import com.odonta.identity.model.AuthenticatedPrincipalResponse;
 import com.odonta.identity.model.AuthenticationMethod;
 import com.odonta.identity.model.AuthenticationResult;
-import com.odonta.identity.model.CreateSessionRequest;
+import com.odonta.identity.model.CreateSessionCommand;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.reader.AuthenticatedPrincipalReader;
 import java.time.OffsetDateTime;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class AuthenticationService {
 
   private final IdentityProvider identityProvider;
   private final AuthenticatedPrincipalReader principals;
   private final RequestingPartyTokenClient requestingPartyTokens;
-  private final AuthenticatedPrincipalMapper mapper;
 
-  AuthenticationService(
-      IdentityProvider identityProvider,
-      AuthenticatedPrincipalReader principals,
-      RequestingPartyTokenClient requestingPartyTokens,
-      AuthenticatedPrincipalMapper mapper) {
-    this.identityProvider = identityProvider;
-    this.principals = principals;
-    this.requestingPartyTokens = requestingPartyTokens;
-    this.mapper = mapper;
-  }
-
-  public AuthenticationResult authenticate(CreateSessionRequest request) {
-    return authenticate(request.email(), request.password());
+  public AuthenticationResult authenticate(CreateSessionCommand command) {
+    return authenticate(command.email(), command.password());
   }
 
   public AuthenticationResult authenticate(String email, String password) {
@@ -47,19 +35,17 @@ public class AuthenticationService {
                 RequestingPartyTokenRequest.allPermissions(
                     token.token(), IdentityPermissions.CLIENT_ID))
             .token();
-    return new AuthenticationResult(getPrincipal(token), authorizationToken);
+    return new AuthenticationResult(principal(token), authorizationToken);
   }
 
-  public AuthenticatedPrincipalResponse getCurrentPrincipal(
+  public AuthenticatedPrincipal getCurrentPrincipal(
       String keycloakSubject, String sessionId, OffsetDateTime expiresAt) {
-    return mapper.toResponse(
-        principal(keycloakSubject, sessionId, AuthenticationMethod.OIDC, expiresAt));
+    return principal(keycloakSubject, sessionId, AuthenticationMethod.OIDC, expiresAt);
   }
 
-  private AuthenticatedPrincipalResponse getPrincipal(IdentityProvider.IssuedIdentityToken token) {
-    return mapper.toResponse(
-        principal(
-            token.subject(), token.sessionId(), AuthenticationMethod.PASSWORD, token.expiresAt()));
+  private AuthenticatedPrincipal principal(IdentityProvider.IssuedIdentityToken token) {
+    return principal(
+        token.subject(), token.sessionId(), AuthenticationMethod.PASSWORD, token.expiresAt());
   }
 
   private AuthenticatedPrincipal principal(

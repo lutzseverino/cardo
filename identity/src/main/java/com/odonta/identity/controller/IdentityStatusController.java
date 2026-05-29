@@ -1,16 +1,18 @@
 package com.odonta.identity.controller;
 
-import java.util.Map;
-import org.springframework.web.bind.annotation.GetMapping;
+import com.odonta.identity.api.IdentityApi;
+import com.odonta.identity.api.model.ServiceStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("${odonta.api.base-path}/identity")
-public class IdentityStatusController {
+@RequestMapping("${odonta.api.base-path}")
+public class IdentityStatusController implements IdentityApi {
 
-  @GetMapping
-  Map<String, String> get() {
-    return Map.of("service", "identity", "status", "ok");
+  @Override
+  public ResponseEntity<ServiceStatus> getIdentity() {
+    return ResponseEntity.ok(
+        new ServiceStatus(ServiceStatus.ServiceEnum.IDENTITY, ServiceStatus.StatusEnum.OK));
   }
 }
