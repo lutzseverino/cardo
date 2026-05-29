@@ -15,6 +15,8 @@ import com.odonta.identity.model.UserStatus;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -30,44 +32,37 @@ public class UserService {
 
   @Transactional
   public UserProjection create(CreateUserCommand command) {
-    UserProjection user;
     EmailAddress email = EmailAddress.of(command.email());
-    try {
-      IdentityProvider.ProvisionedIdentity identity =
-          identityProvider.provisionPasswordIdentity(
-              email.value(), command.password(), command.name());
-      User created =
-          users.saveAndFlush(new User(identity.subject(), email.value(), command.name()));
-      identityProvider.bindUserId(identity.subject(), created.getId());
-      authorizationSync.enqueue(new IdentityUserCreated(created));
-      user = getProjection(created.getId());
-    } catch (DataIntegrityViolationException exception) {
+    if (users.findProjectedByEmail(email.value()).isPresent()) {
       throw ApiException.conflict("user_exists", "A user with this email already exists.");
     }
-
-    return user;
+    return createIdentityUser(
+        () ->
+            identityProvider.provisionPasswordIdentity(
+                email.value(), command.password(), command.name()),
+        identity -> new User(identity.subject(), email.value(), command.name()),
+        () -> {
+          throw ApiException.conflict("user_exists", "A user with this email already exists.");
+        });
   }
 
   @Transactional
   public UserProjection createProvisional(CreateProvisionalUserCommand command) {
-    UserProjection user;
     EmailAddress email = EmailAddress.of(command.email());
-    try {
-      IdentityProvider.ProvisionedIdentity identity =
-          identityProvider.provisionProvisionalIdentity(email.value());
-      User created = users.saveAndFlush(User.invited(identity.subject(), email.value()));
-      identityProvider.bindUserId(identity.subject(), created.getId());
-      authorizationSync.enqueue(new IdentityUserCreated(created));
-      user = getProjection(created.getId());
-    } catch (DataIntegrityViolationException exception) {
-      user =
-          users
-              .findProjectedByEmail(email.value())
-              .orElseThrow(
-                  () -> ApiException.conflict("user_exists", "A user with this email exists."));
-    }
-
-    return user;
+    return users
+        .findProjectedByEmail(email.value())
+        .orElseGet(
+            () ->
+                createIdentityUser(
+                    () -> identityProvider.provisionProvisionalIdentity(email.value()),
+                    identity -> User.invited(identity.subject(), email.value()),
+                    () ->
+                        users
+                            .findProjectedByEmail(email.value())
+                            .orElseThrow(
+                                () ->
+                                    ApiException.conflict(
+                                        "user_exists", "A user with this email exists."))));
   }
 
   @Transactional
@@ -80,10 +75,10 @@ public class UserService {
       throw ApiException.conflict("user_already_complete", "User is already complete.");
     }
 
-    identityProvider.completePasswordIdentity(
-        user.getKeycloakSubject(), command.password(), command.name());
     user.complete(command.name());
     users.saveAndFlush(user);
+    identityProvider.completePasswordIdentity(
+        user.getKeycloakSubject(), command.password(), command.name());
     return getProjection(user.getId());
   }
 
@@ -108,7 +103,13 @@ public class UserService {
             .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
     user.setName(command.name() == null ? user.getName() : command.name());
     user.setAvatarUrl(command.avatarUrl() == null ? user.getAvatarUrl() : command.avatarUrl());
-    user.setStatus(command.status() == null ? user.getStatus() : command.status());
+    if (command.status() != null) {
+      if (!command.status().isOperational()) {
+        throw ApiException.badRequest(
+            "user_status_invalid", "Invited is not an operational user status.");
+      }
+      user.changeOperationalStatus(command.status());
+    }
     users.saveAndFlush(user);
     return getProjection(id);
   }
@@ -136,5 +137,32 @@ public class UserService {
     return users
         .findProjectedByKeycloakSubject(keycloakSubject)
         .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
+  }
+
+  private UserProjection createIdentityUser(
+      Supplier<IdentityProvider.ProvisionedIdentity> provision,
+      Function<IdentityProvider.ProvisionedIdentity, User> factory,
+      Supplier<UserProjection> duplicateUser) {
+    IdentityProvider.ProvisionedIdentity identity = provision.get();
+    try {
+      User created = users.saveAndFlush(factory.apply(identity));
+      identityProvider.bindUserId(identity.subject(), created.getId());
+      authorizationSync.enqueue(new IdentityUserCreated(created));
+      return getProjection(created.getId());
+    } catch (DataIntegrityViolationException exception) {
+      deleteIdentity(identity.subject(), exception);
+      return duplicateUser.get();
+    } catch (RuntimeException exception) {
+      deleteIdentity(identity.subject(), exception);
+      throw exception;
+    }
+  }
+
+  private void deleteIdentity(String subject, RuntimeException original) {
+    try {
+      identityProvider.deleteIdentity(subject);
+    } catch (RuntimeException compensationFailure) {
+      original.addSuppressed(compensationFailure);
+    }
   }
 }

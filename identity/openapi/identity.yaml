@@ -333,6 +333,9 @@ components:
     UserStatus:
       type: string
       enum: [invited, active, disabled]
+    UpdateUserStatus:
+      type: string
+      enum: [active, disabled]
     UserResponse:
       type: object
       required: [id, authorizationSubject, email, name, status, emailVerified, createdAt, updatedAt]
@@ -404,7 +407,7 @@ components:
           nullable: true
           format: uri
         status:
-          $ref: "#/components/schemas/UserStatus"
+          $ref: "#/components/schemas/UpdateUserStatus"
     UpdateCurrentUserRequest:
       type: object
       properties:

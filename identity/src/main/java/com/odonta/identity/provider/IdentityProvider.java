@@ -12,6 +12,8 @@ public interface IdentityProvider {
 
   void completePasswordIdentity(String subject, String password, String name);
 
+  void deleteIdentity(String subject);
+
   void bindUserId(String subject, UUID userId);
 
   void ensureUserIdClaimMapped(List<String> clientIds);

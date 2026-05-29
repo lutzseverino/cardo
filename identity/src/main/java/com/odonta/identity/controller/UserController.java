@@ -7,6 +7,7 @@ import com.odonta.identity.api.model.CreateProvisionalUserRequest;
 import com.odonta.identity.api.model.CreateUserRequest;
 import com.odonta.identity.api.model.UpdateCurrentUserRequest;
 import com.odonta.identity.api.model.UpdateUserRequest;
+import com.odonta.identity.api.model.UpdateUserStatus;
 import com.odonta.identity.api.model.UserResponse;
 import com.odonta.identity.mapper.UserMapper;
 import com.odonta.identity.model.CompleteProvisionalUserCommand;
@@ -117,7 +118,7 @@ public class UserController implements UsersApi {
     return value == null ? null : value.toString();
   }
 
-  private UserStatus status(com.odonta.identity.api.model.UserStatus status) {
+  private UserStatus status(UpdateUserStatus status) {
     return status == null ? null : UserStatus.fromWireValue(status.getValue());
   }
 }

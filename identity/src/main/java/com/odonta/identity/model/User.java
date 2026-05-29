@@ -81,6 +81,10 @@ public class User extends KeycloakAuthorizationResource implements TargetableAut
     this.status = UserStatus.ACTIVE;
   }
 
+  public void changeOperationalStatus(UserStatus status) {
+    this.status = status;
+  }
+
   @PrePersist
   void normalizeEmail() {
     email = EmailAddress.of(email).value();

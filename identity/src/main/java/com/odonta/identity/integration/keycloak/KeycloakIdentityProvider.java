@@ -80,6 +80,19 @@ public class KeycloakIdentityProvider implements IdentityProvider {
     }
   }
 
+  @Override
+  public void deleteIdentity(String subject) {
+    try {
+      rest.delete()
+          .uri("/admin/realms/{realm}/users/{subject}", properties.realm(), subject)
+          .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
+          .retrieve()
+          .toBodilessEntity();
+    } catch (RestClientResponseException exception) {
+      throw providerException(exception);
+    }
+  }
+
   private ProvisionedIdentity createUser(KeycloakUser user) {
     try {
       URI location =

@@ -20,6 +20,10 @@ public enum UserStatus {
     return wireValue;
   }
 
+  public boolean isOperational() {
+    return !INVITED.equals(this);
+  }
+
   @JsonCreator
   public static UserStatus fromWireValue(String value) {
     return UserStatus.valueOf(value.trim().toUpperCase(Locale.ROOT));
