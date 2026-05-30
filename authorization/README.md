@@ -1,9 +1,9 @@
-# Odonta Authorization
+# Authorization
 
-`authorization` is currently an embedded Java library boundary, not a standalone
-HTTP service.
+`authorization` provides reusable authorization primitives for platform and product
+services.
 
-It owns reusable authorization primitives used by platform and product services:
+The module currently owns:
 
 - authenticated user and permission helpers for Spring Security
 - Keycloak authorization and token clients
@@ -11,8 +11,6 @@ It owns reusable authorization primitives used by platform and product services:
 - access profile entities, repositories, and services
 - authorization sync planning and processing
 
-Because this module does not own controllers or an HTTP runtime, it should not have
-an OpenAPI spec or generated HTTP client yet. If authorization is later extracted
-into a standalone platform service, that extraction should introduce the OpenAPI
-contract, generated server interfaces, and generated client module in the same
-pattern used by the HTTP-owning platform modules.
+This is an embedded Java library boundary. It should only gain an OpenAPI contract
+and generated HTTP clients if it is extracted into a service that owns HTTP
+endpoints.
