@@ -10,6 +10,6 @@ public class EmailSender {
   private static final Logger logger = LoggerFactory.getLogger(EmailSender.class);
 
   public void sendInvitation(String email, String acceptUrl) {
-    logger.info("Invitation email queued for {} with completion URL {}", email, acceptUrl);
+    logger.info("Invitation email queued for {}", email);
   }
 }

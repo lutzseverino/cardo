@@ -1,10 +1,10 @@
 openapi: 3.0.3
 info:
-  title: Odonta Identity API
+  title: Identity API
   version: 0.1.0
   description: >
     Identity owns users, authentication, and the authenticated principal exposed
-    to Odonta products. Future account-recovery and external-provider flows are
+    to products. Future account-recovery and external-provider flows are
     tracked outside this active contract until their Keycloak-backed shape is
     designed.
   license:
@@ -22,7 +22,7 @@ paths:
   /identity:
     get:
       tags: [Identity]
-      operationId: getIdentity
+      operationId: getIdentityStatus
       summary: Get identity service status.
       responses:
         "200":
@@ -30,7 +30,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceStatus"
+                $ref: "#/components/schemas/ServiceStatusResponse"
   /identity/users:
     post:
       tags: [Users]
@@ -340,16 +340,13 @@ components:
     Conflict:
       $ref: "../../common/openapi/errors.yaml#/components/responses/Conflict"
   schemas:
-    ServiceStatus:
+    ServiceStatusResponse:
       type: object
-      required: [service, status]
+      required: [status]
       properties:
-        service:
-          type: string
-          enum: [identity]
         status:
           type: string
-          enum: [ok]
+          example: ok
     UserStatus:
       type: string
       enum: [invited, active, disabled]

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Odonta Invite API
+  title: Invite API
   version: 0.1.0
   description: >
     Invite owns cross-product invitation lifecycle operations. Product-specific
@@ -11,9 +11,23 @@ info:
 servers:
   - url: /api/v1
 tags:
+  - name: Invite
+    description: Invite service metadata.
   - name: Invitations
     description: Cross-product invitations.
 paths:
+  /invite:
+    get:
+      tags: [Invite]
+      operationId: getInviteStatus
+      summary: Get invite service status.
+      responses:
+        "200":
+          description: Invite service status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceStatusResponse"
   /invitations:
     post:
       tags: [Invitations]
@@ -136,6 +150,13 @@ components:
     Gone:
       $ref: "../../common/openapi/errors.yaml#/components/responses/Gone"
   schemas:
+    ServiceStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
     InvitationStatus:
       type: string
       enum: [pending, accepted, revoked]

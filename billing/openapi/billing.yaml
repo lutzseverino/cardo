@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Odonta Billing API
+  title: Billing API
   version: 0.1.0
   description: Entitlement and commercial access checks.
 servers:
@@ -202,11 +202,11 @@ components:
         successUrl:
           type: string
           format: uri
-          example: https://app.odonta.test/billing/success
+          example: https://app.example.com/billing/success
         cancelUrl:
           type: string
           format: uri
-          example: https://app.odonta.test/billing/cancel
+          example: https://app.example.com/billing/cancel
     CheckoutSessionResponse:
       type: object
       required: [id, url]
@@ -224,7 +224,7 @@ components:
         returnUrl:
           type: string
           format: uri
-          example: https://app.odonta.test/billing
+          example: https://app.example.com/billing
     PortalSessionResponse:
       type: object
       required: [id, url]
