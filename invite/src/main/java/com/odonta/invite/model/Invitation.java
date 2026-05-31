@@ -1,5 +1,7 @@
 package com.odonta.invite.model;
 
+import com.odonta.common.data.AuditedEntity;
+import com.odonta.common.data.PersonalDataEntity;
 import com.odonta.common.model.EmailAddress;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,8 +17,6 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -24,7 +24,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Table(
     name = "invitations",
     uniqueConstraints = {@UniqueConstraint(name = "uk_invitations_token", columnNames = "token")})
-public class Invitation {
+public class Invitation extends AuditedEntity implements PersonalDataEntity {
 
   @Id @GeneratedValue private UUID id;
 
@@ -58,14 +58,6 @@ public class Invitation {
 
   @Column(name = "accepted_at")
   private OffsetDateTime acceptedAt;
-
-  @CreationTimestamp
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private OffsetDateTime createdAt;
-
-  @UpdateTimestamp
-  @Column(name = "updated_at", nullable = false)
-  private OffsetDateTime updatedAt;
 
   public Invitation(
       UUID tenantId,

@@ -1,6 +1,7 @@
 package com.odonta.authorization.jpa;
 
 import com.odonta.authorization.AuthorizationSyncStatus;
+import com.odonta.common.data.AuditedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -11,7 +12,7 @@ import lombok.Getter;
 
 @Getter
 @MappedSuperclass
-public abstract class KeycloakAuthorizationResource {
+public abstract class KeycloakAuthorizationResource extends AuditedEntity {
 
   @Column(name = "keycloak_resource_id")
   private String keycloakResourceId;

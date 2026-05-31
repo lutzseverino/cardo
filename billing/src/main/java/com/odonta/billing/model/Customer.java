@@ -1,12 +1,13 @@
 package com.odonta.billing.model;
 
+import com.odonta.common.data.AuditedEntity;
+import com.odonta.common.data.PersonalDataEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -25,7 +26,7 @@ import lombok.NoArgsConstructor;
           name = "uq_billing_customers_provider_customer",
           columnNames = {"provider", "provider_customer_id"})
     })
-public class Customer {
+public class Customer extends AuditedEntity implements PersonalDataEntity {
 
   @Id @GeneratedValue private UUID id;
 
@@ -37,12 +38,6 @@ public class Customer {
 
   @Column(name = "provider_customer_id", nullable = false)
   private String providerCustomerId;
-
-  @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
-  private OffsetDateTime createdAt;
-
-  @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
-  private OffsetDateTime updatedAt;
 
   public static Customer create(UUID subjectId, String provider, String providerCustomerId) {
     Customer customer = new Customer();

@@ -2,6 +2,7 @@ package com.odonta.authorization.sync;
 
 import com.odonta.authorization.AuthorizationSyncStatus;
 import com.odonta.authorization.resource.AuthorizationResource;
+import com.odonta.common.data.PersonalDataEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,7 +27,7 @@ import lombok.NoArgsConstructor;
     name = "authorization_sync_items",
     uniqueConstraints =
         @UniqueConstraint(name = "uk_authorization_sync_item_key", columnNames = "unique_key"))
-public class AuthorizationSyncItem {
+public class AuthorizationSyncItem implements PersonalDataEntity {
 
   private static final String ACTION_SEPARATOR = ",";
 

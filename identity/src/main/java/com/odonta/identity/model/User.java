@@ -3,6 +3,7 @@ package com.odonta.identity.model;
 import com.odonta.authorization.jpa.KeycloakAuthorizationResource;
 import com.odonta.authorization.resource.AuthorizationResourceType;
 import com.odonta.authorization.resource.TargetableAuthorizationResource;
+import com.odonta.common.data.PersonalDataEntity;
 import com.odonta.common.model.EmailAddress;
 import com.odonta.identity.IdentityResources;
 import jakarta.persistence.Column;
@@ -14,14 +15,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -32,7 +30,8 @@ import org.hibernate.annotations.UpdateTimestamp;
       @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
       @UniqueConstraint(name = "uk_users_keycloak_subject", columnNames = "keycloak_subject")
     })
-public class User extends KeycloakAuthorizationResource implements TargetableAuthorizationResource {
+public class User extends KeycloakAuthorizationResource
+    implements TargetableAuthorizationResource, PersonalDataEntity {
 
   @Id @GeneratedValue private UUID id;
 
@@ -55,14 +54,6 @@ public class User extends KeycloakAuthorizationResource implements TargetableAut
   @Column(name = "avatar_url")
   @Setter
   private String avatarUrl;
-
-  @CreationTimestamp
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private OffsetDateTime createdAt;
-
-  @UpdateTimestamp
-  @Column(name = "updated_at", nullable = false)
-  private OffsetDateTime updatedAt;
 
   public User(String keycloakSubject, String email, String name) {
     this.keycloakSubject = keycloakSubject;

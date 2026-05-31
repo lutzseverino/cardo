@@ -1,5 +1,7 @@
 package com.odonta.billing.model;
 
+import com.odonta.common.data.AuditedEntity;
+import com.odonta.common.data.PersonalDataEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -24,7 +26,7 @@ import lombok.Setter;
         @UniqueConstraint(
             name = "uq_billing_entitlements_subject_product",
             columnNames = {"subject_id", "product"}))
-public class Entitlement {
+public class Entitlement extends AuditedEntity implements PersonalDataEntity {
 
   @Id @GeneratedValue private UUID id;
 
@@ -54,12 +56,6 @@ public class Entitlement {
   @Setter
   @Column(name = "current_period_ends_at")
   private OffsetDateTime currentPeriodEndsAt;
-
-  @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
-  private OffsetDateTime createdAt;
-
-  @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
-  private OffsetDateTime updatedAt;
 
   public static Entitlement create(UUID subjectId, String product) {
     Entitlement entitlement = new Entitlement();
