@@ -1,3 +1,5 @@
 package com.odonta.billing.model;
 
-public record PortalSessionCommand(String returnUrl) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record PortalSessionCommand(@NotBlank String returnUrl) {}

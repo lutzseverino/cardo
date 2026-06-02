@@ -1,3 +1,7 @@
 package com.odonta.invite.model;
 
-public record CompleteInvitationCommand(String name, String password) {}
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record CompleteInvitationCommand(
+    @NotBlank String name, @NotBlank @Size(min = 8) String password) {}

@@ -1,3 +1,7 @@
 package com.odonta.identity.model;
 
-public record CompleteProvisionalUserCommand(String name, String password) {}
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record CompleteProvisionalUserCommand(
+    @NotBlank String name, @NotBlank @Size(min = 8) String password) {}

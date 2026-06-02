@@ -19,6 +19,7 @@ import com.odonta.invite.model.Invitation;
 import com.odonta.invite.model.InvitationProjection;
 import com.odonta.invite.model.InvitationStatus;
 import com.odonta.invite.repository.InvitationRepository;
+import jakarta.validation.Valid;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -27,7 +28,9 @@ import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @Service
 public class InvitationService {
 
@@ -64,10 +67,10 @@ public class InvitationService {
       "hasPermission(#command.tenantId, #command.tenantResourceType, '"
           + InvitePermissions.WRITE
           + "')")
-  public CreateInvitationResult create(AuthenticatedUser inviter, CreateInvitationCommand command) {
-    String product = product(command.tenantResourceType());
+  public CreateInvitationResult create(
+      AuthenticatedUser inviter, @Valid CreateInvitationCommand command) {
     accessProfiles
-        .availableProfile(command.accessProfileId(), product, command.tenantId())
+        .availableProfile(command.accessProfileId(), command.product(), command.tenantId())
         .orElseThrow(
             () -> ApiException.notFound("access_profile_not_found", "Access profile not found."));
     UserResponse invited =
@@ -96,7 +99,7 @@ public class InvitationService {
   }
 
   @Transactional
-  public void complete(String token, CompleteInvitationCommand command) {
+  public void complete(String token, @Valid CompleteInvitationCommand command) {
     InvitationProjection invitation = validInvitation(token);
     UserResponse completed =
         identityUsers.completeProvisionalUser(
@@ -149,15 +152,6 @@ public class InvitationService {
     return invitations
         .findProjectedById(id)
         .orElseThrow(() -> ApiException.notFound("invitation_not_found", "Invitation not found."));
-  }
-
-  private String product(String tenantResourceType) {
-    String[] parts = tenantResourceType.split(":", 2);
-    if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
-      throw ApiException.badRequest(
-          "tenant_resource_type_invalid", "Tenant resource type must use product:resource format.");
-    }
-    return parts[0];
   }
 
   private String generateInvitationToken() {

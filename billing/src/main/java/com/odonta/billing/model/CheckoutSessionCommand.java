@@ -1,3 +1,6 @@
 package com.odonta.billing.model;
 
-public record CheckoutSessionCommand(String product, String successUrl, String cancelUrl) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record CheckoutSessionCommand(
+    @NotBlank String product, @NotBlank String successUrl, @NotBlank String cancelUrl) {}

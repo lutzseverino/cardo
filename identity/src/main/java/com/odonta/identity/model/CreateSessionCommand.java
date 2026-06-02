@@ -1,3 +1,6 @@
 package com.odonta.identity.model;
 
-public record CreateSessionCommand(String email, String password) {}
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+public record CreateSessionCommand(@NotBlank @Email String email, @NotBlank String password) {}

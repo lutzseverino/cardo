@@ -10,10 +10,13 @@ import com.odonta.identity.model.AuthenticationResult;
 import com.odonta.identity.model.CreateSessionCommand;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.reader.AuthenticatedPrincipalReader;
+import jakarta.validation.Valid;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
@@ -22,7 +25,7 @@ public class AuthenticationService {
   private final AuthenticatedPrincipalReader principals;
   private final RequestingPartyTokenClient requestingPartyTokens;
 
-  public AuthenticationResult authenticate(CreateSessionCommand command) {
+  public AuthenticationResult authenticate(@Valid CreateSessionCommand command) {
     return authenticate(command.email(), command.password());
   }
 

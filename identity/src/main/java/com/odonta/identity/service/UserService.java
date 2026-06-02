@@ -14,6 +14,7 @@ import com.odonta.identity.model.UserProjection;
 import com.odonta.identity.model.UserStatus;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -21,7 +22,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -31,7 +34,7 @@ public class UserService {
   private final AuthorizationSyncService authorizationSync;
 
   @Transactional
-  public UserProjection create(CreateUserCommand command) {
+  public UserProjection create(@Valid CreateUserCommand command) {
     EmailAddress email = EmailAddress.of(command.email());
     if (users.findProjectedByEmail(email.value()).isPresent()) {
       throw ApiException.conflict("user_exists", "A user with this email already exists.");
@@ -47,7 +50,7 @@ public class UserService {
   }
 
   @Transactional
-  public UserProjection createProvisional(CreateProvisionalUserCommand command) {
+  public UserProjection createProvisional(@Valid CreateProvisionalUserCommand command) {
     EmailAddress email = EmailAddress.of(command.email());
     return users
         .findProjectedByEmail(email.value())
@@ -66,7 +69,8 @@ public class UserService {
   }
 
   @Transactional
-  public UserProjection completeProvisional(UUID id, CompleteProvisionalUserCommand command) {
+  public UserProjection completeProvisional(
+      UUID id, @Valid CompleteProvisionalUserCommand command) {
     User user =
         users
             .findById(id)
@@ -112,7 +116,7 @@ public class UserService {
     return getProjectionByKeycloakSubject(keycloakSubject);
   }
 
-  public UserProjection update(UUID id, UpdateUserCommand command) {
+  public UserProjection update(UUID id, @Valid UpdateUserCommand command) {
     User user =
         users
             .findById(id)
@@ -130,7 +134,8 @@ public class UserService {
     return getProjection(id);
   }
 
-  public UserProjection updateCurrent(String keycloakSubject, UpdateCurrentUserCommand command) {
+  public UserProjection updateCurrent(
+      String keycloakSubject, @Valid UpdateCurrentUserCommand command) {
     User user =
         users
             .findProjectedByKeycloakSubject(keycloakSubject)

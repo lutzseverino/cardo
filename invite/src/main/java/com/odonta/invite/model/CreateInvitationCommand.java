@@ -1,6 +1,18 @@
 package com.odonta.invite.model;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.util.UUID;
 
 public record CreateInvitationCommand(
-    UUID tenantId, String tenantResourceType, String email, UUID accessProfileId) {}
+    @NotNull UUID tenantId,
+    @NotBlank @Pattern(regexp = "[^:]+:[^:]+") String tenantResourceType,
+    @NotBlank @Email String email,
+    @NotNull UUID accessProfileId) {
+
+  public String product() {
+    return tenantResourceType.substring(0, tenantResourceType.indexOf(':'));
+  }
+}
