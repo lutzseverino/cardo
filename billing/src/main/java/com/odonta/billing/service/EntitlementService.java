@@ -21,11 +21,11 @@ public class EntitlementService {
   private final EntitlementRepository entitlements;
 
   public EntitlementProjection get(UUID subjectId, String product) {
-    return projection(subjectId, product);
+    return getProjection(subjectId, product);
   }
 
   public EntitlementProjection require(UUID subjectId, String product) {
-    EntitlementProjection entitlement = projection(subjectId, product);
+    EntitlementProjection entitlement = getProjection(subjectId, product);
     if (!entitlement.getStatus().usable()) {
       throw ApiException.forbidden("entitlement_inactive", "Entitlement is not active.");
     }
@@ -69,7 +69,7 @@ public class EntitlementService {
     entitlement.setCurrentPeriodEndsAt(null);
   }
 
-  private EntitlementProjection projection(UUID subjectId, String product) {
+  private EntitlementProjection getProjection(UUID subjectId, String product) {
     return entitlements
         .findProjectedBySubjectIdAndProduct(subjectId, product)
         .orElseThrow(

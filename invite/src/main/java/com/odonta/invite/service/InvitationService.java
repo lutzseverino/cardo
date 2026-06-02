@@ -88,7 +88,7 @@ public class InvitationService {
                   token));
       String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
       email.sendInvitation(command.email(), acceptUrl);
-      return new CreateInvitationResult(projection(invitation.getId()), acceptUrl);
+      return new CreateInvitationResult(getProjection(invitation.getId()), acceptUrl);
     } catch (RuntimeException exception) {
       cancelProvisionalUser(invited.getId(), exception);
       throw exception;
@@ -145,7 +145,7 @@ public class InvitationService {
     return invitation;
   }
 
-  private InvitationProjection projection(UUID id) {
+  private InvitationProjection getProjection(UUID id) {
     return invitations
         .findProjectedById(id)
         .orElseThrow(() -> ApiException.notFound("invitation_not_found", "Invitation not found."));

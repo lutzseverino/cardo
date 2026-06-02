@@ -2,6 +2,7 @@ package com.odonta.common.web;
 
 import com.odonta.common.api.ApiError;
 import com.odonta.common.api.ApiException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,6 +18,11 @@ public abstract class ApiExceptionHandler {
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
   protected ResponseEntity<ApiError> handleValidationException() {
+    return invalidRequest();
+  }
+
+  @ExceptionHandler(ConstraintViolationException.class)
+  protected ResponseEntity<ApiError> handleConstraintViolation() {
     return invalidRequest();
   }
 
