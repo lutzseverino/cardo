@@ -7,7 +7,9 @@ import com.odonta.authorization.resource.TargetableAuthorizationResource;
 import com.odonta.authorization.sync.AuthorizationPlan;
 import com.odonta.authorization.sync.AuthorizationSyncOperation;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class AuthorizationPlanBuilder {
@@ -25,7 +27,10 @@ public final class AuthorizationPlanBuilder {
   }
 
   public AuthorizationPlanBuilder provision(AuthorizationResource resource) {
-    operations.add(AuthorizationSyncOperation.provision(resourceKey(resource), resource));
+    String key = resourceKey(resource);
+    if (operations.stream().noneMatch(operation -> operation.uniqueKey().equals(key))) {
+      operations.add(AuthorizationSyncOperation.provision(key, resource));
+    }
     return this;
   }
 
@@ -86,16 +91,21 @@ public final class AuthorizationPlanBuilder {
       AuthorizationResourceType tenantResourceType,
       UUID tenantId,
       List<AccessProfileGrantProjection> grants) {
-    List<AccessProfileGrantProjection> tenantGrants =
-        grants.stream().filter(grant -> isWildcardTenantGrant(grant, tenantResourceType)).toList();
-    if (tenantGrants.isEmpty()) {
-      return this;
-    }
-    provision(tenantResource(tenantResourceType, tenantId));
-    tenantGrants.forEach(
-        grant ->
-            grantResourceActions(
-                source, subject, tenantResourceType, tenantId, List.of(grant.getAction())));
+    Map<String, List<String>> actionsByResourceType = new LinkedHashMap<>();
+    grants.stream()
+        .filter(grant -> grant.getResourceId() == null)
+        .forEach(
+            grant -> addAction(actionsByResourceType, grant.getResourceType(), grant.getAction()));
+    actionsByResourceType.forEach(
+        (resourceType, actions) -> {
+          AuthorizationResourceType type =
+              tenantResourceType.typeName().equals(resourceType)
+                  ? tenantResourceType
+                  : resourceType(resourceType, actions);
+          AuthorizationResource resource = tenantResource(type, tenantId);
+          provision(resource);
+          grantResourceActions(source, subject, resource, actions);
+        });
     return this;
   }
 
@@ -103,10 +113,18 @@ public final class AuthorizationPlanBuilder {
     return AuthorizationPlan.of(operations);
   }
 
-  private boolean isWildcardTenantGrant(
-      AccessProfileGrantProjection grant, AuthorizationResourceType tenantResourceType) {
-    return tenantResourceType.typeName().equals(grant.getResourceType())
-        && grant.getResourceId() == null;
+  private void addAction(
+      Map<String, List<String>> actionsByResourceType, String resourceType, String action) {
+    List<String> actions =
+        actionsByResourceType.computeIfAbsent(resourceType, ignored -> new ArrayList<>());
+    if (!actions.contains(action)) {
+      actions.add(action);
+    }
+  }
+
+  private AuthorizationResourceType resourceType(String resourceType, List<String> actions) {
+    String[] parts = resourceType.split(":", 2);
+    return AuthorizationResourceType.of(parts[0], parts[1], actions);
   }
 
   private AuthorizationResource tenantResource(

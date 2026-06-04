@@ -8,7 +8,6 @@ import com.odonta.authorization.resource.AuthorizationResource;
 import com.odonta.authorization.resource.AuthorizationResourceType;
 import com.odonta.authorization.sync.AuthorizationPlan;
 import com.odonta.authorization.sync.AuthorizationPlanHandler;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -32,8 +31,7 @@ class InvitationAcceptedAuthorizationHandler
   public AuthorizationPlan plan(InvitationAccepted event) {
     List<AccessProfileGrantProjection> grants =
         accessProfiles.profileGrants(event.accessProfileId());
-    AuthorizationResourceType tenantResourceType =
-        tenantResourceType(event.tenantResourceType(), grants);
+    AuthorizationResourceType tenantResourceType = tenantResourceType(event.tenantResourceType());
     AuthorizationResource tenantResource = tenantResource(tenantResourceType, event.tenantId());
     var plan =
         authorizationPlan()
@@ -43,40 +41,28 @@ class InvitationAcceptedAuthorizationHandler
                 event.authorizationSubject(),
                 tenantResource,
                 List.of(event.minimumAction()));
-    List<String> accessProfileActions =
-        accessProfileActions(event.tenantResourceType(), event.minimumAction(), grants);
-    if (!accessProfileActions.isEmpty()) {
-      plan.grantResourceActions(
-          "invitation:access-profile",
-          event.authorizationSubject(),
-          tenantResource,
-          accessProfileActions);
-    }
+    plan.applyTenantResourceProfile(
+        "invitation:access-profile",
+        event.authorizationSubject(),
+        tenantResourceType,
+        event.tenantId(),
+        accessProfileGrants(event.tenantResourceType(), event.minimumAction(), grants));
     return plan.build();
   }
 
-  private AuthorizationResourceType tenantResourceType(
-      String resourceType, List<AccessProfileGrantProjection> grants) {
+  private AuthorizationResourceType tenantResourceType(String resourceType) {
     String[] parts = resourceType.split(":", 2);
-    List<String> actions = new ArrayList<>();
-    actions.add("read");
-    grants.stream()
-        .filter(grant -> resourceType.equals(grant.getResourceType()))
-        .map(AccessProfileGrantProjection::getAction)
-        .filter(action -> !actions.contains(action))
-        .forEach(actions::add);
-    return AuthorizationResourceType.of(parts[0], parts[1], actions);
+    return AuthorizationResourceType.of(parts[0], parts[1], List.of("read", "write"));
   }
 
-  private List<String> accessProfileActions(
+  private List<AccessProfileGrantProjection> accessProfileGrants(
       String tenantResourceType, String minimumAction, List<AccessProfileGrantProjection> grants) {
     return grants.stream()
+        .filter(grant -> grant.getResourceId() == null)
         .filter(
             grant ->
-                tenantResourceType.equals(grant.getResourceType())
-                    && grant.getResourceId() == null
-                    && !minimumAction.equals(grant.getAction()))
-        .map(AccessProfileGrantProjection::getAction)
+                !tenantResourceType.equals(grant.getResourceType())
+                    || !minimumAction.equals(grant.getAction()))
         .toList();
   }
 

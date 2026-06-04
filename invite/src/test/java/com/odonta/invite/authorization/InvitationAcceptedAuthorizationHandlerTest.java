@@ -31,14 +31,14 @@ class InvitationAcceptedAuthorizationHandlerTest {
             List.of(
                 grant("clinic:clinic", null, "read"),
                 grant("clinic:clinic", null, "write"),
-                grant("clinic:chair", null, "read")));
+                grant("clinic:chairs", null, "read")));
 
     AuthorizationPlan plan =
         new InvitationAcceptedAuthorizationHandler(accessProfiles)
             .plan(
                 new InvitationAccepted(CLINIC_ID, "clinic:clinic", ACCESS_PROFILE_ID, "subject-1"));
 
-    assertThat(plan.operations()).hasSize(3);
+    assertThat(plan.operations()).hasSize(5);
     assertThat(plan.operations().getFirst()).isInstanceOf(ProvisionAuthorizationResource.class);
 
     GrantAuthorizationResourceActions baseline =
@@ -56,6 +56,15 @@ class InvitationAcceptedAuthorizationHandlerTest {
             "grant:invitation:access-profile:subject-1:clinic:"
                 + "clinic:clinic:11111111-1111-1111-1111-111111111111:write");
     assertThat(selectedProfile.actions()).containsExactly("write");
+
+    assertThat(plan.operations().get(3)).isInstanceOf(ProvisionAuthorizationResource.class);
+    GrantAuthorizationResourceActions siblingProfile =
+        (GrantAuthorizationResourceActions) plan.operations().get(4);
+    assertThat(siblingProfile.uniqueKey())
+        .isEqualTo(
+            "grant:invitation:access-profile:subject-1:clinic:"
+                + "clinic:chairs:11111111-1111-1111-1111-111111111111:read");
+    assertThat(siblingProfile.actions()).containsExactly("read");
   }
 
   private static AccessProfileGrantProjection grant(

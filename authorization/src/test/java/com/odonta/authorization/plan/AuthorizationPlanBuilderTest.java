@@ -59,7 +59,7 @@ class AuthorizationPlanBuilderTest {
   }
 
   @Test
-  void appliesOnlyWildcardTenantResourceProfileGrants() {
+  void appliesWildcardProfileGrantsToTenantScopedResources() {
     UUID clinicId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     UUID childResourceId = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
@@ -73,12 +73,15 @@ class AuthorizationPlanBuilderTest {
                 List.of(
                     grant("clinic:clinic", null, "read"),
                     grant("clinic:clinic", childResourceId, "write"),
-                    grant("clinic:chair", null, "read")))
+                    grant("clinic:chairs", null, "read"),
+                    grant("clinic:chairs", null, "read")))
             .build();
 
-    assertThat(plan.operations()).hasSize(2);
+    assertThat(plan.operations()).hasSize(4);
     assertThat(plan.operations().getFirst()).isInstanceOf(ProvisionAuthorizationResource.class);
     isClinicReadGrant(plan.operations().get(1));
+    assertThat(plan.operations().get(2)).isInstanceOf(ProvisionAuthorizationResource.class);
+    isChairsReadGrant(plan.operations().get(3));
   }
 
   private static void isClinicReadGrant(AuthorizationSyncOperation operation) {
@@ -91,6 +94,19 @@ class AuthorizationPlanBuilderTest {
     assertThat(grant.resourceServerClientId()).isEqualTo("clinic");
     assertThat(grant.resourceName())
         .isEqualTo("clinic:clinic:11111111-1111-1111-1111-111111111111");
+    assertThat(grant.actions()).containsExactly("read");
+  }
+
+  private static void isChairsReadGrant(AuthorizationSyncOperation operation) {
+    GrantAuthorizationResourceActions grant = (GrantAuthorizationResourceActions) operation;
+
+    assertThat(grant.uniqueKey())
+        .isEqualTo(
+            "grant:access-profile:subject-1:clinic:"
+                + "clinic:chairs:11111111-1111-1111-1111-111111111111:read");
+    assertThat(grant.resourceServerClientId()).isEqualTo("clinic");
+    assertThat(grant.resourceName())
+        .isEqualTo("clinic:chairs:11111111-1111-1111-1111-111111111111");
     assertThat(grant.actions()).containsExactly("read");
   }
 
