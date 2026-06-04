@@ -5,6 +5,7 @@ import com.odonta.authorization.spring.ResourcePermissionEvaluator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
@@ -55,11 +56,9 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(basePath + "/identity")
                     .permitAll()
-                    .requestMatchers(
-                        org.springframework.http.HttpMethod.POST, basePath + "/identity/users")
+                    .requestMatchers(HttpMethod.POST, basePath + "/identity/users")
                     .permitAll()
-                    .requestMatchers(
-                        org.springframework.http.HttpMethod.POST, basePath + "/identity/sessions")
+                    .requestMatchers(HttpMethod.POST, basePath + "/identity/sessions")
                     .permitAll()
                     .anyRequest()
                     .authenticated())

@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -154,7 +155,7 @@ class UserServiceTest {
     return new UserService(users, identityProvider, authorizationSync);
   }
 
-  private User persisted(org.mockito.invocation.InvocationOnMock invocation, UUID id) {
+  private User persisted(InvocationOnMock invocation, UUID id) {
     User user = invocation.getArgument(0);
     ReflectionTestUtils.setField(user, "id", id);
     return user;

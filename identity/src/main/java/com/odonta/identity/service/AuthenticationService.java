@@ -55,7 +55,7 @@ public class AuthenticationService {
       String subject,
       String sessionId,
       AuthenticationMethod authenticationMethod,
-      java.time.OffsetDateTime expiresAt) {
+      OffsetDateTime expiresAt) {
     return principals
         .findByKeycloakSubject(subject, sessionId, authenticationMethod, expiresAt)
         .orElseThrow(

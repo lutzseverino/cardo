@@ -12,7 +12,9 @@ import com.stripe.StripeClient;
 import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.CustomerCreateParams;
-import com.stripe.param.billingportal.SessionCreateParams;
+import com.stripe.param.checkout.SessionCreateParams;
+import com.stripe.param.checkout.SessionCreateParams.LineItem;
+import com.stripe.param.checkout.SessionCreateParams.Mode;
 import com.stripe.param.checkout.SessionCreateParams.SubscriptionData;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -41,8 +43,8 @@ public class StripeBillingProvider implements BillingProvider {
               .checkout()
               .sessions()
               .create(
-                  com.stripe.param.checkout.SessionCreateParams.builder()
-                      .setMode(com.stripe.param.checkout.SessionCreateParams.Mode.SUBSCRIPTION)
+                  SessionCreateParams.builder()
+                      .setMode(Mode.SUBSCRIPTION)
                       .setCustomer(customer.getProviderCustomerId())
                       .setSuccessUrl(command.successUrl())
                       .setCancelUrl(command.cancelUrl())
@@ -53,11 +55,7 @@ public class StripeBillingProvider implements BillingProvider {
                               .putMetadata("subject_id", subjectId.toString())
                               .putMetadata("product", price.product())
                               .build())
-                      .addLineItem(
-                          com.stripe.param.checkout.SessionCreateParams.LineItem.builder()
-                              .setPrice(price.id())
-                              .setQuantity(1L)
-                              .build())
+                      .addLineItem(LineItem.builder().setPrice(price.id()).setQuantity(1L).build())
                       .build());
       return new BillingSessionResult(session.getId(), session.getUrl());
     } catch (StripeException exception) {
@@ -76,7 +74,7 @@ public class StripeBillingProvider implements BillingProvider {
               .billingPortal()
               .sessions()
               .create(
-                  SessionCreateParams.builder()
+                  com.stripe.param.billingportal.SessionCreateParams.builder()
                       .setCustomer(customer.getProviderCustomerId())
                       .setReturnUrl(command.returnUrl())
                       .build());

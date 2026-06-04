@@ -1,6 +1,9 @@
 package com.odonta.identity.mapper;
 
 import com.odonta.identity.api.model.AuthenticatedPrincipalResponse;
+import com.odonta.identity.api.model.AuthenticationMethod;
+import com.odonta.identity.api.model.UserResponse;
+import com.odonta.identity.api.model.UserStatus;
 import com.odonta.identity.model.AuthenticatedPrincipal;
 import java.net.URI;
 import org.mapstruct.Mapper;
@@ -13,19 +16,18 @@ public interface AuthenticatedPrincipalMapper {
     return new AuthenticatedPrincipalResponse(
         principal.sessionId(),
         user(principal),
-        com.odonta.identity.api.model.AuthenticationMethod.fromValue(
-            principal.authenticationMethod().wireValue()),
+        AuthenticationMethod.fromValue(principal.authenticationMethod().wireValue()),
         principal.authProviderId(),
         principal.expiresAt());
   }
 
-  default com.odonta.identity.api.model.UserResponse user(AuthenticatedPrincipal principal) {
-    return new com.odonta.identity.api.model.UserResponse(
+  default UserResponse user(AuthenticatedPrincipal principal) {
+    return new UserResponse(
             principal.userId(),
             principal.keycloakSubject(),
             principal.userEmail(),
             principal.userName(),
-            com.odonta.identity.api.model.UserStatus.fromValue(principal.userStatus().wireValue()),
+            UserStatus.fromValue(principal.userStatus().wireValue()),
             principal.userEmailVerified(),
             principal.userCreatedAt(),
             principal.userUpdatedAt())

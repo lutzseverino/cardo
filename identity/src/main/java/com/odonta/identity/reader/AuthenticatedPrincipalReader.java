@@ -5,6 +5,7 @@ import com.odonta.identity.model.AuthenticationMethod;
 import com.odonta.identity.model.UserStatus;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,7 +24,7 @@ public class AuthenticatedPrincipalReader {
       String keycloakSubject,
       String sessionId,
       AuthenticationMethod authenticationMethod,
-      java.time.OffsetDateTime expiresAt) {
+      OffsetDateTime expiresAt) {
     return jdbc
         .query(
             """
@@ -50,7 +51,7 @@ public class AuthenticatedPrincipalReader {
       ResultSet rs,
       String sessionId,
       AuthenticationMethod authenticationMethod,
-      java.time.OffsetDateTime expiresAt)
+      OffsetDateTime expiresAt)
       throws SQLException {
     return new AuthenticatedPrincipal(
         sessionId,
@@ -61,8 +62,8 @@ public class AuthenticatedPrincipalReader {
         rs.getString("user_avatar_url"),
         UserStatus.valueOf(rs.getString("user_status")),
         rs.getBoolean("user_email_verified"),
-        rs.getObject("user_created_at", java.time.OffsetDateTime.class),
-        rs.getObject("user_updated_at", java.time.OffsetDateTime.class),
+        rs.getObject("user_created_at", OffsetDateTime.class),
+        rs.getObject("user_updated_at", OffsetDateTime.class),
         authenticationMethod,
         null,
         expiresAt);
