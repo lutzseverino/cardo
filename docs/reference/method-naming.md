@@ -24,6 +24,7 @@ The owner supplies the main subject. The method supplies what happens to that su
 - Prefer nouns or noun phrases for values, projections, and data holders.
 - Keep names symmetric across similar owners when the operations are equivalent.
 - Do not add suffixes such as `resource`, `entity`, `model`, or `object` unless they disambiguate a real boundary.
+- When a qualifier disambiguates a boundary, keep it next to the action and avoid repeating the owner subject. For example, prefer `getProjection()` over `getTreatmentProjection()` inside `TreatmentService`.
 - Do not encode transport, persistence, framework, or generated-code details into product method names.
 - Let generated or external contract surfaces be more explicit when they require globally unique names.
 - Test method names may rely on the test class context in the same way production methods rely on their owner.
