@@ -15,6 +15,10 @@ import com.odonta.identity.model.UserStatus;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
 import jakarta.validation.Valid;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -117,6 +121,15 @@ public class UserService {
     return getProjectionByKeycloakSubject(keycloakSubject);
   }
 
+  public List<UserProjection> searchByAuthorizationSubjects(
+      Collection<String> authorizationSubjects) {
+    List<String> subjects = normalizedAuthorizationSubjects(authorizationSubjects);
+    if (subjects.isEmpty()) {
+      return List.of();
+    }
+    return users.findProjectedByKeycloakSubjectIn(subjects);
+  }
+
   public UserProjection update(UUID id, @Valid UpdateUserCommand command) {
     User user =
         users
@@ -159,6 +172,13 @@ public class UserService {
     return users
         .findProjectedByKeycloakSubject(keycloakSubject)
         .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
+  }
+
+  private List<String> normalizedAuthorizationSubjects(Collection<String> authorizationSubjects) {
+    return authorizationSubjects == null
+        ? List.of()
+        : new LinkedHashSet<>(authorizationSubjects)
+            .stream().filter(Objects::nonNull).filter(subject -> !subject.isBlank()).toList();
   }
 
   private UserProjection createIdentityUser(

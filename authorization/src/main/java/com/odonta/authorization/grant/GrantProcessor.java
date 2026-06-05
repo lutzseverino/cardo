@@ -43,8 +43,8 @@ public class GrantProcessor {
     List<String> grantedActions =
         authorization
             .findResourceActionGrants(
-                new ResourceGrantQuery(
-                    grant.resourceServerClientId(), resource.id(), grant.subject(), true))
+                ResourceGrantQuery.forResourceId(
+                    grant.resourceServerClientId(), resource.id(), grant.subject()))
             .stream()
             .filter(GrantedResourceAction::granted)
             .map(GrantedResourceAction::action)

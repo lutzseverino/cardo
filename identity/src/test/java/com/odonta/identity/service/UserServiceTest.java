@@ -22,6 +22,7 @@ import com.odonta.identity.model.UserStatus;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -150,6 +151,19 @@ class UserServiceTest {
         .hasMessage("User is already complete.");
 
     verify(identityProvider, never()).deleteIdentity(any());
+  }
+
+  @Test
+  void searchesUsersByAuthorizationSubjects() {
+    UserProjection user = projection(UserStatus.ACTIVE);
+    UserService service = service();
+    when(users.findProjectedByKeycloakSubjectIn(List.of("subject-1", "subject-2")))
+        .thenReturn(List.of(user));
+
+    assertThat(
+            service.searchByAuthorizationSubjects(
+                List.of("subject-1", " ", "subject-2", "subject-1")))
+        .containsExactly(user);
   }
 
   private UserService service() {

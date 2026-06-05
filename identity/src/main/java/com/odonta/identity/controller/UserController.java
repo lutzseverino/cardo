@@ -5,10 +5,12 @@ import com.odonta.identity.api.UsersApi;
 import com.odonta.identity.api.model.CompleteProvisionalUserRequest;
 import com.odonta.identity.api.model.CreateProvisionalUserRequest;
 import com.odonta.identity.api.model.CreateUserRequest;
+import com.odonta.identity.api.model.SearchUsersRequest;
 import com.odonta.identity.api.model.UpdateCurrentUserRequest;
 import com.odonta.identity.api.model.UpdateUserRequest;
 import com.odonta.identity.api.model.UpdateUserStatus;
 import com.odonta.identity.api.model.UserResponse;
+import com.odonta.identity.api.model.UsersResponse;
 import com.odonta.identity.mapper.UserMapper;
 import com.odonta.identity.model.CompleteProvisionalUserCommand;
 import com.odonta.identity.model.CreateProvisionalUserCommand;
@@ -20,6 +22,7 @@ import com.odonta.identity.reader.CurrentJwtReader;
 import com.odonta.identity.service.UserService;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -105,6 +108,23 @@ public class UserController implements UsersApi {
           + "')")
   public ResponseEntity<UserResponse> getUserByEmail(String email) {
     return ResponseEntity.ok(mapper.toResponse(users.getByEmail(email)));
+  }
+
+  @Override
+  @PreAuthorize(
+      "hasPermission('*', '"
+          + IdentityPermissions.USER_RESOURCE
+          + "', '"
+          + IdentityPermissions.READ
+          + "')")
+  public ResponseEntity<UsersResponse> searchUsers(@Valid SearchUsersRequest request) {
+    return ResponseEntity.ok(
+        new UsersResponse(
+            mapper.toResponses(
+                users.searchByAuthorizationSubjects(
+                    request.getAuthorizationSubjects() == null
+                        ? List.of()
+                        : request.getAuthorizationSubjects().stream().toList()))));
   }
 
   @Override

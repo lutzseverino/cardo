@@ -4,6 +4,7 @@ import com.odonta.identity.api.model.UserResponse;
 import com.odonta.identity.model.UserProjection;
 import com.odonta.identity.model.UserStatus;
 import java.net.URI;
+import java.util.List;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 
@@ -21,6 +22,10 @@ public interface UserMapper {
             user.getCreatedAt(),
             user.getUpdatedAt())
         .avatarUrl(toUri(user.getAvatarUrl()));
+  }
+
+  default List<UserResponse> toResponses(List<UserProjection> users) {
+    return users.stream().map(this::toResponse).toList();
   }
 
   default com.odonta.identity.api.model.UserStatus toResponse(UserStatus status) {

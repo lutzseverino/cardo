@@ -107,6 +107,32 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /identity/users/search:
+    post:
+      tags: [Users]
+      operationId: searchUsers
+      summary: Search identity users.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchUsersRequest"
+      responses:
+        "200":
+          description: Users matching the search criteria.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /identity/users/me:
     get:
       tags: [Users]
@@ -382,6 +408,23 @@ components:
         updatedAt:
           type: string
           format: date-time
+    UsersResponse:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserResponse"
+    SearchUsersRequest:
+      type: object
+      properties:
+        authorizationSubjects:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+          default: []
     CreateUserRequest:
       type: object
       required: [email, password, name]
@@ -450,13 +493,17 @@ components:
       enum: [password, oidc, saml]
     AuthenticatedPrincipalResponse:
       type: object
-      required: [sessionId, user, authenticationMethod, authProviderId, expiresAt]
+      required: [sessionId, user, grants, authenticationMethod, authProviderId, expiresAt]
       properties:
         sessionId:
           type: string
           nullable: true
         user:
           $ref: "#/components/schemas/UserResponse"
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceGrantResponse"
         authenticationMethod:
           $ref: "#/components/schemas/AuthenticationMethod"
         authProviderId:
@@ -467,3 +514,21 @@ components:
           type: string
           nullable: true
           format: date-time
+    ResourceGrantResponse:
+      type: object
+      required: [resource, actions]
+      properties:
+        resource:
+          $ref: "#/components/schemas/GrantedResourceResponse"
+        actions:
+          type: array
+          items:
+            type: string
+    GrantedResourceResponse:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+        id:
+          type: string

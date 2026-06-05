@@ -1,5 +1,6 @@
 package com.odonta.identity.config;
 
+import com.odonta.authorization.grant.EffectiveGrantAuthorityReader;
 import com.odonta.authorization.keycloak.KeycloakAuthoritiesConverter;
 import com.odonta.authorization.spring.ResourcePermissionEvaluator;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,11 @@ public class SecurityConfig {
   @Bean
   KeycloakAuthoritiesConverter keycloakAuthoritiesConverter() {
     return new KeycloakAuthoritiesConverter();
+  }
+
+  @Bean
+  EffectiveGrantAuthorityReader effectiveGrantAuthorityReader() {
+    return new EffectiveGrantAuthorityReader();
   }
 
   @Bean

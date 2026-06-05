@@ -135,6 +135,15 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
 
   @Override
   public List<GrantedResourceAction> findResourceActionGrants(ResourceGrantQuery query) {
+    String resourceId = query.resourceId();
+    if (resourceId == null && query.resourceName() != null) {
+      Optional<ResourceSetResponse> resource = findResourceByName(query.resourceName());
+      if (resource.isEmpty()) {
+        return List.of();
+      }
+      resourceId = resource.orElseThrow().id();
+    }
+    String resolvedResourceId = resourceId;
     PermissionTicketRepresentation[] tickets =
         rest.get()
             .uri(
@@ -142,8 +151,8 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
                   var builder =
                       uri.path("/realms/{realm}/authz/protection/permission/ticket")
                           .queryParam("returnNames", true);
-                  if (query.resourceId() != null) {
-                    builder.queryParam("resourceId", query.resourceId());
+                  if (resolvedResourceId != null) {
+                    builder.queryParam("resourceId", resolvedResourceId);
                   }
                   if (query.requesterSubject() != null) {
                     builder.queryParam("requester", query.requesterSubject());
