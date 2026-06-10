@@ -8,7 +8,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.odonta.authorization.grant.ClientRoleRevocation;
@@ -17,7 +16,6 @@ import com.odonta.authorization.grant.ResourceGrantQuery;
 import com.odonta.authorization.resource.AuthorizationResource;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -42,12 +40,17 @@ class KeycloakAuthorizationClientTest {
                 MediaType.APPLICATION_JSON));
     server
         .expect(
-            requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles/profile%3Aread")))
+            requestTo(
+                org.hamcrest.Matchers.endsWith(
+                    "/users/subject-1/role-mappings/clients/client-uuid")))
         .andExpect(method(GET))
         .andRespond(
             withSuccess(
                 """
-                {"id":"role-id","name":"profile:read"}
+                [
+                  {"id":"role-id","name":"profile:read"},
+                  {"id":"other-role-id","name":"profile:write"}
+                ]
                 """,
                 MediaType.APPLICATION_JSON));
     server
@@ -88,9 +91,11 @@ class KeycloakAuthorizationClientTest {
                 MediaType.APPLICATION_JSON));
     server
         .expect(
-            requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles/profile%3Aread")))
+            requestTo(
+                org.hamcrest.Matchers.endsWith(
+                    "/users/subject-1/role-mappings/clients/client-uuid")))
         .andExpect(method(GET))
-        .andRespond(withStatus(HttpStatus.NOT_FOUND));
+        .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
     client.removeClientRoles(
         new ClientRoleRevocation("identity", "subject-1", List.of("profile:read")));

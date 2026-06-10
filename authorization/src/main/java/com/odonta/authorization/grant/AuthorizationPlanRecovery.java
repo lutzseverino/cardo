@@ -14,6 +14,11 @@ class AuthorizationPlanRecovery {
 
   @Scheduled(fixedDelayString = "${odonta.authorization.plans.retry-delay:PT1M}")
   void retryFailed() {
-    publications.resubmit(ResubmissionOptions.defaults());
+    publications.resubmit(
+        ResubmissionOptions.defaults()
+            .withFilter(
+                publication ->
+                    publication.getEvent() instanceof GrantPlan
+                        || publication.getEvent() instanceof RevocationPlan));
   }
 }

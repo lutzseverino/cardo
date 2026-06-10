@@ -203,9 +203,8 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
   public void removeClientRoles(ClientRoleRevocation revocation) {
     String clientUuid = clientUuid(revocation.resourceServerClientId());
     List<RoleRepresentation> roles =
-        revocation.authorities().stream()
-            .map(roleName -> existingRole(clientUuid, roleName))
-            .flatMap(Optional::stream)
+        clientRoleMappings(clientUuid, revocation.requesterSubject()).stream()
+            .filter(role -> revocation.authorities().contains(role.name()))
             .toList();
     if (roles.isEmpty()) {
       return;
@@ -220,6 +219,20 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
         .body(roles)
         .retrieve()
         .toBodilessEntity();
+  }
+
+  private List<RoleRepresentation> clientRoleMappings(String clientUuid, String subject) {
+    RoleRepresentation[] roles =
+        rest.get()
+            .uri(
+                "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUuid}",
+                realm,
+                subject,
+                clientUuid)
+            .header(HttpHeaders.AUTHORIZATION, authorization())
+            .retrieve()
+            .body(RoleRepresentation[].class);
+    return roles == null ? List.of() : List.of(roles);
   }
 
   private RoleRepresentation role(String clientUuid, String roleName) {
@@ -237,26 +250,6 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
       if (exception.getStatusCode().value() == 404) {
         createRole(clientUuid, roleName);
         return role(clientUuid, roleName);
-      }
-      throw exception;
-    }
-  }
-
-  private Optional<RoleRepresentation> existingRole(String clientUuid, String roleName) {
-    try {
-      return Optional.ofNullable(
-          rest.get()
-              .uri(
-                  "/admin/realms/{realm}/clients/{clientUuid}/roles/{roleName}",
-                  realm,
-                  clientUuid,
-                  roleName)
-              .header(HttpHeaders.AUTHORIZATION, authorization())
-              .retrieve()
-              .body(RoleRepresentation.class));
-    } catch (RestClientResponseException exception) {
-      if (exception.getStatusCode().value() == 404) {
-        return Optional.empty();
       }
       throw exception;
     }

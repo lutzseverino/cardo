@@ -30,7 +30,11 @@ class RevocationProcessorTest {
 
     processor.apply(new RevocationPlan(List.of(revocation), List.of()));
 
+    verify(authorization)
+        .findResourceActionGrants(
+            ResourceGrantQuery.forResourceName("clinic", "clinic:clinic:123", "subject-1"));
     verify(authorization).revokeResourceActionGrant("ticket-1");
+    verifyNoMoreInteractions(authorization);
   }
 
   @Test
