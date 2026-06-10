@@ -8,6 +8,7 @@ import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.AuthorizationPlanConfiguration;
 import com.odonta.authorization.keycloak.KeycloakAuthorizationClient;
 import com.odonta.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
+import com.odonta.authorization.schema.AuthorizationSchemaConfiguration;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.model.Invitation;
 import com.odonta.invite.repository.InvitationRepository;
@@ -19,7 +20,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@Import(AuthorizationPlanConfiguration.class)
+@Import({AuthorizationPlanConfiguration.class, AuthorizationSchemaConfiguration.class})
 @EntityScan(basePackageClasses = {Invitation.class, AccessProfile.class})
 @EnableJpaRepositories(
     basePackageClasses = {InvitationRepository.class, AccessProfileRepository.class})

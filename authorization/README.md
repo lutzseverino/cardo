@@ -19,3 +19,6 @@ Spring Modulith and applies it asynchronously through the configured
 
 See [Authorization Grant Lifecycle](../docs/reference/authorization-grants.md)
 for the contract and ownership rules.
+
+See [Embed Authorization](../docs/how-to/embed-authorization.md) for schema,
+Flyway, entity scanning, repository, and bean configuration.

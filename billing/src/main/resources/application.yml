@@ -7,6 +7,8 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:odonta}
   flyway:
     table: flyway_schema_history_billing
+    baseline-on-migrate: true
+    baseline-version: 0
   jpa:
     hibernate:
       ddl-auto: validate

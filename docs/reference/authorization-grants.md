@@ -56,5 +56,5 @@ and configure:
 - `odonta.authorization.plans.retry-delay`: failed-publication retry delay;
   defaults to `PT1M`
 
-The shared `db/authorization` Flyway location creates the publication schema and
-Spring Modulith JDBC tables.
+The shared `db/authorization/publications` Flyway location creates the publication
+schema and Spring Modulith JDBC tables.
