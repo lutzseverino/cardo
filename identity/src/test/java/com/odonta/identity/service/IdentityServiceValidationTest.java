@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.odonta.authorization.grant.Grants;
-import com.odonta.identity.authorization.IdentityGrants;
+import com.odonta.identity.authorization.IdentityGrantPlanner;
 import com.odonta.identity.model.CreateUserCommand;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
@@ -60,8 +60,8 @@ class IdentityServiceValidationTest {
     }
 
     @Bean
-    IdentityGrants identityGrants() {
-      return new IdentityGrants();
+    IdentityGrantPlanner identityGrantPlanner() {
+      return new IdentityGrantPlanner();
     }
 
     @Bean
@@ -69,8 +69,8 @@ class IdentityServiceValidationTest {
         UserRepository users,
         IdentityProvider identityProvider,
         Grants grants,
-        IdentityGrants identityGrants) {
-      return new UserService(users, identityProvider, grants, identityGrants);
+        IdentityGrantPlanner identityGrantPlanner) {
+      return new UserService(users, identityProvider, grants, identityGrantPlanner);
     }
   }
 }

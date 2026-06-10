@@ -8,7 +8,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-class IdentityGrantsTest {
+class IdentityGrantPlannerTest {
 
   @Test
   void provisionsUserAndGrantsProfileAuthorities() {
@@ -16,7 +16,7 @@ class IdentityGrantsTest {
     ReflectionTestUtils.setField(
         user, "id", UUID.fromString("11111111-1111-1111-1111-111111111111"));
 
-    GrantPlan plan = new IdentityGrants().creation(user);
+    GrantPlan plan = new IdentityGrantPlanner().creation(user);
 
     assertThat(plan.resources()).hasSize(1);
     assertThat(plan.resourceGrants()).isEmpty();

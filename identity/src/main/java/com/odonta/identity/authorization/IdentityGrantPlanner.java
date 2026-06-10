@@ -7,7 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
-public class IdentityGrants {
+public class IdentityGrantPlanner {
 
   private static final List<String> DEFAULT_PROFILE_AUTHORITIES =
       List.of(IdentityPermissions.PROFILE_READ, IdentityPermissions.PROFILE_WRITE);

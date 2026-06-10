@@ -12,7 +12,7 @@ The module currently owns:
 - durable grant staging and provider application
 
 Application flows define their grant intent in a flow-owned planner such as
-`ClinicGrants`, then stage the resulting `GrantPlan` through `Grants.stage(...)`
+`ClinicGrantPlanner`, then stage the resulting `GrantPlan` through `Grants.stage(...)`
 inside the flow transaction. The authorization module records the plan with
 Spring Modulith and applies it asynchronously through the configured
 `AuthorizationAdminClient`.

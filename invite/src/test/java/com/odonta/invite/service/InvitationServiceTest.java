@@ -17,7 +17,7 @@ import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.identity.client.UserResponse;
 import com.odonta.identity.client.UserStatus;
 import com.odonta.identity.client.api.UsersApi;
-import com.odonta.invite.authorization.InvitationGrants;
+import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.Invitation;
@@ -47,7 +47,7 @@ class InvitationServiceTest {
   @Mock private EmailSender email;
   @Mock private Grants grants;
   @Mock private UsersApi identityUsers;
-  @Mock private InvitationGrants invitationGrants;
+  @Mock private InvitationGrantPlanner invitationGrantPlanner;
   @Mock private InvitationRepository invitations;
 
   @Test
@@ -99,12 +99,13 @@ class InvitationServiceTest {
     when(invitations.findProjectedByToken("token")).thenReturn(Optional.of(invitation));
     when(invitations.findById(invitation.getId())).thenReturn(Optional.of(entity));
     when(accessProfiles.grants(ACCESS_PROFILE_ID)).thenReturn(accessGrants);
-    when(invitationGrants.acceptance(TENANT_ID, "clinic:clinic", "employee-subject", accessGrants))
+    when(invitationGrantPlanner.acceptance(
+            TENANT_ID, "clinic:clinic", "employee-subject", accessGrants))
         .thenReturn(plan);
 
     service.accept("token", new AuthenticatedUser(INVITED_USER_ID, "employee-subject", "Employee"));
 
-    verify(invitationGrants)
+    verify(invitationGrantPlanner)
         .acceptance(TENANT_ID, "clinic:clinic", "employee-subject", accessGrants);
     verify(grants).stage(plan);
   }
@@ -115,7 +116,7 @@ class InvitationServiceTest {
         email,
         grants,
         identityUsers,
-        invitationGrants,
+        invitationGrantPlanner,
         new InvitationProperties(Duration.ofHours(72), "https://app.example.com"),
         invitations);
   }

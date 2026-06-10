@@ -10,7 +10,7 @@ import com.odonta.identity.client.CreateProvisionalUserRequest;
 import com.odonta.identity.client.UserResponse;
 import com.odonta.identity.client.api.UsersApi;
 import com.odonta.invite.InvitePermissions;
-import com.odonta.invite.authorization.InvitationGrants;
+import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
 import com.odonta.invite.model.CompleteInvitationCommand;
 import com.odonta.invite.model.CreateInvitationCommand;
@@ -40,7 +40,7 @@ public class InvitationService {
   private final EmailSender email;
   private final Grants grants;
   private final UsersApi identityUsers;
-  private final InvitationGrants invitationGrants;
+  private final InvitationGrantPlanner invitationGrantPlanner;
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
 
@@ -49,14 +49,14 @@ public class InvitationService {
       EmailSender email,
       Grants grants,
       UsersApi identityUsers,
-      InvitationGrants invitationGrants,
+      InvitationGrantPlanner invitationGrantPlanner,
       InvitationProperties properties,
       InvitationRepository invitations) {
     this.accessProfiles = accessProfiles;
     this.email = email;
     this.grants = grants;
     this.identityUsers = identityUsers;
-    this.invitationGrants = invitationGrants;
+    this.invitationGrantPlanner = invitationGrantPlanner;
     this.properties = properties;
     this.invitations = invitations;
   }
@@ -129,7 +129,7 @@ public class InvitationService {
                 () -> ApiException.notFound("invitation_not_found", "Invitation not found."));
     entity.accept(OffsetDateTime.now(clock));
     grants.stage(
-        invitationGrants.acceptance(
+        invitationGrantPlanner.acceptance(
             invitation.getTenantId(),
             invitation.getTenantResourceType(),
             authorizationSubject,

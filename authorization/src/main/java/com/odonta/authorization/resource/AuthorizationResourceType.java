@@ -21,6 +21,15 @@ public record AuthorizationResourceType(String product, String resourceType, Lis
     return new AuthorizationResourceType(product, resourceType, actions);
   }
 
+  public static AuthorizationResourceType parse(String typeName, List<String> actions) {
+    requireText(typeName, "typeName");
+    int separator = typeName.indexOf(':');
+    if (separator <= 0 || separator == typeName.length() - 1) {
+      throw new IllegalArgumentException("typeName must use the product:resource format");
+    }
+    return of(typeName.substring(0, separator), typeName.substring(separator + 1), actions);
+  }
+
   public String typeName() {
     return product + ":" + resourceType;
   }
@@ -31,6 +40,10 @@ public record AuthorizationResourceType(String product, String resourceType, Lis
 
   public String allResourcesName() {
     return AuthorizationResourceNames.all(product, resourceType);
+  }
+
+  public AuthorizationResource resource(UUID resourceId) {
+    return new AuthorizationResource(product, resourceName(resourceId), typeName(), null, actions);
   }
 
   private static void requireText(String value, String name) {

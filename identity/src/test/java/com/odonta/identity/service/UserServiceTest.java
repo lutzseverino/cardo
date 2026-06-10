@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.odonta.authorization.grant.Grants;
 import com.odonta.common.api.ApiException;
-import com.odonta.identity.authorization.IdentityGrants;
+import com.odonta.identity.authorization.IdentityGrantPlanner;
 import com.odonta.identity.model.CompleteProvisionalUserCommand;
 import com.odonta.identity.model.CreateProvisionalUserCommand;
 import com.odonta.identity.model.CreateUserCommand;
@@ -153,7 +153,7 @@ class UserServiceTest {
   }
 
   private UserService service() {
-    return new UserService(users, identityProvider, grants, new IdentityGrants());
+    return new UserService(users, identityProvider, grants, new IdentityGrantPlanner());
   }
 
   private User persisted(InvocationOnMock invocation, UUID id) {

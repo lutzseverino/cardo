@@ -25,9 +25,12 @@ flows.
 ## Ownership
 
 - The application module that owns a flow owns its planner. Use a small class
-  named for the module concept, such as `ClinicGrants` or `InvitationGrants`.
+  named for the module concept, such as `ClinicGrantPlanner` or
+  `InvitationGrantPlanner`.
 - A planner method is named for the flow action, such as `activation(...)` or
   `acceptance(...)`, and returns a complete `GrantPlan`.
+- `AuthorizationResourceType` owns canonical resource-type parsing and the
+  construction of resources targeted at a domain identifier.
 - Permission constants remain in types such as `ClinicPermissions`. They name
   the authorization vocabulary; grant planners decide when and to whom that
   vocabulary is assigned.

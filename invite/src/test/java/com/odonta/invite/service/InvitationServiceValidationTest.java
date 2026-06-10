@@ -8,7 +8,7 @@ import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.identity.client.api.UsersApi;
-import com.odonta.invite.authorization.InvitationGrants;
+import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.repository.InvitationRepository;
@@ -66,8 +66,8 @@ class InvitationServiceValidationTest {
     }
 
     @Bean
-    InvitationGrants invitationGrants() {
-      return new InvitationGrants();
+    InvitationGrantPlanner invitationGrantPlanner() {
+      return new InvitationGrantPlanner();
     }
 
     @Bean
@@ -96,7 +96,7 @@ class InvitationServiceValidationTest {
         EmailSender email,
         Grants grants,
         UsersApi identityUsers,
-        InvitationGrants invitationGrants,
+        InvitationGrantPlanner invitationGrantPlanner,
         InvitationProperties invitationProperties,
         InvitationRepository invitations) {
       return new InvitationService(
@@ -104,7 +104,7 @@ class InvitationServiceValidationTest {
           email,
           grants,
           identityUsers,
-          invitationGrants,
+          invitationGrantPlanner,
           invitationProperties,
           invitations);
     }

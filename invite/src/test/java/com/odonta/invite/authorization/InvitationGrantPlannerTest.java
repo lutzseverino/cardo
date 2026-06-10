@@ -8,14 +8,14 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-class InvitationGrantsTest {
+class InvitationGrantPlannerTest {
 
   private static final UUID CLINIC_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
   @Test
   void grantsBaselineAccessAndSelectedProfileActions() {
     GrantPlan plan =
-        new InvitationGrants()
+        new InvitationGrantPlanner()
             .acceptance(
                 CLINIC_ID,
                 "clinic:clinic",

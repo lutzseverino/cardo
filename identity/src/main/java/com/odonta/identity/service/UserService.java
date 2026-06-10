@@ -3,7 +3,7 @@ package com.odonta.identity.service;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.common.api.ApiException;
 import com.odonta.common.model.EmailAddress;
-import com.odonta.identity.authorization.IdentityGrants;
+import com.odonta.identity.authorization.IdentityGrantPlanner;
 import com.odonta.identity.model.CompleteProvisionalUserCommand;
 import com.odonta.identity.model.CreateProvisionalUserCommand;
 import com.odonta.identity.model.CreateUserCommand;
@@ -32,7 +32,7 @@ public class UserService {
   private final UserRepository users;
   private final IdentityProvider identityProvider;
   private final Grants grants;
-  private final IdentityGrants identityGrants;
+  private final IdentityGrantPlanner identityGrantPlanner;
 
   @Transactional
   public UserProjection create(@Valid CreateUserCommand command) {
@@ -169,7 +169,7 @@ public class UserService {
     try {
       User created = users.saveAndFlush(factory.apply(identity));
       identityProvider.bindUserId(identity.subject(), created.getId());
-      grants.stage(identityGrants.creation(created));
+      grants.stage(identityGrantPlanner.creation(created));
       return getProjection(created.getId());
     } catch (DataIntegrityViolationException exception) {
       deleteIdentity(identity.subject(), exception);
