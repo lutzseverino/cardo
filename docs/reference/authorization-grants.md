@@ -1,7 +1,7 @@
 # Authorization Grant Lifecycle
 
-This document is authoritative for staging authorization assignment and
-revocation from application flows.
+This document is authoritative for staging authorization assignments and
+revocations from application flows.
 
 ## Contract
 
@@ -24,25 +24,25 @@ revocation from application flows.
   detected before writes. The provider adapter must preserve that property for
   authority assignment.
 - Revocation is idempotent. Processing queries current resource-action grants
-  before deletion and ignores client roles that are already absent, so a retry
-  only applies remaining work.
-- Each service stores event publications in its own configured PostgreSQL
-  schema, even when services share a database.
+  before deletion and ignores client authorities that are already absent, so a
+  retry only applies remaining work.
+- Each application stores event publications in its configured PostgreSQL
+  schema.
 
 ## Ownership
 
 - The application module that owns a flow owns its planners. Use a small class
-  named for the module concept and operation, such as `ClinicGrantPlanner` or
-  `ClinicRevocationPlanner`.
-- A planner method is named for the flow action, such as `activation(...)` or
-  `access(...)`, and returns one complete plan.
+  named for the owned concept and operation, such as `WorkspaceGrantPlanner`
+  or `WorkspaceRevocationPlanner`.
+- A planner method is named for the flow action, such as `creation(...)` or
+  `membership(...)`, and returns one complete plan.
 - `AuthorizationResourceType` owns canonical resource-type parsing and the
   construction of resources targeted at a domain identifier.
-- Permission constants remain in types such as `ClinicPermissions`. They name
+- Permission constants remain in types such as `WorkspacePermissions`. They name
   the authorization vocabulary; planners decide when and to whom that
   vocabulary is assigned or revoked.
 - Flow services persist domain state and stage the plan. They do not call
-  Keycloak or another authorization provider directly.
+  an authorization provider directly.
 - Effective-grant readers expose current authorization state. They do not own
   mutations or provider calls.
 
