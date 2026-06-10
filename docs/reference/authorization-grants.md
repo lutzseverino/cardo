@@ -7,15 +7,18 @@ flows.
 
 - A flow that assigns authorization must create one `GrantPlan` and call
   `Grants.stage(plan)` inside its application transaction.
+- Flows construct plans through `GrantPlan.builder()`. The builder merges repeated
+  compatible definitions and rejects conflicting resource definitions.
 - `Grants.stage(...)` requires an active transaction. The plan publication is
   persisted with that transaction by Spring Modulith.
 - A plan describes provider-neutral intent: resources to provision, resource
   actions to grant, and client authorities to grant.
 - The authorization module applies plans asynchronously through
   `AuthorizationAdminClient` and retries failed publications.
-- Grant application is idempotent. Existing resources and resource-action
-  grants are detected before writes; the provider adapter must preserve that
-  property for authority assignment.
+- Grant application is idempotent. Existing resource capabilities are widened
+  without removing capabilities, and existing resource-action grants are
+  detected before writes. The provider adapter must preserve that property for
+  authority assignment.
 - Each service stores event publications in its own configured PostgreSQL
   schema, even when services share a database.
 

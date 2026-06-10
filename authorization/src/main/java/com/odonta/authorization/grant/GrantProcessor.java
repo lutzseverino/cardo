@@ -1,9 +1,10 @@
 package com.odonta.authorization.grant;
 
 import com.odonta.authorization.AuthorizationAdminClient;
-import com.odonta.authorization.resource.AuthorizationResource;
 import com.odonta.authorization.resource.CreatedAuthorizationResource;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class GrantProcessor {
 
@@ -14,29 +15,25 @@ public class GrantProcessor {
   }
 
   public void apply(GrantPlan plan) {
-    plan.resources().forEach(this::provision);
-    plan.resourceGrants().forEach(this::grant);
+    Map<ResourceKey, CreatedAuthorizationResource> resources = new LinkedHashMap<>();
+    plan.resources()
+        .forEach(
+            resource ->
+                resources.put(
+                    new ResourceKey(resource.resourceServerClientId(), resource.name()),
+                    authorization.ensureResource(resource)));
+    plan.resourceGrants().forEach(grant -> grant(grant, resources));
     plan.authorityGrants().forEach(this::grant);
   }
 
-  private void provision(AuthorizationResource resource) {
-    authorization
-        .findResourceByName(resource.resourceServerClientId(), resource.name())
-        .orElseGet(() -> authorization.createResource(resource));
-  }
-
-  private void grant(GrantPlan.ResourceGrant grant) {
+  private void grant(
+      GrantPlan.ResourceGrant grant, Map<ResourceKey, CreatedAuthorizationResource> resources) {
     CreatedAuthorizationResource resource =
-        authorization
-            .findResourceByName(grant.resourceServerClientId(), grant.resourceName())
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "Authorization resource not found: " + grant.resourceName()));
+        resources.get(new ResourceKey(grant.resourceServerClientId(), grant.resourceName()));
     List<String> missingActions = missingActions(grant, resource);
     if (!missingActions.isEmpty()) {
       authorization.grantResourceActions(
-          new ResourceActionGrant(
+          new ResourceActionAssignment(
               grant.resourceServerClientId(), resource.id(), grant.subject(), missingActions));
     }
   }
@@ -57,6 +54,9 @@ public class GrantProcessor {
 
   private void grant(GrantPlan.AuthorityGrant grant) {
     authorization.ensureClientRolesAssigned(
-        new AuthorityGrant(grant.resourceServerClientId(), grant.subject(), grant.authorities()));
+        new ClientRoleAssignment(
+            grant.resourceServerClientId(), grant.subject(), grant.authorities()));
   }
+
+  private record ResourceKey(String resourceServerClientId, String resourceName) {}
 }

@@ -66,8 +66,8 @@ class InvitationServiceValidationTest {
     }
 
     @Bean
-    InvitationGrants invitationGrants(AccessProfileService accessProfiles) {
-      return new InvitationGrants(accessProfiles);
+    InvitationGrants invitationGrants() {
+      return new InvitationGrants();
     }
 
     @Bean

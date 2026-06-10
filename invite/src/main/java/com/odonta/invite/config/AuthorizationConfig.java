@@ -8,6 +8,7 @@ import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.GrantConfiguration;
 import com.odonta.authorization.keycloak.KeycloakAuthorizationClient;
 import com.odonta.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
+import com.odonta.invite.authorization.InvitationGrants;
 import com.odonta.invite.model.Invitation;
 import com.odonta.invite.repository.InvitationRepository;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
@@ -47,5 +48,10 @@ public class AuthorizationConfig {
   AccessProfileService accessProfileService(
       AccessProfileRepository profiles, AccessProfileGrantRepository grants) {
     return new AccessProfileService(profiles, grants);
+  }
+
+  @Bean
+  InvitationGrants invitationGrants() {
+    return new InvitationGrants();
   }
 }

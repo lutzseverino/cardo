@@ -11,7 +11,6 @@ import com.odonta.authorization.AuthorizationAdminClient;
 import com.odonta.authorization.resource.AuthorizationResource;
 import com.odonta.authorization.resource.CreatedAuthorizationResource;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -23,11 +22,12 @@ class GrantProcessorTest {
   @Test
   void provisionsMissingResource() {
     AuthorizationResource resource = resource();
-    when(authorization.findResourceByName("clinic", resource.name())).thenReturn(Optional.empty());
+    when(authorization.ensureResource(resource))
+        .thenReturn(new CreatedAuthorizationResource("resource-1", resource.name()));
 
     processor.apply(new GrantPlan(List.of(resource), List.of(), List.of()));
 
-    verify(authorization).createResource(resource);
+    verify(authorization).ensureResource(resource);
   }
 
   @Test
@@ -36,18 +36,18 @@ class GrantProcessorTest {
     GrantPlan.ResourceGrant grant =
         new GrantPlan.ResourceGrant(
             "clinic", resource.name(), "subject-1", List.of("read", "write"));
-    when(authorization.findResourceByName("clinic", resource.name()))
-        .thenReturn(Optional.of(new CreatedAuthorizationResource("resource-1", resource.name())));
+    when(authorization.ensureResource(resource))
+        .thenReturn(new CreatedAuthorizationResource("resource-1", resource.name()));
     when(authorization.findResourceActionGrants(any()))
         .thenReturn(
             List.of(
                 new GrantedResourceAction(
                     "ticket-1", "resource-1", resource.name(), "subject-1", "read", true)));
 
-    processor.apply(new GrantPlan(List.of(), List.of(grant), List.of()));
+    processor.apply(new GrantPlan(List.of(resource), List.of(grant), List.of()));
 
-    ArgumentCaptor<ResourceActionGrant> applied =
-        ArgumentCaptor.forClass(ResourceActionGrant.class);
+    ArgumentCaptor<ResourceActionAssignment> applied =
+        ArgumentCaptor.forClass(ResourceActionAssignment.class);
     verify(authorization).grantResourceActions(applied.capture());
     org.assertj.core.api.Assertions.assertThat(applied.getValue().actions())
         .containsExactly("write");
@@ -58,17 +58,17 @@ class GrantProcessorTest {
     AuthorizationResource resource = resource();
     GrantPlan.ResourceGrant grant =
         new GrantPlan.ResourceGrant("clinic", resource.name(), "subject-1", List.of("read"));
-    when(authorization.findResourceByName("clinic", resource.name()))
-        .thenReturn(Optional.of(new CreatedAuthorizationResource("resource-1", resource.name())));
+    when(authorization.ensureResource(resource))
+        .thenReturn(new CreatedAuthorizationResource("resource-1", resource.name()));
     when(authorization.findResourceActionGrants(any()))
         .thenReturn(
             List.of(
                 new GrantedResourceAction(
                     "ticket-1", "resource-1", resource.name(), "subject-1", "read", true)));
 
-    processor.apply(new GrantPlan(List.of(), List.of(grant), List.of()));
+    processor.apply(new GrantPlan(List.of(resource), List.of(grant), List.of()));
 
-    verify(authorization).findResourceByName("clinic", resource.name());
+    verify(authorization).ensureResource(resource);
     verify(authorization).findResourceActionGrants(any());
     verifyNoMoreInteractions(authorization);
   }
@@ -83,13 +83,14 @@ class GrantProcessorTest {
 
     verify(authorization)
         .ensureClientRolesAssigned(
-            new AuthorityGrant("identity", "subject-1", List.of("profile:read", "profile:write")));
+            new ClientRoleAssignment(
+                "identity", "subject-1", List.of("profile:read", "profile:write")));
   }
 
   @Test
   void propagatesProviderFailureForDurableRetry() {
     AuthorizationResource resource = resource();
-    when(authorization.findResourceByName("clinic", resource.name()))
+    when(authorization.ensureResource(resource))
         .thenThrow(new IllegalStateException("provider unavailable"));
 
     assertThatThrownBy(

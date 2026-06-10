@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.odonta.authorization.access.AccessGrant;
 import com.odonta.authorization.access.AccessProfileProjection;
 import com.odonta.authorization.access.AccessProfileService;
+import com.odonta.authorization.grant.GrantPlan;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.identity.client.UserResponse;
@@ -18,9 +21,12 @@ import com.odonta.invite.authorization.InvitationGrants;
 import com.odonta.invite.config.InvitationProperties;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.Invitation;
+import com.odonta.invite.model.InvitationProjection;
+import com.odonta.invite.model.InvitationStatus;
 import com.odonta.invite.repository.InvitationRepository;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -74,6 +80,33 @@ class InvitationServiceTest {
         .satisfies(
             exception ->
                 assertThat(exception.getSuppressed()).containsExactly(compensationFailure));
+  }
+
+  @Test
+  void resolvesProfileGrantsBeforePlanningAcceptance() {
+    InvitationService service = service();
+    InvitationProjection invitation = mock(InvitationProjection.class);
+    Invitation entity = mock(Invitation.class);
+    GrantPlan plan = mock(GrantPlan.class);
+    List<AccessGrant> accessGrants = List.of(new AccessGrant("clinic:clinic", null, "read"));
+    when(invitation.getId()).thenReturn(UUID.randomUUID());
+    when(invitation.getTenantId()).thenReturn(TENANT_ID);
+    when(invitation.getTenantResourceType()).thenReturn("clinic:clinic");
+    when(invitation.getAccessProfileId()).thenReturn(ACCESS_PROFILE_ID);
+    when(invitation.getInvitedUserId()).thenReturn(INVITED_USER_ID);
+    when(invitation.getStatus()).thenReturn(InvitationStatus.PENDING);
+    when(invitation.getCreatedAt()).thenReturn(OffsetDateTime.now());
+    when(invitations.findProjectedByToken("token")).thenReturn(Optional.of(invitation));
+    when(invitations.findById(invitation.getId())).thenReturn(Optional.of(entity));
+    when(accessProfiles.grants(ACCESS_PROFILE_ID)).thenReturn(accessGrants);
+    when(invitationGrants.acceptance(TENANT_ID, "clinic:clinic", "employee-subject", accessGrants))
+        .thenReturn(plan);
+
+    service.accept("token", new AuthenticatedUser(INVITED_USER_ID, "employee-subject", "Employee"));
+
+    verify(invitationGrants)
+        .acceptance(TENANT_ID, "clinic:clinic", "employee-subject", accessGrants);
+    verify(grants).stage(plan);
   }
 
   private InvitationService service() {

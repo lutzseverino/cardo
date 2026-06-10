@@ -3,16 +3,18 @@ package com.odonta.authorization.keycloak;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.odonta.authorization.AuthorizationAdminClient;
-import com.odonta.authorization.grant.AuthorityGrant;
+import com.odonta.authorization.grant.ClientRoleAssignment;
 import com.odonta.authorization.grant.GrantedResourceAction;
-import com.odonta.authorization.grant.ResourceActionGrant;
+import com.odonta.authorization.grant.ResourceActionAssignment;
 import com.odonta.authorization.grant.ResourceGrantQuery;
 import com.odonta.authorization.resource.AuthorizationResource;
 import com.odonta.authorization.resource.CreatedAuthorizationResource;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -33,7 +35,23 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
   }
 
   @Override
-  public CreatedAuthorizationResource createResource(AuthorizationResource authorizationResource) {
+  public CreatedAuthorizationResource ensureResource(AuthorizationResource authorizationResource) {
+    Optional<ResourceSetResponse> existing = findResourceByName(authorizationResource.name());
+    if (existing.isEmpty()) {
+      return createResource(authorizationResource);
+    }
+    ResourceSetResponse resource = resource(existing.orElseThrow().id());
+    LinkedHashSet<String> actions =
+        resource.resourceScopes().stream()
+            .map(ResourceScopeResponse::name)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+    if (actions.addAll(authorizationResource.actions())) {
+      updateResource(resource.id(), authorizationResource, List.copyOf(actions));
+    }
+    return new CreatedAuthorizationResource(resource.id(), resource.name());
+  }
+
+  private CreatedAuthorizationResource createResource(AuthorizationResource authorizationResource) {
     ResourceSetResponse resource =
         rest.post()
             .uri("/realms/{realm}/authz/protection/resource_set", realm)
@@ -53,15 +71,14 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
     return new CreatedAuthorizationResource(resource.id(), resource.name());
   }
 
-  @Override
-  public Optional<CreatedAuthorizationResource> findResourceByName(
-      String resourceServerClientId, String resourceName) {
+  private Optional<ResourceSetResponse> findResourceByName(String resourceName) {
     ResourceSetResponse[] resources =
         rest.get()
             .uri(
                 uri ->
                     uri.path("/realms/{realm}/authz/protection/resource_set")
                         .queryParam("name", resourceName)
+                        .queryParam("exactName", true)
                         .build(realm))
             .header(HttpHeaders.AUTHORIZATION, authorization())
             .retrieve()
@@ -71,13 +88,38 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
     }
     return Arrays.stream(resources)
         .filter(resource -> resourceName.equals(resource.name()))
-        .findFirst()
-        .map(resource -> new CreatedAuthorizationResource(resource.id(), resource.name()));
+        .findFirst();
+  }
+
+  private ResourceSetResponse resource(String resourceId) {
+    ResourceSetResponse resource =
+        rest.get()
+            .uri("/realms/{realm}/authz/protection/resource_set/{resourceId}", realm, resourceId)
+            .header(HttpHeaders.AUTHORIZATION, authorization())
+            .retrieve()
+            .body(ResourceSetResponse.class);
+    if (resource == null) {
+      throw new KeycloakAuthorizationException(
+          "Keycloak did not return an authorization resource.");
+    }
+    return resource;
+  }
+
+  private void updateResource(
+      String resourceId, AuthorizationResource resource, List<String> actions) {
+    rest.put()
+        .uri("/realms/{realm}/authz/protection/resource_set/{resourceId}", realm, resourceId)
+        .header(HttpHeaders.AUTHORIZATION, authorization())
+        .body(
+            new ResourceSetCreateRequest(
+                resource.name(), resource.type(), resource.ownerSubject(), actions))
+        .retrieve()
+        .toBodilessEntity();
   }
 
   @Override
-  public void grantResourceActions(ResourceActionGrant grant) {
-    grant
+  public void grantResourceActions(ResourceActionAssignment assignment) {
+    assignment
         .actions()
         .forEach(
             action ->
@@ -86,7 +128,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
                     .header(HttpHeaders.AUTHORIZATION, authorization())
                     .body(
                         new PermissionTicketCreateRequest(
-                            grant.resourceId(), grant.requesterSubject(), action))
+                            assignment.resourceId(), assignment.requesterSubject(), action))
                     .retrieve()
                     .toBodilessEntity());
   }
@@ -130,15 +172,15 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
   }
 
   @Override
-  public void ensureClientRolesAssigned(AuthorityGrant grant) {
-    String clientUuid = clientUuid(grant.resourceServerClientId());
+  public void ensureClientRolesAssigned(ClientRoleAssignment assignment) {
+    String clientUuid = clientUuid(assignment.resourceServerClientId());
     List<RoleRepresentation> roles =
-        grant.authorities().stream().map(roleName -> role(clientUuid, roleName)).toList();
+        assignment.authorities().stream().map(roleName -> role(clientUuid, roleName)).toList();
     rest.post()
         .uri(
             "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUuid}",
             realm,
-            grant.requesterSubject(),
+            assignment.requesterSubject(),
             clientUuid)
         .header(HttpHeaders.AUTHORIZATION, authorization())
         .body(roles)
@@ -225,5 +267,15 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
       String owner,
       @JsonProperty("resource_scopes") List<String> resourceScopes) {}
 
-  private record ResourceSetResponse(@JsonProperty("_id") String id, String name) {}
+  private record ResourceSetResponse(
+      @JsonProperty("_id") String id,
+      String name,
+      @JsonProperty("resource_scopes") List<ResourceScopeResponse> resourceScopes) {
+
+    private ResourceSetResponse {
+      resourceScopes = resourceScopes == null ? List.of() : List.copyOf(resourceScopes);
+    }
+  }
+
+  private record ResourceScopeResponse(String name) {}
 }

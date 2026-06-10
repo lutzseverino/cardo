@@ -1,9 +1,6 @@
 package com.odonta.invite.authorization;
 
-import static com.odonta.authorization.grant.GrantPlanBuilder.grantPlan;
-
-import com.odonta.authorization.access.AccessProfileGrantProjection;
-import com.odonta.authorization.access.AccessProfileService;
+import com.odonta.authorization.access.AccessGrant;
 import com.odonta.authorization.grant.GrantPlan;
 import com.odonta.authorization.grant.GrantPlanBuilder;
 import com.odonta.authorization.resource.AuthorizationResource;
@@ -13,28 +10,23 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.stereotype.Component;
 
-@Component
 public class InvitationGrants {
 
   private static final String MINIMUM_ACTION = "read";
 
-  private final AccessProfileService accessProfiles;
-
-  public InvitationGrants(AccessProfileService accessProfiles) {
-    this.accessProfiles = accessProfiles;
-  }
-
   public GrantPlan acceptance(
-      UUID tenantId, String tenantResourceType, UUID accessProfileId, String authorizationSubject) {
+      UUID tenantId,
+      String tenantResourceType,
+      String authorizationSubject,
+      List<AccessGrant> accessGrants) {
     AuthorizationResourceType tenantType =
         resourceType(tenantResourceType, List.of(MINIMUM_ACTION));
     GrantPlanBuilder plan =
-        grantPlan()
+        GrantPlan.builder()
             .grantActions(
                 authorizationSubject, resource(tenantType, tenantId), List.of(MINIMUM_ACTION));
-    profileActions(tenantResourceType, accessProfileId)
+    profileActions(tenantResourceType, accessGrants)
         .forEach(
             (typeName, actions) -> {
               AuthorizationResourceType type = resourceType(typeName, actions);
@@ -44,20 +36,17 @@ public class InvitationGrants {
   }
 
   private Map<String, List<String>> profileActions(
-      String tenantResourceType, UUID accessProfileId) {
+      String tenantResourceType, List<AccessGrant> accessGrants) {
     Map<String, List<String>> actionsByResourceType = new LinkedHashMap<>();
-    accessProfiles.profileGrants(accessProfileId).stream()
-        .filter(grant -> grant.getResourceId() == null)
+    accessGrants.stream()
+        .filter(grant -> grant.resourceId() == null)
         .filter(grant -> !isMinimumTenantGrant(tenantResourceType, grant))
-        .forEach(
-            grant -> addAction(actionsByResourceType, grant.getResourceType(), grant.getAction()));
+        .forEach(grant -> addAction(actionsByResourceType, grant.resourceType(), grant.action()));
     return actionsByResourceType;
   }
 
-  private boolean isMinimumTenantGrant(
-      String tenantResourceType, AccessProfileGrantProjection grant) {
-    return tenantResourceType.equals(grant.getResourceType())
-        && MINIMUM_ACTION.equals(grant.getAction());
+  private boolean isMinimumTenantGrant(String tenantResourceType, AccessGrant grant) {
+    return tenantResourceType.equals(grant.resourceType()) && MINIMUM_ACTION.equals(grant.action());
   }
 
   private void addAction(

@@ -3,13 +3,13 @@ package com.odonta.authorization.grant;
 import java.util.List;
 import java.util.Objects;
 
-public record ResourceActionGrant(
+public record ResourceActionAssignment(
     String resourceServerClientId,
     String resourceId,
     String requesterSubject,
     List<String> actions) {
 
-  public ResourceActionGrant {
+  public ResourceActionAssignment {
     requireText(resourceServerClientId, "resourceServerClientId");
     requireText(resourceId, "resourceId");
     requireText(requesterSubject, "requesterSubject");

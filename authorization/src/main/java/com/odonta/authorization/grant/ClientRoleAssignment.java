@@ -3,10 +3,10 @@ package com.odonta.authorization.grant;
 import java.util.List;
 import java.util.Objects;
 
-public record AuthorityGrant(
+public record ClientRoleAssignment(
     String resourceServerClientId, String requesterSubject, List<String> authorities) {
 
-  public AuthorityGrant {
+  public ClientRoleAssignment {
     requireText(resourceServerClientId, "resourceServerClientId");
     requireText(requesterSubject, "requesterSubject");
     authorities = List.copyOf(Objects.requireNonNull(authorities, "authorities"));

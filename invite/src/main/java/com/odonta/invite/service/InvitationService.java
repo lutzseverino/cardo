@@ -132,8 +132,8 @@ public class InvitationService {
         invitationGrants.acceptance(
             invitation.getTenantId(),
             invitation.getTenantResourceType(),
-            invitation.getAccessProfileId(),
-            authorizationSubject));
+            authorizationSubject,
+            accessProfiles.grants(invitation.getAccessProfileId())));
   }
 
   private InvitationProjection validInvitation(String token) {

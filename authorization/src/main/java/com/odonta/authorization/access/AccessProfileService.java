@@ -24,7 +24,11 @@ public class AccessProfileService {
     return profiles.findAvailableById(profileId, product, tenantId);
   }
 
-  public List<AccessProfileGrantProjection> profileGrants(UUID profileId) {
-    return grants.findByProfileIdOrderByResourceTypeAscActionAsc(profileId);
+  public List<AccessGrant> grants(UUID profileId) {
+    return grants.findByProfileIdOrderByResourceTypeAscActionAsc(profileId).stream()
+        .map(
+            grant ->
+                new AccessGrant(grant.getResourceType(), grant.getResourceId(), grant.getAction()))
+        .toList();
   }
 }
