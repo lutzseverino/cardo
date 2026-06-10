@@ -30,6 +30,7 @@ Use the [reference template](../_templates/reference.template.md) for new refere
 
 ## Documents
 
+- [Authorization Grants](authorization-grants.md)
 - [Data Protection Contracts](data-protection-contracts.md)
 - [Generated Client Code](generated-client-code.md)
 - [Method Naming](method-naming.md)

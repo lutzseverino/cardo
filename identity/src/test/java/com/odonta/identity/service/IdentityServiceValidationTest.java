@@ -4,7 +4,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.odonta.authorization.sync.AuthorizationSyncService;
+import com.odonta.authorization.grant.Grants;
+import com.odonta.identity.authorization.IdentityGrants;
 import com.odonta.identity.model.CreateUserCommand;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
@@ -22,7 +23,7 @@ class IdentityServiceValidationTest {
 
   @Autowired private IdentityProvider identityProvider;
 
-  @Autowired private AuthorizationSyncService authorizationSync;
+  @Autowired private Grants grants;
 
   @Autowired private UserService userService;
 
@@ -33,7 +34,7 @@ class IdentityServiceValidationTest {
     assertThatThrownBy(() -> userService.create(command))
         .isInstanceOf(ConstraintViolationException.class);
 
-    verifyNoInteractions(users, identityProvider, authorizationSync);
+    verifyNoInteractions(users, identityProvider, grants);
   }
 
   static class Config {
@@ -54,16 +55,22 @@ class IdentityServiceValidationTest {
     }
 
     @Bean
-    AuthorizationSyncService authorizationSync() {
-      return mock(AuthorizationSyncService.class);
+    Grants grants() {
+      return mock(Grants.class);
+    }
+
+    @Bean
+    IdentityGrants identityGrants() {
+      return new IdentityGrants();
     }
 
     @Bean
     UserService userService(
         UserRepository users,
         IdentityProvider identityProvider,
-        AuthorizationSyncService authorizationSync) {
-      return new UserService(users, identityProvider, authorizationSync);
+        Grants grants,
+        IdentityGrants identityGrants) {
+      return new UserService(users, identityProvider, grants, identityGrants);
     }
   }
 }

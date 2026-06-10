@@ -9,11 +9,12 @@ import static org.mockito.Mockito.when;
 
 import com.odonta.authorization.access.AccessProfileProjection;
 import com.odonta.authorization.access.AccessProfileService;
+import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
-import com.odonta.authorization.sync.AuthorizationSyncService;
 import com.odonta.identity.client.UserResponse;
 import com.odonta.identity.client.UserStatus;
 import com.odonta.identity.client.api.UsersApi;
+import com.odonta.invite.authorization.InvitationGrants;
 import com.odonta.invite.config.InvitationProperties;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.Invitation;
@@ -37,9 +38,10 @@ class InvitationServiceTest {
       UUID.fromString("33333333-3333-3333-3333-333333333333");
 
   @Mock private AccessProfileService accessProfiles;
-  @Mock private AuthorizationSyncService authorizationSync;
   @Mock private EmailSender email;
+  @Mock private Grants grants;
   @Mock private UsersApi identityUsers;
+  @Mock private InvitationGrants invitationGrants;
   @Mock private InvitationRepository invitations;
 
   @Test
@@ -77,9 +79,10 @@ class InvitationServiceTest {
   private InvitationService service() {
     return new InvitationService(
         accessProfiles,
-        authorizationSync,
         email,
+        grants,
         identityUsers,
+        invitationGrants,
         new InvitationProperties(Duration.ofHours(72), "https://app.example.com"),
         invitations);
   }

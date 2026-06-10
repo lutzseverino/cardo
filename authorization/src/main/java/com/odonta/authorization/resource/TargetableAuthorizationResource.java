@@ -12,10 +12,6 @@ public interface TargetableAuthorizationResource {
     return null;
   }
 
-  void markAuthorizationSynced(String keycloakResourceId);
-
-  void markAuthorizationSyncFailed(String message);
-
   default AuthorizationResource toAuthorizationResource() {
     AuthorizationResourceType type = authorizationResourceType();
     return new AuthorizationResource(

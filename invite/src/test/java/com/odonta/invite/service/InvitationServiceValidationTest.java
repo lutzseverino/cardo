@@ -5,9 +5,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.odonta.authorization.access.AccessProfileService;
+import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
-import com.odonta.authorization.sync.AuthorizationSyncService;
 import com.odonta.identity.client.api.UsersApi;
+import com.odonta.invite.authorization.InvitationGrants;
 import com.odonta.invite.config.InvitationProperties;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.repository.InvitationRepository;
@@ -60,8 +61,13 @@ class InvitationServiceValidationTest {
     }
 
     @Bean
-    AuthorizationSyncService authorizationSync() {
-      return mock(AuthorizationSyncService.class);
+    Grants grants() {
+      return mock(Grants.class);
+    }
+
+    @Bean
+    InvitationGrants invitationGrants(AccessProfileService accessProfiles) {
+      return new InvitationGrants(accessProfiles);
     }
 
     @Bean
@@ -87,16 +93,18 @@ class InvitationServiceValidationTest {
     @Bean
     InvitationService invitationService(
         AccessProfileService accessProfiles,
-        AuthorizationSyncService authorizationSync,
         EmailSender email,
+        Grants grants,
         UsersApi identityUsers,
+        InvitationGrants invitationGrants,
         InvitationProperties invitationProperties,
         InvitationRepository invitations) {
       return new InvitationService(
           accessProfiles,
-          authorizationSync,
           email,
+          grants,
           identityUsers,
+          invitationGrants,
           invitationProperties,
           invitations);
     }

@@ -1,8 +1,8 @@
 package com.odonta.invite.service;
 
 import com.odonta.authorization.access.AccessProfileService;
+import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
-import com.odonta.authorization.sync.AuthorizationSyncService;
 import com.odonta.common.api.ApiException;
 import com.odonta.common.model.EmailAddress;
 import com.odonta.identity.client.CompleteProvisionalUserRequest;
@@ -10,7 +10,7 @@ import com.odonta.identity.client.CreateProvisionalUserRequest;
 import com.odonta.identity.client.UserResponse;
 import com.odonta.identity.client.api.UsersApi;
 import com.odonta.invite.InvitePermissions;
-import com.odonta.invite.authorization.InvitationAccepted;
+import com.odonta.invite.authorization.InvitationGrants;
 import com.odonta.invite.config.InvitationProperties;
 import com.odonta.invite.model.CompleteInvitationCommand;
 import com.odonta.invite.model.CreateInvitationCommand;
@@ -37,23 +37,26 @@ public class InvitationService {
   private final Clock clock = Clock.systemUTC();
   private final SecureRandom random = new SecureRandom();
   private final AccessProfileService accessProfiles;
-  private final AuthorizationSyncService authorizationSync;
   private final EmailSender email;
+  private final Grants grants;
   private final UsersApi identityUsers;
+  private final InvitationGrants invitationGrants;
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
 
   InvitationService(
       AccessProfileService accessProfiles,
-      AuthorizationSyncService authorizationSync,
       EmailSender email,
+      Grants grants,
       UsersApi identityUsers,
+      InvitationGrants invitationGrants,
       InvitationProperties properties,
       InvitationRepository invitations) {
     this.accessProfiles = accessProfiles;
-    this.authorizationSync = authorizationSync;
     this.email = email;
+    this.grants = grants;
     this.identityUsers = identityUsers;
+    this.invitationGrants = invitationGrants;
     this.properties = properties;
     this.invitations = invitations;
   }
@@ -125,8 +128,8 @@ public class InvitationService {
             .orElseThrow(
                 () -> ApiException.notFound("invitation_not_found", "Invitation not found."));
     entity.accept(OffsetDateTime.now(clock));
-    authorizationSync.enqueue(
-        new InvitationAccepted(
+    grants.stage(
+        invitationGrants.acceptance(
             invitation.getTenantId(),
             invitation.getTenantResourceType(),
             invitation.getAccessProfileId(),

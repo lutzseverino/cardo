@@ -7,9 +7,16 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:odonta}
   flyway:
     table: flyway_schema_history_identity
+    locations: classpath:db/migration,classpath:db/authorization
+    placeholders:
+      authorizationSchema: identity_events
   jpa:
     hibernate:
       ddl-auto: validate
+  modulith:
+    events:
+      jdbc:
+        schema: identity_events
   security:
     oauth2:
       resourceserver:

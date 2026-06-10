@@ -1,8 +1,8 @@
 package com.odonta.identity.model;
 
-import com.odonta.authorization.jpa.KeycloakAuthorizationResource;
 import com.odonta.authorization.resource.AuthorizationResourceType;
 import com.odonta.authorization.resource.TargetableAuthorizationResource;
+import com.odonta.common.data.AuditedEntity;
 import com.odonta.common.data.PersonalDataEntity;
 import com.odonta.common.model.EmailAddress;
 import com.odonta.identity.IdentityResources;
@@ -30,7 +30,7 @@ import lombok.Setter;
       @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
       @UniqueConstraint(name = "uk_users_keycloak_subject", columnNames = "keycloak_subject")
     })
-public class User extends KeycloakAuthorizationResource
+public class User extends AuditedEntity
     implements TargetableAuthorizationResource, PersonalDataEntity {
 
   @Id @GeneratedValue private UUID id;

@@ -1,24 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS authorization_sync_items (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  unique_key text NOT NULL,
-  operation text NOT NULL,
-  status text NOT NULL DEFAULT 'PENDING',
-  resource_server_client_id text NOT NULL,
-  resource_name text NOT NULL,
-  resource_type text,
-  owner_subject text,
-  requester_subject text,
-  actions text NOT NULL,
-  attempt_count integer NOT NULL DEFAULT 0,
-  last_attempted_at timestamp with time zone,
-  synced_at timestamp with time zone,
-  last_error text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT uk_authorization_sync_item_key UNIQUE (unique_key)
-);
-
 CREATE TABLE IF NOT EXISTS authorization_access_profiles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product text NOT NULL,
