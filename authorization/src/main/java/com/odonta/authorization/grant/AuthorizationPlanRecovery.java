@@ -4,15 +4,15 @@ import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.scheduling.annotation.Scheduled;
 
-class GrantRecovery {
+class AuthorizationPlanRecovery {
 
   private final FailedEventPublications publications;
 
-  GrantRecovery(FailedEventPublications publications) {
+  AuthorizationPlanRecovery(FailedEventPublications publications) {
     this.publications = publications;
   }
 
-  @Scheduled(fixedDelayString = "${odonta.authorization.grants.retry-delay:PT1M}")
+  @Scheduled(fixedDelayString = "${odonta.authorization.plans.retry-delay:PT1M}")
   void retryFailed() {
     publications.resubmit(ResubmissionOptions.defaults());
   }

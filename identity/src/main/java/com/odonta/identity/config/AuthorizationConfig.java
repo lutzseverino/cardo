@@ -1,7 +1,7 @@
 package com.odonta.identity.config;
 
 import com.odonta.authorization.AuthorizationAdminClient;
-import com.odonta.authorization.grant.GrantConfiguration;
+import com.odonta.authorization.grant.AuthorizationPlanConfiguration;
 import com.odonta.authorization.keycloak.KeycloakAuthorizationClient;
 import com.odonta.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import com.odonta.authorization.keycloak.KeycloakRealmAdminClient;
@@ -17,7 +17,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@Import(GrantConfiguration.class)
+@Import(AuthorizationPlanConfiguration.class)
 @EntityScan(basePackageClasses = User.class)
 @EnableJpaRepositories(basePackageClasses = UserRepository.class)
 public class AuthorizationConfig {

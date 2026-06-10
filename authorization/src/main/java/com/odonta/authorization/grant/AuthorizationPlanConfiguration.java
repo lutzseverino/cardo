@@ -9,11 +9,16 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableScheduling
 @Configuration(proxyBeanMethods = false)
-public class GrantConfiguration {
+public class AuthorizationPlanConfiguration {
 
   @Bean
   Grants grants(ApplicationEventPublisher events) {
     return new Grants(events);
+  }
+
+  @Bean
+  Revocations revocations(ApplicationEventPublisher events) {
+    return new Revocations(events);
   }
 
   @Bean
@@ -27,7 +32,17 @@ public class GrantConfiguration {
   }
 
   @Bean
-  GrantRecovery grantRecovery(FailedEventPublications publications) {
-    return new GrantRecovery(publications);
+  RevocationProcessor revocationProcessor(AuthorizationAdminClient authorization) {
+    return new RevocationProcessor(authorization);
+  }
+
+  @Bean
+  RevocationPlanListener revocationPlanListener(RevocationProcessor processor) {
+    return new RevocationPlanListener(processor);
+  }
+
+  @Bean
+  AuthorizationPlanRecovery authorizationPlanRecovery(FailedEventPublications publications) {
+    return new AuthorizationPlanRecovery(publications);
   }
 }

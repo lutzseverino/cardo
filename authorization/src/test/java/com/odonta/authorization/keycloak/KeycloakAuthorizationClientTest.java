@@ -1,24 +1,102 @@
 package com.odonta.authorization.keycloak;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.PUT;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.odonta.authorization.grant.ClientRoleRevocation;
 import com.odonta.authorization.grant.GrantedResourceAction;
 import com.odonta.authorization.grant.ResourceGrantQuery;
 import com.odonta.authorization.resource.AuthorizationResource;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 class KeycloakAuthorizationClientTest {
+
+  @Test
+  void removesExistingClientRoles() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakAuthorizationClient client =
+        new KeycloakAuthorizationClient(
+            "https://keycloak.example", "odonta", rest, () -> "admin-token");
+    server
+        .expect(requestTo(org.hamcrest.Matchers.containsString("clientId=identity")))
+        .andExpect(method(GET))
+        .andRespond(
+            withSuccess(
+                """
+                [{"id":"client-uuid","clientId":"identity"}]
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(
+            requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles/profile%3Aread")))
+        .andExpect(method(GET))
+        .andRespond(
+            withSuccess(
+                """
+                {"id":"role-id","name":"profile:read"}
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(
+            requestTo(
+                org.hamcrest.Matchers.endsWith(
+                    "/users/subject-1/role-mappings/clients/client-uuid")))
+        .andExpect(method(DELETE))
+        .andExpect(
+            content()
+                .json(
+                    """
+                    [{"id":"role-id","name":"profile:read"}]
+                    """))
+        .andRespond(withNoContent());
+
+    client.removeClientRoles(
+        new ClientRoleRevocation("identity", "subject-1", List.of("profile:read")));
+
+    server.verify();
+  }
+
+  @Test
+  void ignoresClientRolesThatAreAlreadyAbsent() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakAuthorizationClient client =
+        new KeycloakAuthorizationClient(
+            "https://keycloak.example", "odonta", rest, () -> "admin-token");
+    server
+        .expect(requestTo(org.hamcrest.Matchers.containsString("clientId=identity")))
+        .andExpect(method(GET))
+        .andRespond(
+            withSuccess(
+                """
+                [{"id":"client-uuid","clientId":"identity"}]
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(
+            requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles/profile%3Aread")))
+        .andExpect(method(GET))
+        .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+    client.removeClientRoles(
+        new ClientRoleRevocation("identity", "subject-1", List.of("profile:read")));
+
+    server.verify();
+  }
 
   @Test
   void widensExistingResourceScopes() {

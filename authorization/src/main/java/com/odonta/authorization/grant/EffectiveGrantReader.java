@@ -9,11 +9,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-public class EffectiveGrantService {
+public class EffectiveGrantReader {
 
   private final AuthorizationAdminClient authorization;
 
-  public EffectiveGrantService(AuthorizationAdminClient authorization) {
+  public EffectiveGrantReader(AuthorizationAdminClient authorization) {
     this.authorization = authorization;
   }
 
@@ -24,12 +24,6 @@ public class EffectiveGrantService {
     return grantsBySubject.entrySet().stream()
         .map(entry -> new SubjectGrants(entry.getKey(), grants(entry.getValue())))
         .toList();
-  }
-
-  public void revoke(
-      List<AuthorizationResourceType> resourceTypes, UUID resourceId, String authorizationSubject) {
-    resourceTypesByProduct(resourceTypes)
-        .forEach((product, types) -> revoke(product, types, resourceId, authorizationSubject));
   }
 
   private void list(
@@ -55,23 +49,6 @@ public class EffectiveGrantService {
                           grantedResource,
                           grant.action());
                     }));
-  }
-
-  private void revoke(
-      String product,
-      List<AuthorizationResourceType> resourceTypes,
-      UUID resourceId,
-      String authorizationSubject) {
-    resourceTypes.forEach(
-        resourceType ->
-            authorization
-                .findResourceActionGrants(
-                    ResourceGrantQuery.forResourceName(
-                        product, resourceType.resourceName(resourceId), authorizationSubject))
-                .stream()
-                .filter(GrantedResourceAction::granted)
-                .map(GrantedResourceAction::id)
-                .forEach(authorization::revokeResourceActionGrant));
   }
 
   private Map<String, List<AuthorizationResourceType>> resourceTypesByProduct(

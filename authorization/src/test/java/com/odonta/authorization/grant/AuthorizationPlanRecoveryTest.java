@@ -7,13 +7,13 @@ import static org.mockito.Mockito.verify;
 import org.junit.jupiter.api.Test;
 import org.springframework.modulith.events.FailedEventPublications;
 
-class GrantRecoveryTest {
+class AuthorizationPlanRecoveryTest {
 
   @Test
   void resubmitsFailedPublications() {
     FailedEventPublications publications = mock(FailedEventPublications.class);
 
-    new GrantRecovery(publications).retryFailed();
+    new AuthorizationPlanRecovery(publications).retryFailed();
 
     verify(publications).resubmit(any());
   }

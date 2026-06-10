@@ -1,6 +1,7 @@
 package com.odonta.authorization;
 
 import com.odonta.authorization.grant.ClientRoleAssignment;
+import com.odonta.authorization.grant.ClientRoleRevocation;
 import com.odonta.authorization.grant.GrantedResourceAction;
 import com.odonta.authorization.grant.ResourceActionAssignment;
 import com.odonta.authorization.grant.ResourceGrantQuery;
@@ -19,4 +20,6 @@ public interface AuthorizationAdminClient {
   void revokeResourceActionGrant(String ticketId);
 
   void ensureClientRolesAssigned(ClientRoleAssignment assignment);
+
+  void removeClientRoles(ClientRoleRevocation revocation);
 }

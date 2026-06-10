@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.odonta.authorization.AuthorizationAdminClient;
 import com.odonta.authorization.grant.ClientRoleAssignment;
+import com.odonta.authorization.grant.ClientRoleRevocation;
 import com.odonta.authorization.grant.GrantedResourceAction;
 import com.odonta.authorization.grant.ResourceActionAssignment;
 import com.odonta.authorization.grant.ResourceGrantQuery;
@@ -16,6 +17,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -197,6 +199,29 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
         .toBodilessEntity();
   }
 
+  @Override
+  public void removeClientRoles(ClientRoleRevocation revocation) {
+    String clientUuid = clientUuid(revocation.resourceServerClientId());
+    List<RoleRepresentation> roles =
+        revocation.authorities().stream()
+            .map(roleName -> existingRole(clientUuid, roleName))
+            .flatMap(Optional::stream)
+            .toList();
+    if (roles.isEmpty()) {
+      return;
+    }
+    rest.method(HttpMethod.DELETE)
+        .uri(
+            "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUuid}",
+            realm,
+            revocation.requesterSubject(),
+            clientUuid)
+        .header(HttpHeaders.AUTHORIZATION, authorization())
+        .body(roles)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
   private RoleRepresentation role(String clientUuid, String roleName) {
     try {
       return rest.get()
@@ -212,6 +237,26 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
       if (exception.getStatusCode().value() == 404) {
         createRole(clientUuid, roleName);
         return role(clientUuid, roleName);
+      }
+      throw exception;
+    }
+  }
+
+  private Optional<RoleRepresentation> existingRole(String clientUuid, String roleName) {
+    try {
+      return Optional.ofNullable(
+          rest.get()
+              .uri(
+                  "/admin/realms/{realm}/clients/{clientUuid}/roles/{roleName}",
+                  realm,
+                  clientUuid,
+                  roleName)
+              .header(HttpHeaders.AUTHORIZATION, authorization())
+              .retrieve()
+              .body(RoleRepresentation.class));
+    } catch (RestClientResponseException exception) {
+      if (exception.getStatusCode().value() == 404) {
+        return Optional.empty();
       }
       throw exception;
     }
