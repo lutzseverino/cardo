@@ -1,6 +1,6 @@
-package com.odonta.billing.client;
+package com.odonta.billing.client.http;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "odonta.billing.client")
-public record BillingClientProperties(String baseUrl) {}
+record BillingClientProperties(String baseUrl) {}

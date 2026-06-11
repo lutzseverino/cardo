@@ -14,10 +14,10 @@ import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.GrantPlan;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
+import com.odonta.identity.client.IdentityUsersClient;
+import com.odonta.identity.client.ProvisionalUser;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
-import com.odonta.invite.integration.identity.IdentityUserClient;
-import com.odonta.invite.integration.identity.IdentityUserClient.ProvisionalUser;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.Invitation;
 import com.odonta.invite.model.InvitationProjection;
@@ -45,7 +45,7 @@ class InvitationServiceTest {
   @Mock private AccessProfileService accessProfiles;
   @Mock private EmailSender email;
   @Mock private Grants grants;
-  @Mock private IdentityUserClient identityUsers;
+  @Mock private IdentityUsersClient identityUsers;
   @Mock private InvitationGrantPlanner invitationGrantPlanner;
   @Mock private InvitationRepository invitations;
 
