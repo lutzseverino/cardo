@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.odonta.billing.model.CheckoutSessionCommand;
+import com.odonta.billing.model.CreateCheckoutSessionCommand;
 import com.odonta.billing.provider.BillingProvider;
 import jakarta.validation.ConstraintViolationException;
 import java.util.UUID;
@@ -23,8 +23,8 @@ class BillingServiceValidationTest {
 
   @Test
   void validatesCommandsAtTheServiceBoundary() {
-    CheckoutSessionCommand command =
-        new CheckoutSessionCommand(
+    CreateCheckoutSessionCommand command =
+        new CreateCheckoutSessionCommand(
             "   ", "https://app.example.com/success", "https://app.example.com/cancel");
 
     assertThatThrownBy(() -> checkoutSessions.create(UUID.randomUUID(), command))

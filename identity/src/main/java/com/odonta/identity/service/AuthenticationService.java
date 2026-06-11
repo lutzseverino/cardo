@@ -4,10 +4,10 @@ import com.odonta.authorization.token.RequestingPartyTokenClient;
 import com.odonta.authorization.token.RequestingPartyTokenRequest;
 import com.odonta.common.api.ApiException;
 import com.odonta.identity.IdentityPermissions;
+import com.odonta.identity.model.AuthenticateCommand;
 import com.odonta.identity.model.AuthenticatedPrincipal;
 import com.odonta.identity.model.AuthenticationMethod;
 import com.odonta.identity.model.AuthenticationResult;
-import com.odonta.identity.model.CreateSessionCommand;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.reader.AuthenticatedPrincipalReader;
 import jakarta.validation.Valid;
@@ -25,7 +25,7 @@ public class AuthenticationService {
   private final AuthenticatedPrincipalReader principals;
   private final RequestingPartyTokenClient requestingPartyTokens;
 
-  public AuthenticationResult authenticate(@Valid CreateSessionCommand command) {
+  public AuthenticationResult authenticate(@Valid AuthenticateCommand command) {
     return authenticate(command.email(), command.password());
   }
 

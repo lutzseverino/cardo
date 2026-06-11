@@ -5,7 +5,7 @@ import com.odonta.billing.api.CheckoutSessionsApi;
 import com.odonta.billing.api.model.CheckoutSessionRequest;
 import com.odonta.billing.api.model.CheckoutSessionResponse;
 import com.odonta.billing.mapper.BillingSessionMapper;
-import com.odonta.billing.model.CheckoutSessionCommand;
+import com.odonta.billing.model.CreateCheckoutSessionCommand;
 import com.odonta.billing.service.CheckoutSessionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +26,8 @@ public class CheckoutSessionController implements CheckoutSessionsApi {
   @Override
   public ResponseEntity<CheckoutSessionResponse> createCheckoutSession(
       @Valid CheckoutSessionRequest request) {
-    CheckoutSessionCommand command =
-        new CheckoutSessionCommand(
+    CreateCheckoutSessionCommand command =
+        new CreateCheckoutSessionCommand(
             request.getProduct(),
             request.getSuccessUrl().toString(),
             request.getCancelUrl().toString());

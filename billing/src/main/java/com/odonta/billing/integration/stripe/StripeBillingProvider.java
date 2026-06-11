@@ -2,9 +2,9 @@ package com.odonta.billing.integration.stripe;
 
 import com.odonta.billing.config.StripeProperties;
 import com.odonta.billing.model.BillingSessionResult;
-import com.odonta.billing.model.CheckoutSessionCommand;
+import com.odonta.billing.model.CreateCheckoutSessionCommand;
+import com.odonta.billing.model.CreatePortalSessionCommand;
 import com.odonta.billing.model.Customer;
-import com.odonta.billing.model.PortalSessionCommand;
 import com.odonta.billing.provider.BillingProvider;
 import com.odonta.billing.service.CustomerService;
 import com.odonta.common.api.ApiException;
@@ -32,7 +32,7 @@ public class StripeBillingProvider implements BillingProvider {
 
   @Override
   public BillingSessionResult createCheckoutSession(
-      UUID subjectId, CheckoutSessionCommand command) {
+      UUID subjectId, CreateCheckoutSessionCommand command) {
     Customer customer = customers.getOrCreate(subjectId, PROVIDER, () -> createCustomer(subjectId));
     StripeProperties.CheckoutPrice price = prices.findByProduct(command.product());
 
@@ -65,7 +65,8 @@ public class StripeBillingProvider implements BillingProvider {
   }
 
   @Override
-  public BillingSessionResult createPortalSession(UUID subjectId, PortalSessionCommand command) {
+  public BillingSessionResult createPortalSession(
+      UUID subjectId, CreatePortalSessionCommand command) {
     Customer customer = customers.getOrCreate(subjectId, PROVIDER, () -> createCustomer(subjectId));
     try {
       com.stripe.model.billingportal.Session session =

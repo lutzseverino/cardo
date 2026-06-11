@@ -9,8 +9,8 @@ import com.odonta.identity.api.model.AuthenticatedPrincipalResponse;
 import com.odonta.identity.api.model.CreateSessionRequest;
 import com.odonta.identity.config.SessionProperties;
 import com.odonta.identity.mapper.AuthenticatedPrincipalMapper;
+import com.odonta.identity.model.AuthenticateCommand;
 import com.odonta.identity.model.AuthenticationResult;
-import com.odonta.identity.model.CreateSessionCommand;
 import com.odonta.identity.reader.CurrentJwtReader;
 import com.odonta.identity.service.AuthenticationService;
 import jakarta.validation.Valid;
@@ -44,8 +44,8 @@ public class SessionController implements SessionsApi {
   @Override
   public ResponseEntity<AuthenticatedPrincipalResponse> createSession(
       @Valid CreateSessionRequest request) {
-    CreateSessionCommand command =
-        new CreateSessionCommand(request.getEmail(), request.getPassword());
+    AuthenticateCommand command =
+        new AuthenticateCommand(request.getEmail(), request.getPassword());
     AuthenticationResult authentication = authenticationService.authenticate(command);
     return ResponseEntity.status(HttpStatus.CREATED)
         .header(
