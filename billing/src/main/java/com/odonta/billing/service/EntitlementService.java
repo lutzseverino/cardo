@@ -1,5 +1,6 @@
 package com.odonta.billing.service;
 
+import com.odonta.billing.BillingPermissions;
 import com.odonta.billing.model.Entitlement;
 import com.odonta.billing.model.EntitlementProjection;
 import com.odonta.billing.model.EntitlementStatus;
@@ -11,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,10 +22,16 @@ public class EntitlementService {
 
   private final EntitlementRepository entitlements;
 
+  public EntitlementProjection getCurrent(UUID subjectId, String product) {
+    return getProjection(subjectId, product);
+  }
+
+  @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
   public EntitlementProjection get(UUID subjectId, String product) {
     return getProjection(subjectId, product);
   }
 
+  @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
   public EntitlementProjection require(UUID subjectId, String product) {
     EntitlementProjection entitlement = getProjection(subjectId, product);
     if (!entitlement.getStatus().usable()) {

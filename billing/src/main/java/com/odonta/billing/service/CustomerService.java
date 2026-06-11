@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -14,6 +15,7 @@ public class CustomerService {
 
   private final CustomerRepository customers;
 
+  @Transactional
   public Customer getOrCreate(
       UUID subjectId, String provider, Supplier<String> providerCustomerId) {
     return customers

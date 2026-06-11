@@ -1,5 +1,8 @@
 package com.odonta.identity.service;
 
+import com.odonta.authorization.grant.EffectiveGrant;
+import com.odonta.authorization.grant.EffectiveGrantAuthorityReader;
+import com.odonta.authorization.keycloak.KeycloakAuthoritiesConverter;
 import com.odonta.authorization.token.RequestingPartyTokenClient;
 import com.odonta.authorization.token.RequestingPartyTokenRequest;
 import com.odonta.common.api.ApiException;
@@ -10,9 +13,16 @@ import com.odonta.identity.model.AuthenticationMethod;
 import com.odonta.identity.model.AuthenticationResult;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.reader.AuthenticatedPrincipalReader;
+import com.odonta.identity.reader.CurrentJwtReader;
 import jakarta.validation.Valid;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -24,6 +34,10 @@ public class AuthenticationService {
   private final IdentityProvider identityProvider;
   private final AuthenticatedPrincipalReader principals;
   private final RequestingPartyTokenClient requestingPartyTokens;
+  private final CurrentJwtReader currentJwt;
+  private final JwtDecoder jwtDecoder;
+  private final KeycloakAuthoritiesConverter authorities;
+  private final EffectiveGrantAuthorityReader grantReader;
 
   public AuthenticationResult authenticate(@Valid AuthenticateCommand command) {
     return authenticate(command.email(), command.password());
@@ -38,12 +52,21 @@ public class AuthenticationService {
                 RequestingPartyTokenRequest.allPermissions(
                     token.token(), IdentityPermissions.CLIENT_ID))
             .token();
-    return new AuthenticationResult(principal(token), authorizationToken);
+    return new AuthenticationResult(
+        principal(token), authorizationToken, grants(authorizationToken));
   }
 
-  public AuthenticatedPrincipal getCurrentPrincipal(
-      String keycloakSubject, String sessionId, OffsetDateTime expiresAt) {
-    return principal(keycloakSubject, sessionId, AuthenticationMethod.OIDC, expiresAt);
+  public AuthenticationResult getCurrentPrincipal() {
+    var current = currentJwt.current();
+    Jwt jwt = current.getToken();
+    return new AuthenticationResult(
+        principal(
+            jwt.getSubject(),
+            jwt.getClaimAsString("sid"),
+            AuthenticationMethod.OIDC,
+            expiresAt(jwt)),
+        jwt.getTokenValue(),
+        grantReader.read(current.getAuthorities()));
   }
 
   private AuthenticatedPrincipal principal(IdentityProvider.IssuedIdentityToken token) {
@@ -64,7 +87,18 @@ public class AuthenticationService {
                     "authenticated_principal_not_found", "Authenticated principal not found."));
   }
 
-  public void revoke(String token) {
-    identityProvider.revokeToken(token);
+  public void revokeCurrent() {
+    identityProvider.revokeToken(currentJwt.current().getToken().getTokenValue());
+  }
+
+  private OffsetDateTime expiresAt(Jwt jwt) {
+    return jwt.getExpiresAt() == null
+        ? null
+        : OffsetDateTime.ofInstant(jwt.getExpiresAt(), ZoneOffset.UTC);
+  }
+
+  private List<EffectiveGrant> grants(String token) {
+    Collection<GrantedAuthority> grantedAuthorities = authorities.convert(jwtDecoder.decode(token));
+    return grantReader.read(grantedAuthorities);
   }
 }

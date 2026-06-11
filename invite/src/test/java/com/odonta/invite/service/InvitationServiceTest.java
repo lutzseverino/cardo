@@ -14,11 +14,10 @@ import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.GrantPlan;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
-import com.odonta.identity.client.UserResponse;
-import com.odonta.identity.client.UserStatus;
-import com.odonta.identity.client.api.UsersApi;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
+import com.odonta.invite.integration.identity.IdentityUserClient;
+import com.odonta.invite.integration.identity.IdentityUserClient.ProvisionalUser;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.Invitation;
 import com.odonta.invite.model.InvitationProjection;
@@ -46,7 +45,7 @@ class InvitationServiceTest {
   @Mock private AccessProfileService accessProfiles;
   @Mock private EmailSender email;
   @Mock private Grants grants;
-  @Mock private UsersApi identityUsers;
+  @Mock private IdentityUserClient identityUsers;
   @Mock private InvitationGrantPlanner invitationGrantPlanner;
   @Mock private InvitationRepository invitations;
 
@@ -56,12 +55,12 @@ class InvitationServiceTest {
     RuntimeException failure = new RuntimeException("database unavailable");
     when(accessProfiles.availableProfile(ACCESS_PROFILE_ID, "clinic", TENANT_ID))
         .thenReturn(Optional.of(accessProfile()));
-    when(identityUsers.createProvisionalUser(any())).thenReturn(identityUser());
+    when(identityUsers.createProvisional(any())).thenReturn(identityUser());
     when(invitations.saveAndFlush(any(Invitation.class))).thenThrow(failure);
 
     assertThatThrownBy(() -> service.create(inviter(), command())).isSameAs(failure);
 
-    verify(identityUsers).cancelProvisionalUser(INVITED_USER_ID);
+    verify(identityUsers).cancelProvisional(INVITED_USER_ID);
   }
 
   @Test
@@ -71,9 +70,9 @@ class InvitationServiceTest {
     RuntimeException compensationFailure = new RuntimeException("identity unavailable");
     when(accessProfiles.availableProfile(ACCESS_PROFILE_ID, "clinic", TENANT_ID))
         .thenReturn(Optional.of(accessProfile()));
-    when(identityUsers.createProvisionalUser(any())).thenReturn(identityUser());
+    when(identityUsers.createProvisional(any())).thenReturn(identityUser());
     when(invitations.saveAndFlush(any(Invitation.class))).thenThrow(failure);
-    doThrow(compensationFailure).when(identityUsers).cancelProvisionalUser(INVITED_USER_ID);
+    doThrow(compensationFailure).when(identityUsers).cancelProvisional(INVITED_USER_ID);
 
     assertThatThrownBy(() -> service.create(inviter(), command()))
         .isSameAs(failure)
@@ -131,15 +130,8 @@ class InvitationServiceTest {
         TENANT_ID, "clinic:clinic", "employee@example.com", ACCESS_PROFILE_ID);
   }
 
-  private UserResponse identityUser() {
-    return new UserResponse()
-        .id(INVITED_USER_ID)
-        .authorizationSubject("employee-subject")
-        .email("employee@example.com")
-        .status(UserStatus.INVITED)
-        .emailVerified(false)
-        .createdAt(OffsetDateTime.now())
-        .updatedAt(OffsetDateTime.now());
+  private ProvisionalUser identityUser() {
+    return new ProvisionalUser(INVITED_USER_ID, "employee-subject");
   }
 
   private AccessProfileProjection accessProfile() {

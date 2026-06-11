@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.odonta.authorization.grant.Grants;
 import com.odonta.common.api.ApiException;
+import com.odonta.identity.IdentityPermissions;
 import com.odonta.identity.authorization.IdentityGrantPlanner;
 import com.odonta.identity.model.CompleteProvisionalUserCommand;
 import com.odonta.identity.model.CreateProvisionalUserCommand;
@@ -21,6 +22,7 @@ import com.odonta.identity.model.UserProjection;
 import com.odonta.identity.model.UserStatus;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
+import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +34,9 @@ import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -164,6 +168,26 @@ class UserServiceTest {
             service.searchByAuthorizationSubjects(
                 List.of("subject-1", " ", "subject-2", "subject-1")))
         .containsExactly(user);
+  }
+
+  @Test
+  void authorizationAndTransactionsLiveOnServiceMethods() throws Exception {
+    Method update = UserService.class.getMethod("update", UUID.class, UpdateUserCommand.class);
+    Method updateCurrent =
+        UserService.class.getMethod(
+            "updateCurrent",
+            String.class,
+            com.odonta.identity.model.UpdateCurrentUserCommand.class);
+    Method createProvisional =
+        UserService.class.getMethod(
+            "createProvisional", com.odonta.identity.model.CreateProvisionalUserCommand.class);
+
+    assertThat(update.isAnnotationPresent(Transactional.class)).isTrue();
+    assertThat(update.isAnnotationPresent(PreAuthorize.class)).isTrue();
+    assertThat(updateCurrent.isAnnotationPresent(Transactional.class)).isTrue();
+    assertThat(updateCurrent.isAnnotationPresent(PreAuthorize.class)).isTrue();
+    assertThat(createProvisional.getAnnotation(PreAuthorize.class).value())
+        .contains(IdentityPermissions.USER_PROVISION_AUTHORITY);
   }
 
   private UserService service() {

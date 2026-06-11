@@ -7,9 +7,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
-import com.odonta.identity.client.api.UsersApi;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
+import com.odonta.invite.integration.identity.IdentityUserClient;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.repository.InvitationRepository;
 import jakarta.validation.ConstraintViolationException;
@@ -26,7 +26,7 @@ class InvitationServiceValidationTest {
 
   @Autowired private AccessProfileService accessProfiles;
 
-  @Autowired private UsersApi identityUsers;
+  @Autowired private IdentityUserClient identityUsers;
 
   @Autowired private InvitationRepository invitations;
 
@@ -76,8 +76,8 @@ class InvitationServiceValidationTest {
     }
 
     @Bean
-    UsersApi identityUsers() {
-      return mock(UsersApi.class);
+    IdentityUserClient identityUsers() {
+      return mock(IdentityUserClient.class);
     }
 
     @Bean
@@ -95,7 +95,7 @@ class InvitationServiceValidationTest {
         AccessProfileService accessProfiles,
         EmailSender email,
         Grants grants,
-        UsersApi identityUsers,
+        IdentityUserClient identityUsers,
         InvitationGrantPlanner invitationGrantPlanner,
         InvitationProperties invitationProperties,
         InvitationRepository invitations) {

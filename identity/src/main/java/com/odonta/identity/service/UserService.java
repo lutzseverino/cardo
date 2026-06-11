@@ -3,6 +3,7 @@ package com.odonta.identity.service;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.common.api.ApiException;
 import com.odonta.common.model.EmailAddress;
+import com.odonta.identity.IdentityPermissions;
 import com.odonta.identity.authorization.IdentityGrantPlanner;
 import com.odonta.identity.model.CompleteProvisionalUserCommand;
 import com.odonta.identity.model.CreateProvisionalUserCommand;
@@ -24,6 +25,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -55,6 +57,7 @@ public class UserService {
   }
 
   @Transactional
+  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public UserProjection createProvisional(@Valid CreateProvisionalUserCommand command) {
     EmailAddress email = EmailAddress.of(command.email());
     return users
@@ -74,6 +77,7 @@ public class UserService {
   }
 
   @Transactional
+  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public UserProjection completeProvisional(
       UUID id, @Valid CompleteProvisionalUserCommand command) {
     User user =
@@ -92,6 +96,7 @@ public class UserService {
   }
 
   @Transactional
+  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public void cancelProvisional(UUID id) {
     User user =
         users
@@ -107,20 +112,39 @@ public class UserService {
     identityProvider.deleteIdentity(subject);
   }
 
+  @PreAuthorize(
+      "hasPermission(#id, '"
+          + IdentityPermissions.USER_RESOURCE
+          + "', '"
+          + IdentityPermissions.READ
+          + "')")
   public UserProjection get(UUID id) {
     return getProjection(id);
   }
 
+  @PreAuthorize(
+      "hasPermission('*', '"
+          + IdentityPermissions.USER_RESOURCE
+          + "', '"
+          + IdentityPermissions.READ
+          + "')")
   public UserProjection getByEmail(String email) {
     return users
         .findProjectedByEmail(EmailAddress.of(email).value())
         .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
   }
 
+  @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_READ_AUTHORITY + "')")
   public UserProjection getCurrent(String keycloakSubject) {
     return getProjectionByKeycloakSubject(keycloakSubject);
   }
 
+  @PreAuthorize(
+      "hasPermission('*', '"
+          + IdentityPermissions.USER_RESOURCE
+          + "', '"
+          + IdentityPermissions.READ
+          + "')")
   public List<UserProjection> searchByAuthorizationSubjects(
       Collection<String> authorizationSubjects) {
     List<String> subjects = normalizedAuthorizationSubjects(authorizationSubjects);
@@ -130,6 +154,13 @@ public class UserService {
     return users.findProjectedByKeycloakSubjectIn(subjects);
   }
 
+  @Transactional
+  @PreAuthorize(
+      "hasPermission(#id, '"
+          + IdentityPermissions.USER_RESOURCE
+          + "', '"
+          + IdentityPermissions.WRITE
+          + "')")
   public UserProjection update(UUID id, @Valid UpdateUserCommand command) {
     User user =
         users
@@ -148,6 +179,8 @@ public class UserService {
     return getProjection(id);
   }
 
+  @Transactional
+  @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_WRITE_AUTHORITY + "')")
   public UserProjection updateCurrent(
       String keycloakSubject, @Valid UpdateCurrentUserCommand command) {
     User user =

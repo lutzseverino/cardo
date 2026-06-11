@@ -5,13 +5,11 @@ import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.common.api.ApiException;
 import com.odonta.common.model.EmailAddress;
-import com.odonta.identity.client.CompleteProvisionalUserRequest;
-import com.odonta.identity.client.CreateProvisionalUserRequest;
-import com.odonta.identity.client.UserResponse;
-import com.odonta.identity.client.api.UsersApi;
 import com.odonta.invite.InvitePermissions;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
+import com.odonta.invite.integration.identity.IdentityUserClient;
+import com.odonta.invite.integration.identity.IdentityUserClient.ProvisionalUser;
 import com.odonta.invite.model.CompleteInvitationCommand;
 import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.CreateInvitationResult;
@@ -25,6 +23,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +31,7 @@ import org.springframework.validation.annotation.Validated;
 
 @Validated
 @Service
+@RequiredArgsConstructor
 public class InvitationService {
 
   private final Clock clock = Clock.systemUTC();
@@ -39,27 +39,10 @@ public class InvitationService {
   private final AccessProfileService accessProfiles;
   private final EmailSender email;
   private final Grants grants;
-  private final UsersApi identityUsers;
+  private final IdentityUserClient identityUsers;
   private final InvitationGrantPlanner invitationGrantPlanner;
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
-
-  InvitationService(
-      AccessProfileService accessProfiles,
-      EmailSender email,
-      Grants grants,
-      UsersApi identityUsers,
-      InvitationGrantPlanner invitationGrantPlanner,
-      InvitationProperties properties,
-      InvitationRepository invitations) {
-    this.accessProfiles = accessProfiles;
-    this.email = email;
-    this.grants = grants;
-    this.identityUsers = identityUsers;
-    this.invitationGrantPlanner = invitationGrantPlanner;
-    this.properties = properties;
-    this.invitations = invitations;
-  }
 
   public InvitationProjection get(String token) {
     return validInvitation(token);
@@ -76,9 +59,7 @@ public class InvitationService {
         .availableProfile(command.accessProfileId(), command.product(), command.tenantId())
         .orElseThrow(
             () -> ApiException.notFound("access_profile_not_found", "Access profile not found."));
-    UserResponse invited =
-        identityUsers.createProvisionalUser(
-            new CreateProvisionalUserRequest().email(command.email()));
+    ProvisionalUser invited = identityUsers.createProvisional(command.email());
     try {
       String token = generateInvitationToken();
       Invitation invitation =
@@ -88,15 +69,15 @@ public class InvitationService {
                   command.tenantResourceType(),
                   command.accessProfileId(),
                   EmailAddress.of(command.email()).value(),
-                  invited.getId(),
-                  invited.getAuthorizationSubject(),
+                  invited.id(),
+                  invited.authorizationSubject(),
                   inviter.id(),
                   token));
       String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
       email.sendInvitation(command.email(), acceptUrl);
       return new CreateInvitationResult(getProjection(invitation.getId()), acceptUrl);
     } catch (RuntimeException exception) {
-      cancelProvisionalUser(invited.getId(), exception);
+      cancelProvisionalUser(invited.id(), exception);
       throw exception;
     }
   }
@@ -104,11 +85,10 @@ public class InvitationService {
   @Transactional
   public void complete(String token, @Valid CompleteInvitationCommand command) {
     InvitationProjection invitation = validInvitation(token);
-    UserResponse completed =
-        identityUsers.completeProvisionalUser(
-            invitation.getInvitedUserId(),
-            new CompleteProvisionalUserRequest().name(command.name()).password(command.password()));
-    accept(invitation, completed.getId(), completed.getAuthorizationSubject());
+    ProvisionalUser completed =
+        identityUsers.completeProvisional(
+            invitation.getInvitedUserId(), command.name(), command.password());
+    accept(invitation, completed.id(), completed.authorizationSubject());
   }
 
   @Transactional
@@ -165,7 +145,7 @@ public class InvitationService {
 
   private void cancelProvisionalUser(UUID userId, RuntimeException original) {
     try {
-      identityUsers.cancelProvisionalUser(userId);
+      identityUsers.cancelProvisional(userId);
     } catch (RuntimeException compensationFailure) {
       original.addSuppressed(compensationFailure);
     }

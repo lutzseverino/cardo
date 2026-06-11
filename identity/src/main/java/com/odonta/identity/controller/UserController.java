@@ -1,6 +1,5 @@
 package com.odonta.identity.controller;
 
-import com.odonta.identity.IdentityPermissions;
 import com.odonta.identity.api.UsersApi;
 import com.odonta.identity.api.model.CompleteProvisionalUserRequest;
 import com.odonta.identity.api.model.CreateProvisionalUserRequest;
@@ -27,7 +26,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -48,7 +46,6 @@ public class UserController implements UsersApi {
   }
 
   @Override
-  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public ResponseEntity<UserResponse> createProvisionalUser(
       @Valid CreateProvisionalUserRequest request) {
     CreateProvisionalUserCommand command = new CreateProvisionalUserCommand(request.getEmail());
@@ -57,7 +54,6 @@ public class UserController implements UsersApi {
   }
 
   @Override
-  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public ResponseEntity<UserResponse> completeProvisionalUser(
       UUID userId, @Valid CompleteProvisionalUserRequest request) {
     CompleteProvisionalUserCommand command =
@@ -67,20 +63,17 @@ public class UserController implements UsersApi {
   }
 
   @Override
-  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public ResponseEntity<Void> cancelProvisionalUser(UUID userId) {
     users.cancelProvisional(userId);
     return ResponseEntity.noContent().build();
   }
 
   @Override
-  @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_READ_AUTHORITY + "')")
   public ResponseEntity<UserResponse> getCurrentUser() {
     return ResponseEntity.ok(mapper.toResponse(users.getCurrent(currentJwt.current().getName())));
   }
 
   @Override
-  @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_WRITE_AUTHORITY + "')")
   public ResponseEntity<UserResponse> updateCurrentUser(@Valid UpdateCurrentUserRequest request) {
     UpdateCurrentUserCommand command =
         new UpdateCurrentUserCommand(request.getName(), string(request.getAvatarUrl()));
@@ -89,34 +82,16 @@ public class UserController implements UsersApi {
   }
 
   @Override
-  @PreAuthorize(
-      "hasPermission(#userId, '"
-          + IdentityPermissions.USER_RESOURCE
-          + "', '"
-          + IdentityPermissions.READ
-          + "')")
   public ResponseEntity<UserResponse> getUser(UUID userId) {
     return ResponseEntity.ok(mapper.toResponse(users.get(userId)));
   }
 
   @Override
-  @PreAuthorize(
-      "hasPermission('*', '"
-          + IdentityPermissions.USER_RESOURCE
-          + "', '"
-          + IdentityPermissions.READ
-          + "')")
   public ResponseEntity<UserResponse> getUserByEmail(String email) {
     return ResponseEntity.ok(mapper.toResponse(users.getByEmail(email)));
   }
 
   @Override
-  @PreAuthorize(
-      "hasPermission('*', '"
-          + IdentityPermissions.USER_RESOURCE
-          + "', '"
-          + IdentityPermissions.READ
-          + "')")
   public ResponseEntity<UsersResponse> searchUsers(@Valid SearchUsersRequest request) {
     return ResponseEntity.ok(
         new UsersResponse(
@@ -128,12 +103,6 @@ public class UserController implements UsersApi {
   }
 
   @Override
-  @PreAuthorize(
-      "hasPermission(#userId, '"
-          + IdentityPermissions.USER_RESOURCE
-          + "', '"
-          + IdentityPermissions.WRITE
-          + "')")
   public ResponseEntity<UserResponse> updateUser(UUID userId, @Valid UpdateUserRequest request) {
     UpdateUserCommand command =
         new UpdateUserCommand(
