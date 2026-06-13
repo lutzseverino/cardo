@@ -16,9 +16,9 @@ import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.identity.client.IdentityUsersClient;
 import com.odonta.identity.client.ProvisionalUser;
+import com.odonta.invite.api.model.CreateInvitationInput;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
-import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.Invitation;
 import com.odonta.invite.model.InvitationProjection;
 import com.odonta.invite.model.InvitationStatus;
@@ -58,7 +58,7 @@ class InvitationServiceTest {
     when(identityUsers.createProvisional(any())).thenReturn(identityUser());
     when(invitations.saveAndFlush(any(Invitation.class))).thenThrow(failure);
 
-    assertThatThrownBy(() -> service.create(inviter(), command())).isSameAs(failure);
+    assertThatThrownBy(() -> service.create(inviter(), input())).isSameAs(failure);
 
     verify(identityUsers).cancelProvisional(INVITED_USER_ID);
   }
@@ -74,7 +74,7 @@ class InvitationServiceTest {
     when(invitations.saveAndFlush(any(Invitation.class))).thenThrow(failure);
     doThrow(compensationFailure).when(identityUsers).cancelProvisional(INVITED_USER_ID);
 
-    assertThatThrownBy(() -> service.create(inviter(), command()))
+    assertThatThrownBy(() -> service.create(inviter(), input()))
         .isSameAs(failure)
         .satisfies(
             exception ->
@@ -125,8 +125,8 @@ class InvitationServiceTest {
         UUID.fromString("44444444-4444-4444-4444-444444444444"), "owner-subject", "Owner");
   }
 
-  private CreateInvitationCommand command() {
-    return new CreateInvitationCommand(
+  private CreateInvitationInput input() {
+    return new CreateInvitationInput(
         TENANT_ID, "clinic:clinic", "employee@example.com", ACCESS_PROFILE_ID);
   }
 

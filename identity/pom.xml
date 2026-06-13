@@ -103,6 +103,10 @@
               <generatorName>spring</generatorName>
               <apiPackage>com.odonta.identity.api</apiPackage>
               <modelPackage>com.odonta.identity.api.model</modelPackage>
+              <schemaMappings>
+                <schemaMapping>UpdateUserStatus=com.odonta.identity.model.UserStatus</schemaMapping>
+                <schemaMapping>UserStatus=com.odonta.identity.model.UserStatus</schemaMapping>
+              </schemaMappings>
               <generateApiDocumentation>false</generateApiDocumentation>
               <generateModelDocumentation>false</generateModelDocumentation>
               <generateSupportingFiles>false</generateSupportingFiles>

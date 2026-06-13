@@ -4,12 +4,12 @@ import com.odonta.authorization.grant.Grants;
 import com.odonta.common.api.ApiException;
 import com.odonta.common.model.EmailAddress;
 import com.odonta.identity.IdentityPermissions;
+import com.odonta.identity.api.model.CompleteProvisionalUserInput;
+import com.odonta.identity.api.model.CreateProvisionalUserInput;
+import com.odonta.identity.api.model.CreateUserInput;
+import com.odonta.identity.api.model.UpdateCurrentUserInput;
+import com.odonta.identity.api.model.UpdateUserInput;
 import com.odonta.identity.authorization.IdentityGrantPlanner;
-import com.odonta.identity.model.CompleteProvisionalUserCommand;
-import com.odonta.identity.model.CreateProvisionalUserCommand;
-import com.odonta.identity.model.CreateUserCommand;
-import com.odonta.identity.model.UpdateCurrentUserCommand;
-import com.odonta.identity.model.UpdateUserCommand;
 import com.odonta.identity.model.User;
 import com.odonta.identity.model.UserProjection;
 import com.odonta.identity.model.UserStatus;
@@ -41,16 +41,16 @@ public class UserService {
   private final IdentityGrantPlanner identityGrantPlanner;
 
   @Transactional
-  public UserProjection create(@Valid CreateUserCommand command) {
-    EmailAddress email = EmailAddress.of(command.email());
+  public UserProjection create(@Valid CreateUserInput input) {
+    EmailAddress email = EmailAddress.of(input.getEmail());
     if (users.findProjectedByEmail(email.value()).isPresent()) {
       throw ApiException.conflict("user_exists", "A user with this email already exists.");
     }
     return createIdentityUser(
         () ->
             identityProvider.provisionPasswordIdentity(
-                email.value(), command.password(), command.name()),
-        identity -> new User(identity.subject(), email.value(), command.name()),
+                email.value(), input.getPassword(), input.getName()),
+        identity -> new User(identity.subject(), email.value(), input.getName()),
         () -> {
           throw ApiException.conflict("user_exists", "A user with this email already exists.");
         });
@@ -58,8 +58,8 @@ public class UserService {
 
   @Transactional
   @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
-  public UserProjection createProvisional(@Valid CreateProvisionalUserCommand command) {
-    EmailAddress email = EmailAddress.of(command.email());
+  public UserProjection createProvisional(@Valid CreateProvisionalUserInput input) {
+    EmailAddress email = EmailAddress.of(input.getEmail());
     return users
         .findProjectedByEmail(email.value())
         .orElseGet(
@@ -78,8 +78,7 @@ public class UserService {
 
   @Transactional
   @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
-  public UserProjection completeProvisional(
-      UUID id, @Valid CompleteProvisionalUserCommand command) {
+  public UserProjection completeProvisional(UUID id, @Valid CompleteProvisionalUserInput input) {
     User user =
         users
             .findById(id)
@@ -88,10 +87,10 @@ public class UserService {
       throw ApiException.conflict("user_already_complete", "User is already complete.");
     }
 
-    user.complete(command.name());
+    user.complete(input.getName());
     users.saveAndFlush(user);
     identityProvider.completePasswordIdentity(
-        user.getKeycloakSubject(), command.password(), command.name());
+        user.getKeycloakSubject(), input.getPassword(), input.getName());
     return getProjection(user.getId());
   }
 
@@ -161,19 +160,20 @@ public class UserService {
           + "', '"
           + IdentityPermissions.WRITE
           + "')")
-  public UserProjection update(UUID id, @Valid UpdateUserCommand command) {
+  public UserProjection update(UUID id, @Valid UpdateUserInput input) {
     User user =
         users
             .findById(id)
             .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
-    user.setName(command.name() == null ? user.getName() : command.name());
-    user.setAvatarUrl(command.avatarUrl() == null ? user.getAvatarUrl() : command.avatarUrl());
-    if (command.status() != null) {
-      if (!command.status().isOperational()) {
+    user.setName(input.getName() == null ? user.getName() : input.getName());
+    user.setAvatarUrl(
+        input.getAvatarUrl() == null ? user.getAvatarUrl() : input.getAvatarUrl().toString());
+    if (input.getStatus() != null) {
+      if (!input.getStatus().isOperational()) {
         throw ApiException.badRequest(
             "user_status_invalid", "Invited is not an operational user status.");
       }
-      user.changeOperationalStatus(command.status());
+      user.changeOperationalStatus(input.getStatus());
     }
     users.saveAndFlush(user);
     return getProjection(id);
@@ -181,16 +181,16 @@ public class UserService {
 
   @Transactional
   @PreAuthorize("hasAuthority('" + IdentityPermissions.PROFILE_WRITE_AUTHORITY + "')")
-  public UserProjection updateCurrent(
-      String keycloakSubject, @Valid UpdateCurrentUserCommand command) {
+  public UserProjection updateCurrent(String keycloakSubject, @Valid UpdateCurrentUserInput input) {
     User user =
         users
             .findProjectedByKeycloakSubject(keycloakSubject)
             .map(UserProjection::getId)
             .flatMap(users::findById)
             .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
-    user.setName(command.name() == null ? user.getName() : command.name());
-    user.setAvatarUrl(command.avatarUrl() == null ? user.getAvatarUrl() : command.avatarUrl());
+    user.setName(input.getName() == null ? user.getName() : input.getName());
+    user.setAvatarUrl(
+        input.getAvatarUrl() == null ? user.getAvatarUrl() : input.getAvatarUrl().toString());
     users.saveAndFlush(user);
     return getProjection(user.getId());
   }

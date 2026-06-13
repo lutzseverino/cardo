@@ -7,7 +7,6 @@ import com.odonta.identity.api.model.AuthenticationMethod;
 import com.odonta.identity.api.model.GrantedResourceResponse;
 import com.odonta.identity.api.model.ResourceGrantResponse;
 import com.odonta.identity.api.model.UserResponse;
-import com.odonta.identity.api.model.UserStatus;
 import com.odonta.identity.model.AuthenticatedPrincipal;
 import java.net.URI;
 import java.util.List;
@@ -34,7 +33,7 @@ public interface AuthenticatedPrincipalMapper {
             principal.keycloakSubject(),
             principal.userEmail(),
             principal.userName(),
-            UserStatus.fromValue(principal.userStatus().wireValue()),
+            principal.userStatus(),
             principal.userEmailVerified(),
             principal.userCreatedAt(),
             principal.userUpdatedAt())

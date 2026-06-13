@@ -5,8 +5,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.odonta.authorization.grant.Grants;
+import com.odonta.identity.api.model.CreateUserInput;
 import com.odonta.identity.authorization.IdentityGrantPlanner;
-import com.odonta.identity.model.CreateUserCommand;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
 import jakarta.validation.ConstraintViolationException;
@@ -28,10 +28,10 @@ class IdentityServiceValidationTest {
   @Autowired private UserService userService;
 
   @Test
-  void validatesCommandsAtTheServiceBoundary() {
-    CreateUserCommand command = new CreateUserCommand("not-an-email", "short", "Owner");
+  void validatesRequestsAtTheServiceBoundary() {
+    CreateUserInput input = new CreateUserInput("not-an-email", "short", "Owner");
 
-    assertThatThrownBy(() -> userService.create(command))
+    assertThatThrownBy(() -> userService.create(input))
         .isInstanceOf(ConstraintViolationException.class);
 
     verifyNoInteractions(users, identityProvider, grants);

@@ -2,11 +2,10 @@ package com.odonta.identity.controller;
 
 import com.odonta.common.web.SessionCookies;
 import com.odonta.identity.api.SessionsApi;
+import com.odonta.identity.api.model.AuthenticateInput;
 import com.odonta.identity.api.model.AuthenticatedPrincipalResponse;
-import com.odonta.identity.api.model.CreateSessionRequest;
 import com.odonta.identity.config.SessionProperties;
 import com.odonta.identity.mapper.AuthenticatedPrincipalMapper;
-import com.odonta.identity.model.AuthenticateCommand;
 import com.odonta.identity.model.AuthenticationResult;
 import com.odonta.identity.service.AuthenticationService;
 import jakarta.validation.Valid;
@@ -27,11 +26,9 @@ public class SessionController implements SessionsApi {
   private final AuthenticationService authenticationService;
 
   @Override
-  public ResponseEntity<AuthenticatedPrincipalResponse> createSession(
-      @Valid CreateSessionRequest request) {
-    AuthenticateCommand command =
-        new AuthenticateCommand(request.getEmail(), request.getPassword());
-    AuthenticationResult authentication = authenticationService.authenticate(command);
+  public ResponseEntity<AuthenticatedPrincipalResponse> authenticate(
+      @Valid AuthenticateInput input) {
+    AuthenticationResult authentication = authenticationService.authenticate(input);
     return ResponseEntity.status(HttpStatus.CREATED)
         .header(
             HttpHeaders.SET_COOKIE,

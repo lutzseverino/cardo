@@ -8,10 +8,10 @@ import com.odonta.common.model.EmailAddress;
 import com.odonta.identity.client.IdentityUsersClient;
 import com.odonta.identity.client.ProvisionalUser;
 import com.odonta.invite.InvitePermissions;
+import com.odonta.invite.api.model.CompleteInvitationInput;
+import com.odonta.invite.api.model.CreateInvitationInput;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
-import com.odonta.invite.model.CompleteInvitationCommand;
-import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.model.CreateInvitationResult;
 import com.odonta.invite.model.Invitation;
 import com.odonta.invite.model.InvitationProjection;
@@ -50,31 +50,32 @@ public class InvitationService {
 
   @Transactional
   @PreAuthorize(
-      "hasPermission(#command.tenantId, #command.tenantResourceType, '"
+      "hasPermission(#input.tenantId, #input.tenantResourceType, '"
           + InvitePermissions.WRITE
           + "')")
   public CreateInvitationResult create(
-      AuthenticatedUser inviter, @Valid CreateInvitationCommand command) {
+      AuthenticatedUser inviter, @Valid CreateInvitationInput input) {
     accessProfiles
-        .availableProfile(command.accessProfileId(), command.product(), command.tenantId())
+        .availableProfile(
+            input.getAccessProfileId(), product(input.getTenantResourceType()), input.getTenantId())
         .orElseThrow(
             () -> ApiException.notFound("access_profile_not_found", "Access profile not found."));
-    ProvisionalUser invited = identityUsers.createProvisional(command.email());
+    ProvisionalUser invited = identityUsers.createProvisional(input.getEmail());
     try {
       String token = generateInvitationToken();
       Invitation invitation =
           invitations.saveAndFlush(
               new Invitation(
-                  command.tenantId(),
-                  command.tenantResourceType(),
-                  command.accessProfileId(),
-                  EmailAddress.of(command.email()).value(),
+                  input.getTenantId(),
+                  input.getTenantResourceType(),
+                  input.getAccessProfileId(),
+                  EmailAddress.of(input.getEmail()).value(),
                   invited.id(),
                   invited.authorizationSubject(),
                   inviter.id(),
                   token));
       String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
-      email.sendInvitation(command.email(), acceptUrl);
+      email.sendInvitation(input.getEmail(), acceptUrl);
       return new CreateInvitationResult(getProjection(invitation.getId()), acceptUrl);
     } catch (RuntimeException exception) {
       cancelProvisionalUser(invited.id(), exception);
@@ -83,11 +84,11 @@ public class InvitationService {
   }
 
   @Transactional
-  public void complete(String token, @Valid CompleteInvitationCommand command) {
+  public void complete(String token, @Valid CompleteInvitationInput input) {
     InvitationProjection invitation = validInvitation(token);
     ProvisionalUser completed =
         identityUsers.completeProvisional(
-            invitation.getInvitedUserId(), command.name(), command.password());
+            invitation.getInvitedUserId(), input.getName(), input.getPassword());
     accept(invitation, completed.id(), completed.authorizationSubject());
   }
 
@@ -135,6 +136,10 @@ public class InvitationService {
     return invitations
         .findProjectedById(id)
         .orElseThrow(() -> ApiException.notFound("invitation_not_found", "Invitation not found."));
+  }
+
+  private String product(String tenantResourceType) {
+    return tenantResourceType.substring(0, tenantResourceType.indexOf(':'));
   }
 
   private String generateInvitationToken() {

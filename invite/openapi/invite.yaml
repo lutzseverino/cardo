@@ -40,7 +40,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateInvitationRequest"
+              $ref: "#/components/schemas/CreateInvitationInput"
       responses:
         "201":
           description: Invitation created.
@@ -86,7 +86,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CompleteInvitationRequest"
+              $ref: "#/components/schemas/CompleteInvitationInput"
       responses:
         "201":
           description: Invitation completed.
@@ -160,7 +160,7 @@ components:
     InvitationStatus:
       type: string
       enum: [pending, accepted, revoked]
-    CreateInvitationRequest:
+    CreateInvitationInput:
       type: object
       required: [tenantId, tenantResourceType, email, accessProfileId]
       properties:
@@ -170,23 +170,28 @@ components:
         tenantResourceType:
           type: string
           minLength: 1
+          pattern: "^[^:]+:[^:]+$"
           description: Product-qualified resource type using product:resource format.
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
         email:
           type: string
           format: email
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
         accessProfileId:
           type: string
           format: uuid
-    CompleteInvitationRequest:
+    CompleteInvitationInput:
       type: object
       required: [name, password]
       properties:
         name:
           type: string
           minLength: 1
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
         password:
           type: string
           minLength: 8
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
     InvitationResponse:
       type: object
       required:

@@ -7,7 +7,7 @@ import com.odonta.authorization.token.RequestingPartyTokenClient;
 import com.odonta.authorization.token.RequestingPartyTokenRequest;
 import com.odonta.common.api.ApiException;
 import com.odonta.identity.IdentityPermissions;
-import com.odonta.identity.model.AuthenticateCommand;
+import com.odonta.identity.api.model.AuthenticateInput;
 import com.odonta.identity.model.AuthenticatedPrincipal;
 import com.odonta.identity.model.AuthenticationMethod;
 import com.odonta.identity.model.AuthenticationResult;
@@ -39,8 +39,8 @@ public class AuthenticationService {
   private final KeycloakAuthoritiesConverter authorities;
   private final EffectiveGrantAuthorityReader grantReader;
 
-  public AuthenticationResult authenticate(@Valid AuthenticateCommand command) {
-    return authenticate(command.email(), command.password());
+  public AuthenticationResult authenticate(@Valid AuthenticateInput input) {
+    return authenticate(input.getEmail(), input.getPassword());
   }
 
   public AuthenticationResult authenticate(String email, String password) {

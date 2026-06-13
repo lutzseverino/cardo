@@ -41,7 +41,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CheckoutSessionRequest"
+              $ref: "#/components/schemas/CreateCheckoutSessionInput"
       responses:
         "201":
           description: Checkout session created.
@@ -63,7 +63,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PortalSessionRequest"
+              $ref: "#/components/schemas/CreatePortalSessionInput"
       responses:
         "201":
           description: Portal session created.
@@ -192,13 +192,14 @@ components:
     RawJsonPayload:
       type: string
       description: Raw JSON payload. The exact body is required for provider webhook signature verification.
-    CheckoutSessionRequest:
+    CreateCheckoutSessionInput:
       type: object
       required: [product, successUrl, cancelUrl]
       properties:
         product:
           type: string
           example: clinic
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
         successUrl:
           type: string
           format: uri
@@ -217,7 +218,7 @@ components:
         url:
           type: string
           format: uri
-    PortalSessionRequest:
+    CreatePortalSessionInput:
       type: object
       required: [returnUrl]
       properties:

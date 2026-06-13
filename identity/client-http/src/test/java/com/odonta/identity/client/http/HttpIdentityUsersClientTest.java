@@ -12,7 +12,7 @@ import com.odonta.identity.client.IdentityUser;
 import com.odonta.identity.client.IdentityUserStatus;
 import com.odonta.identity.client.IdentityUsersClient;
 import com.odonta.identity.client.ProvisionalUser;
-import com.odonta.identity.client.http.generated.CreateProvisionalUserRequest;
+import com.odonta.identity.client.http.generated.CreateProvisionalUserInput;
 import com.odonta.identity.client.http.generated.SearchUsersRequest;
 import com.odonta.identity.client.http.generated.UserResponse;
 import com.odonta.identity.client.http.generated.UserStatus;
@@ -59,16 +59,16 @@ class HttpIdentityUsersClientTest {
     UsersApi users = mock(UsersApi.class);
     HttpIdentityUsersClient client = new HttpIdentityUsersClient(users);
     UUID userId = UUID.randomUUID();
-    when(users.createProvisionalUser(any(CreateProvisionalUserRequest.class)))
+    when(users.createProvisionalUser(any(CreateProvisionalUserInput.class)))
         .thenReturn(new UserResponse().id(userId).authorizationSubject("subject-1"));
 
     assertThat(client.createProvisional("employee@example.com"))
         .isEqualTo(new ProvisionalUser(userId, "subject-1"));
 
-    ArgumentCaptor<CreateProvisionalUserRequest> request =
-        ArgumentCaptor.forClass(CreateProvisionalUserRequest.class);
-    verify(users).createProvisionalUser(request.capture());
-    assertThat(request.getValue().getEmail()).isEqualTo("employee@example.com");
+    ArgumentCaptor<CreateProvisionalUserInput> input =
+        ArgumentCaptor.forClass(CreateProvisionalUserInput.class);
+    verify(users).createProvisionalUser(input.capture());
+    assertThat(input.getValue().getEmail()).isEqualTo("employee@example.com");
   }
 
   @Test

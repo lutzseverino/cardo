@@ -2,10 +2,9 @@ package com.odonta.billing.controller;
 
 import com.odonta.authorization.spring.AuthenticatedUserReader;
 import com.odonta.billing.api.PortalSessionsApi;
-import com.odonta.billing.api.model.PortalSessionRequest;
+import com.odonta.billing.api.model.CreatePortalSessionInput;
 import com.odonta.billing.api.model.PortalSessionResponse;
 import com.odonta.billing.mapper.BillingSessionMapper;
-import com.odonta.billing.model.CreatePortalSessionCommand;
 import com.odonta.billing.service.PortalSessionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,10 +24,8 @@ public class PortalSessionController implements PortalSessionsApi {
 
   @Override
   public ResponseEntity<PortalSessionResponse> createPortalSession(
-      @Valid PortalSessionRequest request) {
-    CreatePortalSessionCommand command =
-        new CreatePortalSessionCommand(request.getReturnUrl().toString());
+      @Valid CreatePortalSessionInput input) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(mapper.toPortalResponse(portalSessions.create(users.currentUser().id(), command)));
+        .body(mapper.toPortalResponse(portalSessions.create(users.currentUser().id(), input)));
   }
 }

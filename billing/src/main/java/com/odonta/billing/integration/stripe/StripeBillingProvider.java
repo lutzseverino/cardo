@@ -2,8 +2,6 @@ package com.odonta.billing.integration.stripe;
 
 import com.odonta.billing.config.StripeProperties;
 import com.odonta.billing.model.BillingSessionResult;
-import com.odonta.billing.model.CreateCheckoutSessionCommand;
-import com.odonta.billing.model.CreatePortalSessionCommand;
 import com.odonta.billing.model.Customer;
 import com.odonta.billing.provider.BillingProvider;
 import com.odonta.billing.service.CustomerService;
@@ -16,6 +14,7 @@ import com.stripe.param.checkout.SessionCreateParams;
 import com.stripe.param.checkout.SessionCreateParams.LineItem;
 import com.stripe.param.checkout.SessionCreateParams.Mode;
 import com.stripe.param.checkout.SessionCreateParams.SubscriptionData;
+import java.net.URI;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -32,9 +31,9 @@ public class StripeBillingProvider implements BillingProvider {
 
   @Override
   public BillingSessionResult createCheckoutSession(
-      UUID subjectId, CreateCheckoutSessionCommand command) {
+      UUID subjectId, String product, URI successUrl, URI cancelUrl) {
     Customer customer = customers.getOrCreate(subjectId, PROVIDER, () -> createCustomer(subjectId));
-    StripeProperties.CheckoutPrice price = prices.findByProduct(command.product());
+    StripeProperties.CheckoutPrice price = prices.findByProduct(product);
 
     try {
       Session session =
@@ -46,8 +45,8 @@ public class StripeBillingProvider implements BillingProvider {
                   SessionCreateParams.builder()
                       .setMode(Mode.SUBSCRIPTION)
                       .setCustomer(customer.getProviderCustomerId())
-                      .setSuccessUrl(command.successUrl())
-                      .setCancelUrl(command.cancelUrl())
+                      .setSuccessUrl(successUrl.toString())
+                      .setCancelUrl(cancelUrl.toString())
                       .putMetadata("subject_id", subjectId.toString())
                       .putMetadata("product", price.product())
                       .setSubscriptionData(
@@ -65,8 +64,7 @@ public class StripeBillingProvider implements BillingProvider {
   }
 
   @Override
-  public BillingSessionResult createPortalSession(
-      UUID subjectId, CreatePortalSessionCommand command) {
+  public BillingSessionResult createPortalSession(UUID subjectId, URI returnUrl) {
     Customer customer = customers.getOrCreate(subjectId, PROVIDER, () -> createCustomer(subjectId));
     try {
       com.stripe.model.billingportal.Session session =
@@ -77,7 +75,7 @@ public class StripeBillingProvider implements BillingProvider {
               .create(
                   com.stripe.param.billingportal.SessionCreateParams.builder()
                       .setCustomer(customer.getProviderCustomerId())
-                      .setReturnUrl(command.returnUrl())
+                      .setReturnUrl(returnUrl.toString())
                       .build());
       return new BillingSessionResult(session.getId(), session.getUrl());
     } catch (StripeException exception) {

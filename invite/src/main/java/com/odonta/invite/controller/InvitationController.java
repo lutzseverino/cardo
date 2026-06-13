@@ -2,14 +2,12 @@ package com.odonta.invite.controller;
 
 import com.odonta.authorization.spring.AuthenticatedUserReader;
 import com.odonta.invite.api.InvitationsApi;
-import com.odonta.invite.api.model.CompleteInvitationRequest;
-import com.odonta.invite.api.model.CreateInvitationRequest;
+import com.odonta.invite.api.model.CompleteInvitationInput;
+import com.odonta.invite.api.model.CreateInvitationInput;
 import com.odonta.invite.api.model.CreateInvitationResponse;
 import com.odonta.invite.api.model.InvitationCompletionResponse;
 import com.odonta.invite.api.model.InvitationResponse;
 import com.odonta.invite.mapper.InvitationMapper;
-import com.odonta.invite.model.CompleteInvitationCommand;
-import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.service.InvitationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,15 +27,9 @@ public class InvitationController implements InvitationsApi {
 
   @Override
   public ResponseEntity<CreateInvitationResponse> createInvitation(
-      @Valid CreateInvitationRequest request) {
-    CreateInvitationCommand command =
-        new CreateInvitationCommand(
-            request.getTenantId(),
-            request.getTenantResourceType(),
-            request.getEmail(),
-            request.getAccessProfileId());
+      @Valid CreateInvitationInput input) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(mapper.toResponse(invitations.create(users.currentUser(), command)));
+        .body(mapper.toResponse(invitations.create(users.currentUser(), input)));
   }
 
   @Override
@@ -47,10 +39,8 @@ public class InvitationController implements InvitationsApi {
 
   @Override
   public ResponseEntity<InvitationCompletionResponse> completeInvitation(
-      String token, @Valid CompleteInvitationRequest request) {
-    CompleteInvitationCommand command =
-        new CompleteInvitationCommand(request.getName(), request.getPassword());
-    invitations.complete(token, command);
+      String token, @Valid CompleteInvitationInput input) {
+    invitations.complete(token, input);
     return ResponseEntity.status(HttpStatus.CREATED).body(new InvitationCompletionResponse(true));
   }
 

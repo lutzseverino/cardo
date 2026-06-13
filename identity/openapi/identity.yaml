@@ -41,7 +41,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateUserRequest"
+              $ref: "#/components/schemas/CreateUserInput"
       responses:
         "201":
           description: User created.
@@ -93,7 +93,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateProvisionalUserRequest"
+              $ref: "#/components/schemas/CreateProvisionalUserInput"
       responses:
         "201":
           description: Provisional user created or found.
@@ -164,7 +164,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateCurrentUserRequest"
+              $ref: "#/components/schemas/UpdateCurrentUserInput"
       responses:
         "200":
           description: User updated.
@@ -194,7 +194,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CompleteProvisionalUserRequest"
+              $ref: "#/components/schemas/CompleteProvisionalUserInput"
       responses:
         "201":
           description: Provisional user completed.
@@ -265,7 +265,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateUserRequest"
+              $ref: "#/components/schemas/UpdateUserInput"
       responses:
         "200":
           description: User updated.
@@ -284,14 +284,14 @@ paths:
   /identity/sessions:
     post:
       tags: [Sessions]
-      operationId: createSession
+      operationId: authenticate
       summary: Sign in with email and password.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateSessionRequest"
+              $ref: "#/components/schemas/AuthenticateInput"
       responses:
         "201":
           description: Session created. Also sets an HTTP-only session cookie.
@@ -425,7 +425,7 @@ components:
             type: string
           uniqueItems: true
           default: []
-    CreateUserRequest:
+    CreateUserInput:
       type: object
       required: [email, password, name]
       properties:
@@ -438,14 +438,14 @@ components:
         name:
           type: string
           minLength: 1
-    CreateProvisionalUserRequest:
+    CreateProvisionalUserInput:
       type: object
       required: [email]
       properties:
         email:
           type: string
           format: email
-    CompleteProvisionalUserRequest:
+    CompleteProvisionalUserInput:
       type: object
       required: [name, password]
       properties:
@@ -455,7 +455,7 @@ components:
         password:
           type: string
           minLength: 8
-    UpdateUserRequest:
+    UpdateUserInput:
       type: object
       properties:
         name:
@@ -468,7 +468,7 @@ components:
           format: uri
         status:
           $ref: "#/components/schemas/UpdateUserStatus"
-    UpdateCurrentUserRequest:
+    UpdateCurrentUserInput:
       type: object
       properties:
         name:
@@ -479,7 +479,7 @@ components:
           type: string
           nullable: true
           format: uri
-    CreateSessionRequest:
+    AuthenticateInput:
       type: object
       required: [email, password]
       properties:

@@ -12,11 +12,12 @@ import static org.mockito.Mockito.when;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.common.api.ApiException;
 import com.odonta.identity.IdentityPermissions;
+import com.odonta.identity.api.model.CompleteProvisionalUserInput;
+import com.odonta.identity.api.model.CreateProvisionalUserInput;
+import com.odonta.identity.api.model.CreateUserInput;
+import com.odonta.identity.api.model.UpdateCurrentUserInput;
+import com.odonta.identity.api.model.UpdateUserInput;
 import com.odonta.identity.authorization.IdentityGrantPlanner;
-import com.odonta.identity.model.CompleteProvisionalUserCommand;
-import com.odonta.identity.model.CreateProvisionalUserCommand;
-import com.odonta.identity.model.CreateUserCommand;
-import com.odonta.identity.model.UpdateUserCommand;
 import com.odonta.identity.model.User;
 import com.odonta.identity.model.UserProjection;
 import com.odonta.identity.model.UserStatus;
@@ -55,7 +56,7 @@ class UserServiceTest {
         .thenThrow(new DataIntegrityViolationException("duplicate"));
 
     assertThatThrownBy(
-            () -> service.create(new CreateUserCommand("owner@example.com", "password-1", "Owner")))
+            () -> service.create(new CreateUserInput("owner@example.com", "password-1", "Owner")))
         .isInstanceOf(ApiException.class)
         .hasMessage("A user with this email already exists.");
 
@@ -76,7 +77,7 @@ class UserServiceTest {
     doThrow(failure).when(identityProvider).bindUserId("kc-user-1", userId);
 
     assertThatThrownBy(
-            () -> service.create(new CreateUserCommand("owner@example.com", "password-1", "Owner")))
+            () -> service.create(new CreateUserInput("owner@example.com", "password-1", "Owner")))
         .isSameAs(failure);
 
     verify(identityProvider).deleteIdentity("kc-user-1");
@@ -88,7 +89,7 @@ class UserServiceTest {
     UserService service = service();
     when(users.findProjectedByEmail("employee@example.com")).thenReturn(Optional.of(existing));
 
-    assertThat(service.createProvisional(new CreateProvisionalUserCommand("employee@example.com")))
+    assertThat(service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
         .isSameAs(existing);
 
     verify(identityProvider, never()).provisionProvisionalIdentity(any());
@@ -101,7 +102,7 @@ class UserServiceTest {
     when(users.findById(userId)).thenReturn(Optional.of(new User("kc-user-1", "a@b.com", "A")));
 
     assertThatThrownBy(
-            () -> service.update(userId, new UpdateUserCommand(null, null, UserStatus.INVITED)))
+            () -> service.update(userId, new UpdateUserInput().status(UserStatus.INVITED)))
         .isInstanceOf(ApiException.class)
         .hasMessage("Invited is not an operational user status.");
 
@@ -121,7 +122,7 @@ class UserServiceTest {
 
     assertThat(
             service.completeProvisional(
-                userId, new CompleteProvisionalUserCommand("Employee", "password-1")))
+                userId, new CompleteProvisionalUserInput("Employee", "password-1")))
         .isSameAs(completed);
 
     InOrder order = inOrder(users, identityProvider);
@@ -172,15 +173,11 @@ class UserServiceTest {
 
   @Test
   void authorizationAndTransactionsLiveOnServiceMethods() throws Exception {
-    Method update = UserService.class.getMethod("update", UUID.class, UpdateUserCommand.class);
+    Method update = UserService.class.getMethod("update", UUID.class, UpdateUserInput.class);
     Method updateCurrent =
-        UserService.class.getMethod(
-            "updateCurrent",
-            String.class,
-            com.odonta.identity.model.UpdateCurrentUserCommand.class);
+        UserService.class.getMethod("updateCurrent", String.class, UpdateCurrentUserInput.class);
     Method createProvisional =
-        UserService.class.getMethod(
-            "createProvisional", com.odonta.identity.model.CreateProvisionalUserCommand.class);
+        UserService.class.getMethod("createProvisional", CreateProvisionalUserInput.class);
 
     assertThat(update.isAnnotationPresent(Transactional.class)).isTrue();
     assertThat(update.isAnnotationPresent(PreAuthorize.class)).isTrue();

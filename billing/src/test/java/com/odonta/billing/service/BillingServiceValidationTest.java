@@ -4,9 +4,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.odonta.billing.model.CreateCheckoutSessionCommand;
+import com.odonta.billing.api.model.CreateCheckoutSessionInput;
 import com.odonta.billing.provider.BillingProvider;
 import jakarta.validation.ConstraintViolationException;
+import java.net.URI;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,12 +23,14 @@ class BillingServiceValidationTest {
   @Autowired private CheckoutSessionService checkoutSessions;
 
   @Test
-  void validatesCommandsAtTheServiceBoundary() {
-    CreateCheckoutSessionCommand command =
-        new CreateCheckoutSessionCommand(
-            "   ", "https://app.example.com/success", "https://app.example.com/cancel");
+  void validatesRequestsAtTheServiceBoundary() {
+    CreateCheckoutSessionInput input =
+        new CreateCheckoutSessionInput(
+            "   ",
+            URI.create("https://app.example.com/success"),
+            URI.create("https://app.example.com/cancel"));
 
-    assertThatThrownBy(() -> checkoutSessions.create(UUID.randomUUID(), command))
+    assertThatThrownBy(() -> checkoutSessions.create(UUID.randomUUID(), input))
         .isInstanceOf(ConstraintViolationException.class);
 
     verifyNoInteractions(provider);

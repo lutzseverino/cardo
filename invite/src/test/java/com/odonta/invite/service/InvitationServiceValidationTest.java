@@ -8,9 +8,9 @@ import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.identity.client.IdentityUsersClient;
+import com.odonta.invite.api.model.CreateInvitationInput;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
-import com.odonta.invite.model.CreateInvitationCommand;
 import com.odonta.invite.repository.InvitationRepository;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Duration;
@@ -33,12 +33,12 @@ class InvitationServiceValidationTest {
   @Autowired private InvitationService invitationService;
 
   @Test
-  void validatesCommandsAtTheServiceBoundary() {
-    CreateInvitationCommand command =
-        new CreateInvitationCommand(
+  void validatesRequestsAtTheServiceBoundary() {
+    CreateInvitationInput input =
+        new CreateInvitationInput(
             UUID.randomUUID(), "clinic", "employee@example.com", UUID.randomUUID());
 
-    assertThatThrownBy(() -> invitationService.create(inviter(), command))
+    assertThatThrownBy(() -> invitationService.create(inviter(), input))
         .isInstanceOf(ConstraintViolationException.class);
 
     verifyNoInteractions(accessProfiles, identityUsers, invitations);
