@@ -3,7 +3,7 @@ package com.odonta.billing.controller;
 import com.odonta.authorization.spring.AuthenticatedUserReader;
 import com.odonta.billing.api.EntitlementsApi;
 import com.odonta.billing.api.model.EntitlementResponse;
-import com.odonta.billing.mapper.EntitlementMapper;
+import com.odonta.billing.mapper.EntitlementTransportMapper;
 import com.odonta.billing.service.EntitlementService;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class EntitlementController implements EntitlementsApi {
 
-  private final EntitlementMapper mapper;
+  private final EntitlementTransportMapper mapper;
   private final EntitlementService entitlements;
   private final AuthenticatedUserReader users;
 

@@ -40,7 +40,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateInvitationInput"
+              $ref: "#/components/schemas/CreateInvitationRequest"
       responses:
         "201":
           description: Invitation created.
@@ -86,7 +86,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CompleteInvitationInput"
+              $ref: "#/components/schemas/CompleteInvitationRequest"
       responses:
         "201":
           description: Invitation completed.
@@ -160,7 +160,7 @@ components:
     InvitationStatus:
       type: string
       enum: [pending, accepted, revoked]
-    CreateInvitationInput:
+    CreateInvitationRequest:
       type: object
       required: [tenantId, tenantResourceType, email, accessProfileId]
       properties:
@@ -180,7 +180,7 @@ components:
         accessProfileId:
           type: string
           format: uuid
-    CompleteInvitationInput:
+    CompleteInvitationRequest:
       type: object
       required: [name, password]
       properties:

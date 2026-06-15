@@ -1,10 +1,12 @@
 package com.odonta.billing.service;
 
 import com.odonta.billing.BillingPermissions;
+import com.odonta.billing.mapper.EntitlementApplicationMapper;
 import com.odonta.billing.model.Entitlement;
-import com.odonta.billing.model.EntitlementProjection;
+import com.odonta.billing.model.EntitlementResult;
 import com.odonta.billing.model.EntitlementStatus;
 import com.odonta.billing.model.EntitlementSyncItem;
+import com.odonta.billing.repository.EntitlementProjection;
 import com.odonta.billing.repository.EntitlementRepository;
 import com.odonta.common.api.ApiException;
 import java.util.Collection;
@@ -21,23 +23,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class EntitlementService {
 
   private final EntitlementRepository entitlements;
+  private final EntitlementApplicationMapper mapper;
 
-  public EntitlementProjection getCurrent(UUID subjectId, String product) {
-    return getProjection(subjectId, product);
+  public EntitlementResult getCurrent(UUID subjectId, String product) {
+    return getResult(subjectId, product);
   }
 
   @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
-  public EntitlementProjection get(UUID subjectId, String product) {
-    return getProjection(subjectId, product);
+  public EntitlementResult get(UUID subjectId, String product) {
+    return getResult(subjectId, product);
   }
 
   @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
-  public EntitlementProjection require(UUID subjectId, String product) {
+  public EntitlementResult require(UUID subjectId, String product) {
     EntitlementProjection entitlement = getProjection(subjectId, product);
     if (!entitlement.getStatus().usable()) {
       throw ApiException.forbidden("entitlement_inactive", "Entitlement is not active.");
     }
-    return entitlement;
+    return mapper.toResult(entitlement);
   }
 
   @Transactional
@@ -82,5 +85,9 @@ public class EntitlementService {
         .findProjectedBySubjectIdAndProduct(subjectId, product)
         .orElseThrow(
             () -> ApiException.notFound("entitlement_not_found", "Entitlement not found."));
+  }
+
+  private EntitlementResult getResult(UUID subjectId, String product) {
+    return mapper.toResult(getProjection(subjectId, product));
   }
 }

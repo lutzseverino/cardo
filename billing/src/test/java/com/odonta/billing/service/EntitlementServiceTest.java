@@ -5,10 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.odonta.billing.mapper.EntitlementApplicationMapperImpl;
 import com.odonta.billing.model.Entitlement;
-import com.odonta.billing.model.EntitlementProjection;
 import com.odonta.billing.model.EntitlementStatus;
 import com.odonta.billing.model.EntitlementSyncItem;
+import com.odonta.billing.repository.EntitlementProjection;
 import com.odonta.billing.repository.EntitlementRepository;
 import com.odonta.common.api.ApiException;
 import java.time.OffsetDateTime;
@@ -29,18 +30,19 @@ class EntitlementServiceTest {
   @Test
   void requiresUsableEntitlement() {
     UUID subjectId = UUID.randomUUID();
-    EntitlementService service = new EntitlementService(entitlements);
+    EntitlementService service =
+        new EntitlementService(entitlements, new EntitlementApplicationMapperImpl());
     when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
         .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.TRIALING)));
 
-    assertThat(service.require(subjectId, "clinic").getStatus())
-        .isEqualTo(EntitlementStatus.TRIALING);
+    assertThat(service.require(subjectId, "clinic").status()).isEqualTo(EntitlementStatus.TRIALING);
   }
 
   @Test
   void rejectsInactiveEntitlement() {
     UUID subjectId = UUID.randomUUID();
-    EntitlementService service = new EntitlementService(entitlements);
+    EntitlementService service =
+        new EntitlementService(entitlements, new EntitlementApplicationMapperImpl());
     when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
         .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.PAST_DUE)));
 
@@ -52,7 +54,8 @@ class EntitlementServiceTest {
   @Test
   void replacesActiveEntitlements() {
     UUID subjectId = UUID.randomUUID();
-    EntitlementService service = new EntitlementService(entitlements);
+    EntitlementService service =
+        new EntitlementService(entitlements, new EntitlementApplicationMapperImpl());
     when(entitlements.findBySubjectId(subjectId)).thenReturn(List.of());
 
     service.replaceActive(subjectId, List.of(new EntitlementSyncItem("clinic", 1, 5)));

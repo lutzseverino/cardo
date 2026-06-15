@@ -41,7 +41,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateUserInput"
+              $ref: "#/components/schemas/CreateUserRequest"
       responses:
         "201":
           description: User created.
@@ -93,7 +93,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateProvisionalUserInput"
+              $ref: "#/components/schemas/CreateProvisionalUserRequest"
       responses:
         "201":
           description: Provisional user created or found.
@@ -126,7 +126,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UsersResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -164,7 +166,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateCurrentUserInput"
+              $ref: "#/components/schemas/UpdateCurrentUserRequest"
       responses:
         "200":
           description: User updated.
@@ -194,7 +196,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CompleteProvisionalUserInput"
+              $ref: "#/components/schemas/CompleteProvisionalUserRequest"
       responses:
         "201":
           description: Provisional user completed.
@@ -265,7 +267,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateUserInput"
+              $ref: "#/components/schemas/UpdateUserRequest"
       responses:
         "200":
           description: User updated.
@@ -291,7 +293,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AuthenticateInput"
+              $ref: "#/components/schemas/AuthenticateRequest"
       responses:
         "201":
           description: Session created. Also sets an HTTP-only session cookie.
@@ -408,14 +410,6 @@ components:
         updatedAt:
           type: string
           format: date-time
-    UsersResponse:
-      type: object
-      required: [users]
-      properties:
-        users:
-          type: array
-          items:
-            $ref: "#/components/schemas/UserResponse"
     SearchUsersRequest:
       type: object
       properties:
@@ -425,7 +419,7 @@ components:
             type: string
           uniqueItems: true
           default: []
-    CreateUserInput:
+    CreateUserRequest:
       type: object
       required: [email, password, name]
       properties:
@@ -438,14 +432,14 @@ components:
         name:
           type: string
           minLength: 1
-    CreateProvisionalUserInput:
+    CreateProvisionalUserRequest:
       type: object
       required: [email]
       properties:
         email:
           type: string
           format: email
-    CompleteProvisionalUserInput:
+    CompleteProvisionalUserRequest:
       type: object
       required: [name, password]
       properties:
@@ -455,7 +449,7 @@ components:
         password:
           type: string
           minLength: 8
-    UpdateUserInput:
+    UpdateUserRequest:
       type: object
       properties:
         name:
@@ -468,7 +462,7 @@ components:
           format: uri
         status:
           $ref: "#/components/schemas/UpdateUserStatus"
-    UpdateCurrentUserInput:
+    UpdateCurrentUserRequest:
       type: object
       properties:
         name:
@@ -479,7 +473,7 @@ components:
           type: string
           nullable: true
           format: uri
-    AuthenticateInput:
+    AuthenticateRequest:
       type: object
       required: [email, password]
       properties:

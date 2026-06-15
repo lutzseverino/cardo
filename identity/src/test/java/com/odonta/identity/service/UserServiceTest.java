@@ -11,17 +11,19 @@ import static org.mockito.Mockito.when;
 
 import com.odonta.authorization.grant.Grants;
 import com.odonta.common.api.ApiException;
+import com.odonta.common.model.FieldUpdate;
 import com.odonta.identity.IdentityPermissions;
-import com.odonta.identity.api.model.CompleteProvisionalUserInput;
-import com.odonta.identity.api.model.CreateProvisionalUserInput;
-import com.odonta.identity.api.model.CreateUserInput;
-import com.odonta.identity.api.model.UpdateCurrentUserInput;
-import com.odonta.identity.api.model.UpdateUserInput;
 import com.odonta.identity.authorization.IdentityGrantPlanner;
+import com.odonta.identity.mapper.UserApplicationMapperImpl;
+import com.odonta.identity.model.CompleteProvisionalUserInput;
+import com.odonta.identity.model.CreateProvisionalUserInput;
+import com.odonta.identity.model.CreateUserInput;
+import com.odonta.identity.model.UpdateCurrentUserInput;
+import com.odonta.identity.model.UpdateUserInput;
 import com.odonta.identity.model.User;
-import com.odonta.identity.model.UserProjection;
 import com.odonta.identity.model.UserStatus;
 import com.odonta.identity.provider.IdentityProvider;
+import com.odonta.identity.repository.UserProjection;
 import com.odonta.identity.repository.UserRepository;
 import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
@@ -90,7 +92,8 @@ class UserServiceTest {
     when(users.findProjectedByEmail("employee@example.com")).thenReturn(Optional.of(existing));
 
     assertThat(service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
-        .isSameAs(existing);
+        .extracting(result -> result.id(), result -> result.status())
+        .containsExactly(existing.getId(), UserStatus.INVITED);
 
     verify(identityProvider, never()).provisionProvisionalIdentity(any());
   }
@@ -102,11 +105,31 @@ class UserServiceTest {
     when(users.findById(userId)).thenReturn(Optional.of(new User("kc-user-1", "a@b.com", "A")));
 
     assertThatThrownBy(
-            () -> service.update(userId, new UpdateUserInput().status(UserStatus.INVITED)))
+            () ->
+                service.update(
+                    userId, new UpdateUserInput(null, FieldUpdate.absent(), UserStatus.INVITED)))
         .isInstanceOf(ApiException.class)
         .hasMessage("Invited is not an operational user status.");
 
     verify(users, never()).saveAndFlush(any(User.class));
+  }
+
+  @Test
+  void clearsAvatarWhenTheUpdateExplicitlyProvidesNull() {
+    UUID userId = UUID.randomUUID();
+    User user = new User("kc-user-1", "a@b.com", "A");
+    user.setAvatarUrl("https://example.com/avatar.png");
+    UserProjection updated = projection(UserStatus.ACTIVE);
+    UserService service = service();
+    when(users.findById(userId)).thenReturn(Optional.of(user));
+    when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
+
+    assertThat(service.update(userId, new UpdateUserInput(null, FieldUpdate.present(null), null)))
+        .extracting(result -> result.id(), result -> result.status())
+        .containsExactly(updated.getId(), UserStatus.ACTIVE);
+
+    assertThat(user.getAvatarUrl()).isNull();
+    verify(users).saveAndFlush(user);
   }
 
   @Test
@@ -123,7 +146,8 @@ class UserServiceTest {
     assertThat(
             service.completeProvisional(
                 userId, new CompleteProvisionalUserInput("Employee", "password-1")))
-        .isSameAs(completed);
+        .extracting(result -> result.id(), result -> result.status())
+        .containsExactly(completed.getId(), UserStatus.ACTIVE);
 
     InOrder order = inOrder(users, identityProvider);
     order.verify(users).saveAndFlush(user);
@@ -168,7 +192,9 @@ class UserServiceTest {
     assertThat(
             service.searchByAuthorizationSubjects(
                 List.of("subject-1", " ", "subject-2", "subject-1")))
-        .containsExactly(user);
+        .singleElement()
+        .extracting(result -> result.id())
+        .isEqualTo(user.getId());
   }
 
   @Test
@@ -188,7 +214,12 @@ class UserServiceTest {
   }
 
   private UserService service() {
-    return new UserService(users, identityProvider, grants, new IdentityGrantPlanner());
+    return new UserService(
+        users,
+        new UserApplicationMapperImpl(),
+        identityProvider,
+        grants,
+        new IdentityGrantPlanner());
   }
 
   private User persisted(InvocationOnMock invocation, UUID id) {

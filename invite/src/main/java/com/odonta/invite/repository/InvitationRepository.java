@@ -1,7 +1,6 @@
 package com.odonta.invite.repository;
 
 import com.odonta.invite.model.Invitation;
-import com.odonta.invite.model.InvitationProjection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;

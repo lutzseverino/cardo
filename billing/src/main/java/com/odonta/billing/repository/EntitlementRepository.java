@@ -1,7 +1,6 @@
 package com.odonta.billing.repository;
 
 import com.odonta.billing.model.Entitlement;
-import com.odonta.billing.model.EntitlementProjection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

@@ -1,5 +1,6 @@
-package com.odonta.billing.model;
+package com.odonta.billing.repository;
 
+import com.odonta.billing.model.EntitlementStatus;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 

@@ -8,9 +8,10 @@ import com.odonta.authorization.access.AccessProfileService;
 import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.identity.client.IdentityUsersClient;
-import com.odonta.invite.api.model.CreateInvitationInput;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
+import com.odonta.invite.mapper.InvitationApplicationMapperImpl;
+import com.odonta.invite.model.CreateInvitationInput;
 import com.odonta.invite.repository.InvitationRepository;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Duration;
@@ -105,6 +106,7 @@ class InvitationServiceValidationTest {
           grants,
           identityUsers,
           invitationGrantPlanner,
+          new InvitationApplicationMapperImpl(),
           invitationProperties,
           invitations);
     }

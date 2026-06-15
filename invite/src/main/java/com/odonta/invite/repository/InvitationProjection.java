@@ -1,5 +1,6 @@
-package com.odonta.invite.model;
+package com.odonta.invite.repository;
 
+import com.odonta.invite.model.InvitationStatus;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 

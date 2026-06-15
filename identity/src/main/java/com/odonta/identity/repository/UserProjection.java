@@ -1,5 +1,6 @@
-package com.odonta.identity.model;
+package com.odonta.identity.repository;
 
+import com.odonta.identity.model.UserStatus;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 

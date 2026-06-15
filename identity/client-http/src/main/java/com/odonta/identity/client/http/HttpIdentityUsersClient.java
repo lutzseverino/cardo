@@ -4,8 +4,8 @@ import com.odonta.identity.client.IdentityUser;
 import com.odonta.identity.client.IdentityUserStatus;
 import com.odonta.identity.client.IdentityUsersClient;
 import com.odonta.identity.client.ProvisionalUser;
-import com.odonta.identity.client.http.generated.CompleteProvisionalUserInput;
-import com.odonta.identity.client.http.generated.CreateProvisionalUserInput;
+import com.odonta.identity.client.http.generated.CompleteProvisionalUserRequest;
+import com.odonta.identity.client.http.generated.CreateProvisionalUserRequest;
 import com.odonta.identity.client.http.generated.SearchUsersRequest;
 import com.odonta.identity.client.http.generated.UserResponse;
 import com.odonta.identity.client.http.generated.UserStatus;
@@ -26,14 +26,14 @@ final class HttpIdentityUsersClient implements IdentityUsersClient {
   @Override
   public ProvisionalUser createProvisional(String email) {
     return toProvisionalUser(
-        users.createProvisionalUser(new CreateProvisionalUserInput().email(email)));
+        users.createProvisionalUser(new CreateProvisionalUserRequest().email(email)));
   }
 
   @Override
   public ProvisionalUser completeProvisional(UUID userId, String name, String password) {
     return toProvisionalUser(
         users.completeProvisionalUser(
-            userId, new CompleteProvisionalUserInput().name(name).password(password)));
+            userId, new CompleteProvisionalUserRequest().name(name).password(password)));
   }
 
   @Override
@@ -45,7 +45,6 @@ final class HttpIdentityUsersClient implements IdentityUsersClient {
   public List<IdentityUser> searchByAuthorizationSubjects(Collection<String> subjects) {
     return users
         .searchUsers(new SearchUsersRequest().authorizationSubjects(new LinkedHashSet<>(subjects)))
-        .getUsers()
         .stream()
         .map(this::toIdentityUser)
         .toList();

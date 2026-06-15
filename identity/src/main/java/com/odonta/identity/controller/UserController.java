@@ -1,15 +1,15 @@
 package com.odonta.identity.controller;
 
 import com.odonta.identity.api.UsersApi;
-import com.odonta.identity.api.model.CompleteProvisionalUserInput;
-import com.odonta.identity.api.model.CreateProvisionalUserInput;
-import com.odonta.identity.api.model.CreateUserInput;
+import com.odonta.identity.api.model.CompleteProvisionalUserRequest;
+import com.odonta.identity.api.model.CreateProvisionalUserRequest;
+import com.odonta.identity.api.model.CreateUserRequest;
 import com.odonta.identity.api.model.SearchUsersRequest;
-import com.odonta.identity.api.model.UpdateCurrentUserInput;
-import com.odonta.identity.api.model.UpdateUserInput;
+import com.odonta.identity.api.model.UpdateCurrentUserRequest;
+import com.odonta.identity.api.model.UpdateUserRequest;
 import com.odonta.identity.api.model.UserResponse;
-import com.odonta.identity.api.model.UsersResponse;
-import com.odonta.identity.mapper.UserMapper;
+import com.odonta.identity.mapper.UserTransportMapper;
+import com.odonta.identity.patch.UserPatchAdapter;
 import com.odonta.identity.reader.CurrentJwtReader;
 import com.odonta.identity.service.UserService;
 import jakarta.validation.Valid;
@@ -26,27 +26,29 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class UserController implements UsersApi {
 
-  private final UserMapper mapper;
+  private final UserTransportMapper mapper;
+  private final UserPatchAdapter patchAdapter;
   private final CurrentJwtReader currentJwt;
   private final UserService users;
 
   @Override
-  public ResponseEntity<UserResponse> createUser(@Valid CreateUserInput input) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(users.create(input)));
+  public ResponseEntity<UserResponse> createUser(@Valid CreateUserRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(mapper.toResponse(users.create(mapper.toInput(request))));
   }
 
   @Override
   public ResponseEntity<UserResponse> createProvisionalUser(
-      @Valid CreateProvisionalUserInput input) {
+      @Valid CreateProvisionalUserRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(mapper.toResponse(users.createProvisional(input)));
+        .body(mapper.toResponse(users.createProvisional(mapper.toInput(request))));
   }
 
   @Override
   public ResponseEntity<UserResponse> completeProvisionalUser(
-      UUID userId, @Valid CompleteProvisionalUserInput input) {
+      UUID userId, @Valid CompleteProvisionalUserRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(mapper.toResponse(users.completeProvisional(userId, input)));
+        .body(mapper.toResponse(users.completeProvisional(userId, mapper.toInput(request))));
   }
 
   @Override
@@ -61,9 +63,10 @@ public class UserController implements UsersApi {
   }
 
   @Override
-  public ResponseEntity<UserResponse> updateCurrentUser(@Valid UpdateCurrentUserInput input) {
+  public ResponseEntity<UserResponse> updateCurrentUser(@Valid UpdateCurrentUserRequest request) {
     return ResponseEntity.ok(
-        mapper.toResponse(users.updateCurrent(currentJwt.current().getName(), input)));
+        mapper.toResponse(
+            users.updateCurrent(currentJwt.current().getName(), patchAdapter.toInput(request))));
   }
 
   @Override
@@ -77,18 +80,18 @@ public class UserController implements UsersApi {
   }
 
   @Override
-  public ResponseEntity<UsersResponse> searchUsers(@Valid SearchUsersRequest request) {
+  public ResponseEntity<List<UserResponse>> searchUsers(@Valid SearchUsersRequest request) {
     return ResponseEntity.ok(
-        new UsersResponse(
-            mapper.toResponses(
-                users.searchByAuthorizationSubjects(
-                    request.getAuthorizationSubjects() == null
-                        ? List.of()
-                        : request.getAuthorizationSubjects().stream().toList()))));
+        mapper.toResponses(
+            users.searchByAuthorizationSubjects(
+                request.getAuthorizationSubjects() == null
+                    ? List.of()
+                    : request.getAuthorizationSubjects().stream().toList())));
   }
 
   @Override
-  public ResponseEntity<UserResponse> updateUser(UUID userId, @Valid UpdateUserInput input) {
-    return ResponseEntity.ok(mapper.toResponse(users.update(userId, input)));
+  public ResponseEntity<UserResponse> updateUser(UUID userId, @Valid UpdateUserRequest request) {
+    return ResponseEntity.ok(
+        mapper.toResponse(users.update(userId, patchAdapter.toInput(request))));
   }
 }

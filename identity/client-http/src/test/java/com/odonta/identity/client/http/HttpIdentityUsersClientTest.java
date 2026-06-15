@@ -12,11 +12,10 @@ import com.odonta.identity.client.IdentityUser;
 import com.odonta.identity.client.IdentityUserStatus;
 import com.odonta.identity.client.IdentityUsersClient;
 import com.odonta.identity.client.ProvisionalUser;
-import com.odonta.identity.client.http.generated.CreateProvisionalUserInput;
+import com.odonta.identity.client.http.generated.CreateProvisionalUserRequest;
 import com.odonta.identity.client.http.generated.SearchUsersRequest;
 import com.odonta.identity.client.http.generated.UserResponse;
 import com.odonta.identity.client.http.generated.UserStatus;
-import com.odonta.identity.client.http.generated.UsersResponse;
 import com.odonta.identity.client.http.generated.api.UsersApi;
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -59,14 +58,14 @@ class HttpIdentityUsersClientTest {
     UsersApi users = mock(UsersApi.class);
     HttpIdentityUsersClient client = new HttpIdentityUsersClient(users);
     UUID userId = UUID.randomUUID();
-    when(users.createProvisionalUser(any(CreateProvisionalUserInput.class)))
+    when(users.createProvisionalUser(any(CreateProvisionalUserRequest.class)))
         .thenReturn(new UserResponse().id(userId).authorizationSubject("subject-1"));
 
     assertThat(client.createProvisional("employee@example.com"))
         .isEqualTo(new ProvisionalUser(userId, "subject-1"));
 
-    ArgumentCaptor<CreateProvisionalUserInput> input =
-        ArgumentCaptor.forClass(CreateProvisionalUserInput.class);
+    ArgumentCaptor<CreateProvisionalUserRequest> input =
+        ArgumentCaptor.forClass(CreateProvisionalUserRequest.class);
     verify(users).createProvisionalUser(input.capture());
     assertThat(input.getValue().getEmail()).isEqualTo("employee@example.com");
   }
@@ -79,19 +78,17 @@ class HttpIdentityUsersClientTest {
     OffsetDateTime now = OffsetDateTime.parse("2026-06-11T12:00:00Z");
     when(users.searchUsers(any(SearchUsersRequest.class)))
         .thenReturn(
-            new UsersResponse()
-                .users(
-                    List.of(
-                        new UserResponse()
-                            .id(userId)
-                            .authorizationSubject("subject-1")
-                            .email("dentist@example.com")
-                            .name("Dentist")
-                            .avatarUrl(URI.create("https://example.com/avatar.png"))
-                            .status(UserStatus.ACTIVE)
-                            .emailVerified(true)
-                            .createdAt(now)
-                            .updatedAt(now))));
+            List.of(
+                new UserResponse()
+                    .id(userId)
+                    .authorizationSubject("subject-1")
+                    .email("dentist@example.com")
+                    .name("Dentist")
+                    .avatarUrl(URI.create("https://example.com/avatar.png"))
+                    .status(UserStatus.ACTIVE)
+                    .emailVerified(true)
+                    .createdAt(now)
+                    .updatedAt(now)));
 
     assertThat(client.searchByAuthorizationSubjects(Set.of("subject-1")))
         .containsExactly(

@@ -5,8 +5,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.odonta.authorization.grant.Grants;
-import com.odonta.identity.api.model.CreateUserInput;
 import com.odonta.identity.authorization.IdentityGrantPlanner;
+import com.odonta.identity.mapper.UserApplicationMapperImpl;
+import com.odonta.identity.model.CreateUserInput;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserRepository;
 import jakarta.validation.ConstraintViolationException;
@@ -70,7 +71,8 @@ class IdentityServiceValidationTest {
         IdentityProvider identityProvider,
         Grants grants,
         IdentityGrantPlanner identityGrantPlanner) {
-      return new UserService(users, identityProvider, grants, identityGrantPlanner);
+      return new UserService(
+          users, new UserApplicationMapperImpl(), identityProvider, grants, identityGrantPlanner);
     }
   }
 }

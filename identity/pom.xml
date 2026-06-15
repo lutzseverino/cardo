@@ -25,6 +25,11 @@
     </dependency>
     <dependency>
       <groupId>com.odonta</groupId>
+      <artifactId>openapi-support</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.odonta</groupId>
       <artifactId>authorization</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -103,17 +108,13 @@
               <generatorName>spring</generatorName>
               <apiPackage>com.odonta.identity.api</apiPackage>
               <modelPackage>com.odonta.identity.api.model</modelPackage>
-              <schemaMappings>
-                <schemaMapping>UpdateUserStatus=com.odonta.identity.model.UserStatus</schemaMapping>
-                <schemaMapping>UserStatus=com.odonta.identity.model.UserStatus</schemaMapping>
-              </schemaMappings>
               <generateApiDocumentation>false</generateApiDocumentation>
               <generateModelDocumentation>false</generateModelDocumentation>
               <generateSupportingFiles>false</generateSupportingFiles>
               <configOptions>
                 <dateLibrary>java8</dateLibrary>
                 <interfaceOnly>true</interfaceOnly>
-                <openApiNullable>false</openApiNullable>
+                <openApiNullable>true</openApiNullable>
                 <skipDefaultInterface>true</skipDefaultInterface>
                 <sourceFolder>src/gen/java</sourceFolder>
                 <useBeanValidation>true</useBeanValidation>

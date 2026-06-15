@@ -1,7 +1,6 @@
 package com.odonta.identity.repository;
 
 import com.odonta.identity.model.User;
-import com.odonta.identity.model.UserProjection;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;

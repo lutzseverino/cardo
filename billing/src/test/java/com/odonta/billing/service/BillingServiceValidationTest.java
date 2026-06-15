@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.odonta.billing.api.model.CreateCheckoutSessionInput;
+import com.odonta.billing.model.CreateCheckoutSessionInput;
 import com.odonta.billing.provider.BillingProvider;
 import jakarta.validation.ConstraintViolationException;
 import java.net.URI;

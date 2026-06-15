@@ -16,12 +16,13 @@ import com.odonta.authorization.grant.Grants;
 import com.odonta.authorization.spring.AuthenticatedUser;
 import com.odonta.identity.client.IdentityUsersClient;
 import com.odonta.identity.client.ProvisionalUser;
-import com.odonta.invite.api.model.CreateInvitationInput;
 import com.odonta.invite.authorization.InvitationGrantPlanner;
 import com.odonta.invite.config.InvitationProperties;
+import com.odonta.invite.mapper.InvitationApplicationMapperImpl;
+import com.odonta.invite.model.CreateInvitationInput;
 import com.odonta.invite.model.Invitation;
-import com.odonta.invite.model.InvitationProjection;
 import com.odonta.invite.model.InvitationStatus;
+import com.odonta.invite.repository.InvitationProjection;
 import com.odonta.invite.repository.InvitationRepository;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -116,6 +117,7 @@ class InvitationServiceTest {
         grants,
         identityUsers,
         invitationGrantPlanner,
+        new InvitationApplicationMapperImpl(),
         new InvitationProperties(Duration.ofHours(72), "https://app.example.com"),
         invitations);
   }

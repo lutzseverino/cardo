@@ -2,12 +2,12 @@ package com.odonta.invite.controller;
 
 import com.odonta.authorization.spring.AuthenticatedUserReader;
 import com.odonta.invite.api.InvitationsApi;
-import com.odonta.invite.api.model.CompleteInvitationInput;
-import com.odonta.invite.api.model.CreateInvitationInput;
+import com.odonta.invite.api.model.CompleteInvitationRequest;
+import com.odonta.invite.api.model.CreateInvitationRequest;
 import com.odonta.invite.api.model.CreateInvitationResponse;
 import com.odonta.invite.api.model.InvitationCompletionResponse;
 import com.odonta.invite.api.model.InvitationResponse;
-import com.odonta.invite.mapper.InvitationMapper;
+import com.odonta.invite.mapper.InvitationTransportMapper;
 import com.odonta.invite.service.InvitationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,14 +22,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class InvitationController implements InvitationsApi {
 
   private final AuthenticatedUserReader users;
-  private final InvitationMapper mapper;
+  private final InvitationTransportMapper mapper;
   private final InvitationService invitations;
 
   @Override
   public ResponseEntity<CreateInvitationResponse> createInvitation(
-      @Valid CreateInvitationInput input) {
+      @Valid CreateInvitationRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(mapper.toResponse(invitations.create(users.currentUser(), input)));
+        .body(mapper.toResponse(invitations.create(users.currentUser(), mapper.toInput(request))));
   }
 
   @Override
@@ -39,8 +39,8 @@ public class InvitationController implements InvitationsApi {
 
   @Override
   public ResponseEntity<InvitationCompletionResponse> completeInvitation(
-      String token, @Valid CompleteInvitationInput input) {
-    invitations.complete(token, input);
+      String token, @Valid CompleteInvitationRequest request) {
+    invitations.complete(token, mapper.toInput(request));
     return ResponseEntity.status(HttpStatus.CREATED).body(new InvitationCompletionResponse(true));
   }
 
