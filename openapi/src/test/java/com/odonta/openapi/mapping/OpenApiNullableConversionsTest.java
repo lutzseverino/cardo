@@ -39,6 +39,9 @@ class OpenApiNullableConversionsTest {
 
   @Test
   void convertsUriStrings() {
+    assertThat(uris.toUri("https://odonta.example/logo"))
+        .isEqualTo(URI.create("https://odonta.example/logo"));
+    assertThat(uris.toUri(null)).isNull();
     assertThat(uris.toNullableUri("https://odonta.example/logo").get())
         .isEqualTo(URI.create("https://odonta.example/logo"));
     assertThat(uris.toNullableUri(null).orElse(null)).isNull();

@@ -7,9 +7,12 @@ import com.odonta.billing.api.model.PortalSessionResponse;
 import com.odonta.billing.model.BillingSessionResult;
 import com.odonta.billing.model.CreateCheckoutSessionInput;
 import com.odonta.billing.model.CreatePortalSessionInput;
+import com.odonta.openapi.mapping.UriResponseConversions;
 import org.mapstruct.Mapper;
 
-@Mapper(config = BillingMapperConfig.class, uses = BillingTransportConversions.class)
+@Mapper(
+    config = BillingMapperConfig.class,
+    uses = {BillingTransportConversions.class, UriResponseConversions.class})
 public interface BillingSessionTransportMapper {
 
   CreateCheckoutSessionInput toInput(CreateCheckoutSessionRequest request);

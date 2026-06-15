@@ -9,8 +9,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class UriResponseConversions {
 
+  public URI toUri(String value) {
+    return value == null ? null : URI.create(value);
+  }
+
   @Named("toNullableUri")
   public JsonNullable<URI> toNullableUri(String value) {
-    return JsonNullable.of(value == null ? null : URI.create(value));
+    return JsonNullable.of(toUri(value));
   }
 }

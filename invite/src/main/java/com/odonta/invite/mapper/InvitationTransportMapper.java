@@ -8,9 +8,12 @@ import com.odonta.invite.model.CompleteInvitationInput;
 import com.odonta.invite.model.CreateInvitationInput;
 import com.odonta.invite.model.CreateInvitationResult;
 import com.odonta.invite.model.InvitationResult;
+import com.odonta.openapi.mapping.UriResponseConversions;
 import org.mapstruct.Mapper;
 
-@Mapper(config = InviteMapperConfig.class, uses = InviteTransportConversions.class)
+@Mapper(
+    config = InviteMapperConfig.class,
+    uses = {InviteTransportConversions.class, UriResponseConversions.class})
 public interface InvitationTransportMapper {
 
   CreateInvitationInput toInput(CreateInvitationRequest request);

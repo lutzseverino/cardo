@@ -25,6 +25,11 @@
     </dependency>
     <dependency>
       <groupId>com.odonta</groupId>
+      <artifactId>openapi-support</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.odonta</groupId>
       <artifactId>authorization</artifactId>
       <version>${project.version}</version>
     </dependency>
