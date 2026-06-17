@@ -33,3 +33,14 @@ Every product follows the same boundary mechanics:
 
 Keep PATCH adapters separate from MapStruct transport mappers, including for currently simple
 requests. This keeps the update path predictable if its presence semantics become richer later.
+
+## Product Integration
+
+OpenAPI Support owns lightweight generated-transport mechanics such as nullable
+field conversion and common response conversions.
+
+Products own their OpenAPI contracts, generated request/response models,
+operation-specific adapters, enum conversions, and application inputs. There is
+no HTTP client or product integration module here; products import
+`openapi-support` only when the shared conversion helpers remove local mapping
+noise.

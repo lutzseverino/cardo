@@ -30,3 +30,12 @@ mvn validate
 ## Documentation
 
 Durable platform docs live in [docs](docs/README.md).
+
+## Modules
+
+- [Authorization](authorization/README.md)
+- [Billing](billing/README.md)
+- [Common](common/README.md)
+- [Identity](identity/README.md)
+- [Invite](invite/README.md)
+- [OpenAPI Support](openapi/README.md)

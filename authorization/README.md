@@ -22,3 +22,17 @@ for the contract and ownership rules.
 
 See [Embed Authorization](../docs/how-to/embed-authorization.md) for schema,
 Flyway, entity scanning, repository, and bean configuration.
+
+## Product Integration
+
+Authorization owns reusable mechanics: resource naming, permission evaluation,
+access profiles, grant and revocation staging, and provider adapters.
+
+Products own their resource catalogs, actions, planners, seed data, tenant
+semantics, and the business flows that create or revoke access. A product embeds
+this module when it needs those mechanics, but it should not ask Authorization to
+own product policy.
+
+There is no HTTP client module because Authorization does not own an HTTP
+runtime. Keep using the embedded Java APIs unless Authorization is deliberately
+extracted into a service.
