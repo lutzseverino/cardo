@@ -18,6 +18,8 @@ import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.repository.UserProjection;
 import com.odonta.identity.repository.UserRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -132,7 +134,7 @@ public class UserService {
           + "', '"
           + IdentityPermissions.READ
           + "')")
-  public UserResult getByEmail(String email) {
+  public UserResult getByEmail(@NotBlank @Email String email) {
     return users
         .findProjectedByEmail(EmailAddress.of(email).value())
         .map(mapper::toResult)

@@ -15,6 +15,8 @@ import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.reader.AuthenticatedPrincipalReader;
 import com.odonta.identity.reader.CurrentJwtReader;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Collection;
@@ -43,7 +45,8 @@ public class AuthenticationService {
     return authenticate(input.email(), input.password());
   }
 
-  public AuthenticationResult authenticate(String email, String password) {
+  public AuthenticationResult authenticate(
+      @NotBlank @Email String email, @NotBlank String password) {
     IdentityProvider.IssuedIdentityToken token =
         identityProvider.issuePasswordToken(email, password);
     String authorizationToken =

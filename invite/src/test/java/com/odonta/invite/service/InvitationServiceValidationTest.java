@@ -45,6 +45,14 @@ class InvitationServiceValidationTest {
     verifyNoInteractions(accessProfiles, identityUsers, invitations);
   }
 
+  @Test
+  void validatesScalarParametersAtTheServiceBoundary() {
+    assertThatThrownBy(() -> invitationService.get("   "))
+        .isInstanceOf(ConstraintViolationException.class);
+
+    verifyNoInteractions(invitations);
+  }
+
   private AuthenticatedUser inviter() {
     return new AuthenticatedUser(UUID.randomUUID(), "owner-subject", "Owner");
   }

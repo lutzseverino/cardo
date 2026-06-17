@@ -9,6 +9,7 @@ import com.odonta.billing.model.EntitlementSyncItem;
 import com.odonta.billing.repository.EntitlementProjection;
 import com.odonta.billing.repository.EntitlementRepository;
 import com.odonta.common.api.ApiException;
+import jakarta.validation.constraints.NotBlank;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,7 +18,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @Service
 @RequiredArgsConstructor
 public class EntitlementService {
@@ -25,17 +28,17 @@ public class EntitlementService {
   private final EntitlementRepository entitlements;
   private final EntitlementApplicationMapper mapper;
 
-  public EntitlementResult getCurrent(UUID subjectId, String product) {
+  public EntitlementResult getCurrent(UUID subjectId, @NotBlank String product) {
     return getResult(subjectId, product);
   }
 
   @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
-  public EntitlementResult get(UUID subjectId, String product) {
+  public EntitlementResult get(UUID subjectId, @NotBlank String product) {
     return getResult(subjectId, product);
   }
 
   @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
-  public EntitlementResult require(UUID subjectId, String product) {
+  public EntitlementResult require(UUID subjectId, @NotBlank String product) {
     EntitlementProjection entitlement = getProjection(subjectId, product);
     if (!entitlement.getStatus().usable()) {
       throw ApiException.forbidden("entitlement_inactive", "Entitlement is not active.");

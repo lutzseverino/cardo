@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.odonta.billing.mapper.EntitlementApplicationMapper;
 import com.odonta.billing.model.CreateCheckoutSessionInput;
 import com.odonta.billing.provider.BillingProvider;
+import com.odonta.billing.repository.EntitlementRepository;
 import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.UUID;
@@ -20,7 +22,11 @@ class BillingServiceValidationTest {
 
   @Autowired private BillingProvider provider;
 
+  @Autowired private EntitlementRepository entitlements;
+
   @Autowired private CheckoutSessionService checkoutSessions;
+
+  @Autowired private EntitlementService entitlementService;
 
   @Test
   void validatesRequestsAtTheServiceBoundary() {
@@ -36,6 +42,14 @@ class BillingServiceValidationTest {
     verifyNoInteractions(provider);
   }
 
+  @Test
+  void validatesScalarParametersAtTheServiceBoundary() {
+    assertThatThrownBy(() -> entitlementService.getCurrent(UUID.randomUUID(), "   "))
+        .isInstanceOf(ConstraintViolationException.class);
+
+    verifyNoInteractions(entitlements);
+  }
+
   static class Config {
 
     @Bean
@@ -49,8 +63,24 @@ class BillingServiceValidationTest {
     }
 
     @Bean
+    EntitlementRepository entitlements() {
+      return mock(EntitlementRepository.class);
+    }
+
+    @Bean
+    EntitlementApplicationMapper entitlementMapper() {
+      return mock(EntitlementApplicationMapper.class);
+    }
+
+    @Bean
     CheckoutSessionService checkoutSessions(BillingProvider provider) {
       return new CheckoutSessionService(provider);
+    }
+
+    @Bean
+    EntitlementService entitlementService(
+        EntitlementRepository entitlements, EntitlementApplicationMapper mapper) {
+      return new EntitlementService(entitlements, mapper);
     }
   }
 }

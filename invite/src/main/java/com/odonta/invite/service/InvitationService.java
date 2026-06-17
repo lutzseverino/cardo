@@ -20,6 +20,7 @@ import com.odonta.invite.model.InvitationStatus;
 import com.odonta.invite.repository.InvitationProjection;
 import com.odonta.invite.repository.InvitationRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -47,7 +48,7 @@ public class InvitationService {
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
 
-  public InvitationResult get(String token) {
+  public InvitationResult get(@NotBlank String token) {
     return mapper.toResult(validInvitation(token));
   }
 
@@ -88,7 +89,7 @@ public class InvitationService {
   }
 
   @Transactional
-  public void complete(String token, @Valid CompleteInvitationInput input) {
+  public void complete(@NotBlank String token, @Valid CompleteInvitationInput input) {
     InvitationProjection invitation = validInvitation(token);
     ProvisionalUser completed =
         identityUsers.completeProvisional(
@@ -97,7 +98,7 @@ public class InvitationService {
   }
 
   @Transactional
-  public void accept(String token, AuthenticatedUser user) {
+  public void accept(@NotBlank String token, AuthenticatedUser user) {
     InvitationProjection invitation = validInvitation(token);
     if (!invitation.getInvitedUserId().equals(user.id())) {
       throw ApiException.forbidden(
