@@ -4,7 +4,8 @@ State what this reference is authoritative for.
 
 ## Structure
 
-Describe the contract, schema, naming shape, configuration surface, or lookup structure.
+Describe the contract, schema, naming shape, configuration surface, or lookup
+structure.
 
 ## Rules
 

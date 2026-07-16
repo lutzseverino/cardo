@@ -1,6 +1,6 @@
 # Documentation Templates
 
-Use these templates to keep documents consistent across runs and contributors.
+Use these templates to keep documents consistent across repositories and contributors.
 
 ## Templates
 
@@ -11,14 +11,14 @@ Use these templates to keep documents consistent across runs and contributors.
 - [decision.template.md](decision.template.md)
 - [index.template.md](index.template.md)
 
-## Writing Rules By Doc Type
+## Writing Rules By Document Type
 
-- `index`: short directory or section map; include purpose and boundaries when the section would otherwise be ambiguous
+- `index`: short directory or section map with clear purpose and boundaries
 - `tutorial`: guided learning sequence for a complete outcome
 - `how-to`: task-first instructions and verification
 - `reference`: factual, contract-first, and easy to scan
 - `explanation`: stable conceptual guidance, vocabulary, and rationale
-- `decision`: decision record with context, decision, consequences, and alternatives
+- `decision`: durable choice with context, consequences, and alternatives
 
 ## Rules
 

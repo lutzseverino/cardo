@@ -1,5 +1,11 @@
-# AGENTS.md
+# Agent guidance
 
-If the codebase shows conflicting patterns, unclear ownership, repeated failed fixes, or a solution that keeps widening, pause and name the tension before continuing. Do not silently standardize a mixed area or keep retrying the same fix shape without explaining the deeper issue.
+Follow the repository's existing architecture, build tooling, and local
+instructions. Keep changes scoped to the requested outcome and preserve
+repository-specific behavior unless the task explicitly changes it.
 
-Detailed implementation and architecture rules belong in code, tests, tooling, docs, and skills, not in this file.
+Read `CONTRIBUTING.md` before preparing a change. Use the repository's declared
+package or build manager and run its documented canonical validation command.
+
+Prefer durable rules in tests, tooling, and documentation over instructions
+that exist only in agent context.

@@ -40,12 +40,12 @@ for artifact selection, configuration, and ownership rules.
 Cardo targets Java 21 and Spring Boot 4.
 
 ```bash
-mvn test
-mvn verify
-mvn install
+./mvnw test
+./mvnw verify
+./mvnw install
 ```
 
-`mvn install` publishes the current snapshot to the local Maven repository. CI
+`./mvnw install` publishes the current snapshot to the local Maven repository. CI
 validates formatting, compilation, generated OpenAPI boundaries, and the
 complete Maven test suite.
 

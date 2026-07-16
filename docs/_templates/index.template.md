@@ -4,7 +4,7 @@ State what this section contains and why a reader would come here.
 
 ## Documents
 
-- `relative-path.md` — document title
+- `relative-path.md`: document title
 
 ## Boundaries
 

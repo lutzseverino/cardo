@@ -1,0 +1,23 @@
+{
+  "standards-version": 1,
+  "standards-release": "1.0.0",
+  "profiles": ["common", "documentation", "spring-boot"],
+  "variables": {},
+  "local-fragments": {
+    ".gitignore": [".repository-standards/gitignore.local"]
+  },
+  "repository-owned": [
+    "README.md",
+    "LICENSE",
+    "pom.xml",
+    "src/**",
+    "docs/README.md",
+    "docs/decisions/**",
+    "docs/explanation/**",
+    "docs/how-to/**",
+    "docs/reference/**",
+    "docs/tutorials/**",
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml"
+  ]
+}
