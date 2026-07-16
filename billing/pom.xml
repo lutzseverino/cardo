@@ -5,31 +5,31 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.odonta</groupId>
-    <artifactId>services</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
-    <relativePath>../../pom.xml</relativePath>
+    <groupId>io.github.lutzseverino.cardo</groupId>
+    <artifactId>cardo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>billing</artifactId>
   <packaging>jar</packaging>
 
-  <name>Odonta Billing Service</name>
-  <description>Commercial entitlement and subscription boundary for Odonta products.</description>
+  <name>Cardo Billing Service</name>
+  <description>Commercial entitlement and subscription boundary for Cardo products.</description>
 
   <dependencies>
     <dependency>
-      <groupId>com.odonta</groupId>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>common</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.odonta</groupId>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>openapi-support</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.odonta</groupId>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>authorization</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -111,8 +111,8 @@
             <configuration>
               <inputSpec>${project.basedir}/openapi/billing.yaml</inputSpec>
               <generatorName>spring</generatorName>
-              <apiPackage>com.odonta.billing.api</apiPackage>
-              <modelPackage>com.odonta.billing.api.model</modelPackage>
+              <apiPackage>io.github.lutzseverino.cardo.billing.api</apiPackage>
+              <modelPackage>io.github.lutzseverino.cardo.billing.api.model</modelPackage>
               <generateApiDocumentation>false</generateApiDocumentation>
               <generateModelDocumentation>false</generateModelDocumentation>
               <generateSupportingFiles>false</generateSupportingFiles>

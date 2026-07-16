@@ -106,7 +106,7 @@ Type-use validation constraints on `FieldUpdate<T>` apply to present values. The
 registers the Jakarta Bean Validation value extractor for this behavior; product modules do not
 register their own extractors.
 
-OpenAPI-generated transports use `com.odonta.openapi.patch.PatchFields` from the
+OpenAPI-generated transports use `io.github.lutzseverino.cardo.openapi.patch.PatchFields` from the
 `openapi-support` module to perform this conversion. Product-specific request-to-input adapters
 remain in the product module because they own enum conversion and application input construction.
 

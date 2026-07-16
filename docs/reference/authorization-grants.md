@@ -63,7 +63,7 @@ and configure:
 
 - `spring.modulith.events.jdbc.schema`: service-local publication schema
 - Flyway placeholder `authorizationSchema`: the same schema name
-- `odonta.authorization.plans.retry-delay`: failed-publication retry delay;
+- `cardo.authorization.plans.retry-delay`: failed-publication retry delay;
   defaults to `PT1M`
 
 The shared `db/authorization/publications` Flyway location creates the publication

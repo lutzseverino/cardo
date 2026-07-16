@@ -1,6 +1,6 @@
 # Identity Product Auth
 
-Spring Security integration for products that accept logged-in Odonta users.
+Spring Security integration for products that accept logged-in Cardo users.
 
 The module provides auto-configuration for the shared product auth mechanics:
 JWT authority conversion, resource permission evaluation, authenticated-user
@@ -12,12 +12,12 @@ enforced for already-issued JWTs after a short cache window.
 ## Configuration
 
 ```yaml
-odonta:
+cardo:
   identity:
     product-auth:
-      session-cookie-name: odonta.session
+      session-cookie-name: cardo.session
       public-paths:
-        - ${odonta.api.base-path}/workforce
+        - ${product.api.base-path}/status
       active-token-validation:
         enabled: true
         introspection-uri: ${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token/introspect

@@ -5,16 +5,16 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.odonta</groupId>
-    <artifactId>services</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
-    <relativePath>../../pom.xml</relativePath>
+    <groupId>io.github.lutzseverino.cardo</groupId>
+    <artifactId>cardo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>common</artifactId>
   <packaging>jar</packaging>
 
-  <name>Odonta Common</name>
+  <name>Cardo Common</name>
   <description>Small cross-cutting primitives shared by services.</description>
 
   <dependencies>

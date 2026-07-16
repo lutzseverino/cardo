@@ -1,10 +1,10 @@
 spring:
   application:
-    name: odonta-billing
+    name: cardo-billing
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/odonta}
-    username: ${SPRING_DATASOURCE_USERNAME:odonta}
-    password: ${SPRING_DATASOURCE_PASSWORD:odonta}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cardo}
+    username: ${SPRING_DATASOURCE_USERNAME:cardo}
+    password: ${SPRING_DATASOURCE_PASSWORD:cardo}
   flyway:
     table: flyway_schema_history_billing
     baseline-on-migrate: true
@@ -16,24 +16,20 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:${odonta.billing.keycloak.base-url}/realms/${odonta.billing.keycloak.realm}}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:${cardo.billing.keycloak.base-url}/realms/${cardo.billing.keycloak.realm}}
 
-odonta:
+cardo:
   api:
     version: v1
-    base-path: /api/${odonta.api.version}
+    base-path: /api/${cardo.api.version}
   billing:
     keycloak:
       base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
-      realm: ${KEYCLOAK_REALM:odonta}
+      realm: ${KEYCLOAK_REALM:cardo}
     stripe:
       secret-key: ${STRIPE_SECRET_KEY:}
       webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
-      checkout-prices:
-        - id: ${STRIPE_CLINIC_PRICE_ID:}
-          product: clinic
-        - id: ${STRIPE_POLITY_PRICE_ID:}
-          product: polity
+      checkout-prices: []
 
 server:
   port: ${BILLING_PORT:8085}

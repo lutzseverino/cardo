@@ -1,10 +1,10 @@
 spring:
   application:
-    name: odonta-identity
+    name: cardo-identity
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/odonta}
-    username: ${SPRING_DATASOURCE_USERNAME:odonta}
-    password: ${SPRING_DATASOURCE_PASSWORD:odonta}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cardo}
+    username: ${SPRING_DATASOURCE_USERNAME:cardo}
+    password: ${SPRING_DATASOURCE_PASSWORD:cardo}
   flyway:
     table: flyway_schema_history_identity
     baseline-on-migrate: true
@@ -23,27 +23,25 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:${odonta.identity.keycloak.base-url}/realms/${odonta.identity.keycloak.realm}}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:${cardo.identity.keycloak.base-url}/realms/${cardo.identity.keycloak.realm}}
 
-odonta:
+cardo:
   api:
     version: v1
-    base-path: /api/${odonta.api.version}
+    base-path: /api/${cardo.api.version}
   identity:
     session:
-      cookie-name: odonta.session
+      cookie-name: cardo.session
       ttl: 8h
     keycloak:
       base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
-      realm: ${KEYCLOAK_REALM:odonta}
-      client-id: ${KEYCLOAK_CLIENT_ID:odonta-identity}
+      realm: ${KEYCLOAK_REALM:cardo}
+      client-id: ${KEYCLOAK_CLIENT_ID:cardo-identity}
       client-secret: ${KEYCLOAK_CLIENT_SECRET:}
       user-id-claim-client-ids:
-        - ${odonta.identity.keycloak.client-id}
+        - ${cardo.identity.keycloak.client-id}
         - identity
         - billing
-        - clinic
-        - invite
 
 server:
   port: ${IDENTITY_PORT:8081}

@@ -5,15 +5,15 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.odonta</groupId>
-    <artifactId>services</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
-    <relativePath>../../../pom.xml</relativePath>
+    <groupId>io.github.lutzseverino.cardo</groupId>
+    <artifactId>cardo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
 
   <artifactId>billing-client</artifactId>
   <packaging>jar</packaging>
 
-  <name>Odonta Billing Client API</name>
-  <description>Stable Java contract for services that call Odonta Billing.</description>
+  <name>Cardo Billing Client API</name>
+  <description>Stable Java contract for services that call Cardo Billing.</description>
 </project>

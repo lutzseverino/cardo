@@ -1,1 +1,1 @@
-com.odonta.billing.client.http.BillingClientAutoConfiguration
+io.github.lutzseverino.cardo.billing.client.http.BillingClientAutoConfiguration

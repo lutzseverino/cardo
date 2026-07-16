@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Odonta Common API Errors
+  title: Cardo Common API Errors
   version: 0.1.0
-  description: Shared HTTP error envelope used by Odonta services.
+  description: Shared HTTP error envelope used by Cardo services.
 paths: {}
 components:
   responses:

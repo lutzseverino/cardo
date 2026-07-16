@@ -5,21 +5,21 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.odonta</groupId>
-    <artifactId>services</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
-    <relativePath>../../pom.xml</relativePath>
+    <groupId>io.github.lutzseverino.cardo</groupId>
+    <artifactId>cardo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>authorization</artifactId>
   <packaging>jar</packaging>
 
-  <name>Odonta Authorization</name>
+  <name>Cardo Authorization</name>
   <description>Reusable authorization integration primitives for product services.</description>
 
   <dependencies>
     <dependency>
-      <groupId>com.odonta</groupId>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>common</artifactId>
       <version>${project.version}</version>
     </dependency>

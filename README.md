@@ -1,51 +1,67 @@
 <div align="center">
-    <h1 align="center">Platform</h1>
-    <p>Service capabilities that can be shared by multiple products.</p>
-    <p>
-        <img alt="status" src="https://img.shields.io/badge/status-consolidated-0f172a">
-        <img alt="service" src="https://img.shields.io/badge/service-spring_boot-111827">
-        <img alt="docs" src="https://img.shields.io/badge/docs-diataxis-1f2937">
-    </p>
+  <h1>Cardo</h1>
+  <p>Shared application services and integration libraries for independent product repositories.</p>
+
+  [![CI](https://github.com/lutzseverino/cardo/actions/workflows/ci.yml/badge.svg)](https://github.com/lutzseverino/cardo/actions/workflows/ci.yml)
+  [![License: MIT](https://img.shields.io/badge/license-MIT-2f3437)](LICENSE)
 </div>
 
-## Overview
+Cardo provides the product-neutral service capabilities used by Odonta, Polity,
+and future applications. It owns stable identity and billing contracts,
+authorization mechanics, HTTP client implementations, and the small shared
+libraries that make those boundaries consistent.
 
-Platform contains service capabilities that can be shared by multiple products.
+Products remain independently deployable and own their domain language,
+persistence, APIs, permissions, and lifecycle decisions. Cardo does not absorb
+product behavior or provide a generic plugin framework.
 
-It is the place for service concerns that are reusable across product boundaries: shared service primitives, product-neutral mechanics, integrations, and contracts that more than one product can depend on.
+> [!IMPORTANT]
+> Cardo is currently a `0.x` platform. Its contracts are shared by active
+> products, but releases may still include coordinated migrations while the
+> repository family settles.
 
-## Boundary
+## Capabilities
 
-Platform code should make products easier to build without absorbing product behavior.
+| Capability | Ownership |
+| --- | --- |
+| Identity | Application users, profiles, provider integration, sessions, and stable user clients |
+| Authorization | Resource vocabulary, permission evaluation, durable grant staging, and provider adapters |
+| Billing | Customers, Stripe checkout and portal integration, entitlements, and stable billing clients |
+| Common | Shared API errors, audit and personal-data markers, value objects, and validation |
+| OpenAPI Support | Reusable generated-transport and PATCH conversion helpers |
 
-Product-specific language, behavior, persistence, and policies should stay in the product that owns them. Platform modules should expose capabilities through clear contracts instead of making products reach into platform internals.
+Cardo intentionally does not own product invitations. Invitations carry product
+meaning and stay with the product that defines acceptance and membership.
+
+## Product Contract
+
+Products consume the narrow client artifacts they need and keep policy local.
+Identity and Billing expose transport-independent client interfaces with
+separate HTTP implementations. Authorization is embedded because grant staging
+participates in the product transaction that produces the grant.
+
+See the [product integration reference](docs/reference/product-integration.md)
+for artifact selection, configuration, and ownership rules.
 
 ## Development
 
-From the repository root:
+Cardo targets Java 21 and Spring Boot 4.
 
 ```bash
-pnpm test:services
-pnpm compile:services
-```
-
-Or from the service workspace:
-
-```bash
-cd services
 mvn test
-mvn compile
+mvn verify
+mvn install
 ```
+
+`mvn install` makes the current snapshot available to sibling product
+repositories during local development. CI validates formatting, compilation,
+generated OpenAPI boundaries, and the complete Maven test suite.
 
 ## Documentation
 
-Durable platform docs live in [docs](docs/README.md).
+Start with the [documentation index](docs/README.md). Documentation is organized
+by reader intent so durable guidance has one predictable home.
 
-## Modules
+## License
 
-- [Authorization](authorization/README.md)
-- [Billing](billing/README.md)
-- [Common](common/README.md)
-- [Identity](identity/README.md)
-- [Invite](invite/README.md)
-- [OpenAPI Support](openapi/README.md)
+Cardo is available under the [MIT License](LICENSE).

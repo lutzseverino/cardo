@@ -5,31 +5,31 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.odonta</groupId>
-    <artifactId>services</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
-    <relativePath>../../../pom.xml</relativePath>
+    <groupId>io.github.lutzseverino.cardo</groupId>
+    <artifactId>cardo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
 
   <artifactId>identity-client-http</artifactId>
   <packaging>jar</packaging>
 
-  <name>Odonta Identity HTTP Client</name>
-  <description>HTTP implementation of the stable Odonta Identity client contract.</description>
+  <name>Cardo Identity HTTP Client</name>
+  <description>HTTP implementation of the stable Cardo Identity client contract.</description>
 
   <dependencies>
     <dependency>
-      <groupId>com.odonta</groupId>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>identity-client</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.odonta</groupId>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>common</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.odonta</groupId>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>authorization</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -85,8 +85,8 @@
               <inputSpec>${project.basedir}/../openapi/identity.yaml</inputSpec>
               <generatorName>java</generatorName>
               <library>restclient</library>
-              <apiPackage>com.odonta.identity.client.http.generated.api</apiPackage>
-              <modelPackage>com.odonta.identity.client.http.generated</modelPackage>
+              <apiPackage>io.github.lutzseverino.cardo.identity.client.http.generated.api</apiPackage>
+              <modelPackage>io.github.lutzseverino.cardo.identity.client.http.generated</modelPackage>
               <generateApiDocumentation>false</generateApiDocumentation>
               <generateModelDocumentation>false</generateModelDocumentation>
               <generateSupportingFiles>true</generateSupportingFiles>
