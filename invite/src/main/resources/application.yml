@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: cardo-invite
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cardo}
+    username: ${SPRING_DATASOURCE_USERNAME:cardo}
+    password: ${SPRING_DATASOURCE_PASSWORD:cardo}
+  flyway:
+    table: flyway_schema_history_invite
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration,classpath:db/authorization/publications
+    placeholders:
+      authorizationSchema: invite_events
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  modulith:
+    events:
+      jdbc:
+        schema: invite_events
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:${cardo.invite.keycloak.base-url}/realms/${cardo.invite.keycloak.realm}}
+
+cardo:
+  api:
+    version: v1
+    base-path: /api/${cardo.api.version}
+  invite:
+    invitation:
+      ttl: 72h
+      web-url: ${WEB_URL:http://localhost:3000}
+    keycloak:
+      base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
+      realm: ${KEYCLOAK_REALM:cardo}
+      client-id: ${KEYCLOAK_INVITE_CLIENT_ID:cardo-invite}
+      client-secret: ${KEYCLOAK_INVITE_CLIENT_SECRET:}
+  identity:
+    client:
+      base-url: ${IDENTITY_BASE_URL:http://localhost:8081/api/v1}
+
+server:
+  port: ${INVITE_PORT:8084}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    path: /openapi.json
+  swagger-ui:
+    path: /docs

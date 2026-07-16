@@ -27,6 +27,7 @@
     <module>identity/client-http</module>
     <module>identity/product-auth</module>
     <module>identity</module>
+    <module>invite</module>
     <module>billing/client</module>
     <module>billing/client-http</module>
     <module>billing</module>

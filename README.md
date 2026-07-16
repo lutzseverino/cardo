@@ -26,12 +26,10 @@ product behavior or provide a generic plugin framework.
 | --- | --- |
 | Identity | Application users, profiles, provider integration, sessions, and stable user clients |
 | Authorization | Resource vocabulary, permission evaluation, durable grant staging, and provider adapters |
+| Invite | Cross-product invitation tokens, expiry, provisional identity completion, and access-profile grant staging |
 | Billing | Customers, Stripe checkout and portal integration, entitlements, and stable billing clients |
 | Common | Shared API errors, audit and personal-data markers, value objects, and validation |
 | OpenAPI Support | Reusable generated-transport and PATCH conversion helpers |
-
-Cardo intentionally does not own product invitations. Invitations carry product
-meaning and stay with the product that defines acceptance and membership.
 
 ## Product Contract
 

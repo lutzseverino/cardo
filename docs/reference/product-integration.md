@@ -10,6 +10,7 @@ the same wiring and the packaged shape can stay product-neutral.
 | --- | --- | --- | --- | --- |
 | Identity | users, authentication, sessions, authenticated principal | `identity-client` | `identity-client-http` | `identity-product-auth` for accepting logged-in Cardo users |
 | Authorization | resource naming, permission evaluation, access profiles, grant staging, provider adapters | embedded Java APIs | none while authorization has no HTTP owner | embedded mechanics and docs |
+| Invite | invitation tokens, expiry, provisional identity completion, access-profile grant staging | none yet | none yet | products call the service API until a stable client is earned |
 | Billing | customers, entitlements, checkout, portal, provider webhooks | `billing-client` | `billing-client-http` | none until products repeat billing guard or flow wiring |
 | Common | shared API errors, data markers, value objects, validation, cookie helpers | embedded Java APIs | none | none |
 | OpenAPI Support | generated transport mapping helpers and PATCH presence conversion | embedded Java APIs | none | none |
@@ -19,8 +20,9 @@ the same wiring and the packaged shape can stay product-neutral.
 - Keep product resource catalogs, domain rules, tenant semantics, and lifecycle
   decisions in the product.
 - Do not make Identity or Billing silently grant product-domain access.
-- Keep invitation lifecycle and acceptance semantics in the product that owns
-  the resulting membership or access.
+- Keep invitation token lifecycle in Invite. Products own why an invitation is
+  created, what resource it targets, and any domain lifecycle surrounding
+  acceptance.
 - Keep Authorization product-neutral. It provides mechanics; products decide
   which resources and actions exist.
 - Prefer Maven modules and Spring Boot auto-configuration when they match the
