@@ -16,6 +16,8 @@ public interface IdentityProvider {
 
   void bindUserId(String subject, UUID userId);
 
+  void setIdentityEnabled(String subject, boolean enabled);
+
   void ensureUserIdClaimMapped(List<String> clientIds);
 
   IssuedIdentityToken issuePasswordToken(String email, String password);

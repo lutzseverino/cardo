@@ -11,6 +11,7 @@ import com.odonta.identity.model.AuthenticateInput;
 import com.odonta.identity.model.AuthenticatedPrincipal;
 import com.odonta.identity.model.AuthenticationMethod;
 import com.odonta.identity.model.AuthenticationResult;
+import com.odonta.identity.model.UserStatus;
 import com.odonta.identity.provider.IdentityProvider;
 import com.odonta.identity.reader.AuthenticatedPrincipalReader;
 import com.odonta.identity.reader.CurrentJwtReader;
@@ -49,27 +50,29 @@ public class AuthenticationService {
       @NotBlank @Email String email, @NotBlank String password) {
     IdentityProvider.IssuedIdentityToken token =
         identityProvider.issuePasswordToken(email, password);
+    AuthenticatedPrincipal principal = principal(token);
+    assertEnabled(principal, token.token());
     String authorizationToken =
         requestingPartyTokens
             .authorize(
                 RequestingPartyTokenRequest.allPermissions(
                     token.token(), IdentityPermissions.CLIENT_ID))
             .token();
-    return new AuthenticationResult(
-        principal(token), authorizationToken, grants(authorizationToken));
+    return new AuthenticationResult(principal, authorizationToken, grants(authorizationToken));
   }
 
   public AuthenticationResult getCurrentPrincipal() {
     var current = currentJwt.current();
     Jwt jwt = current.getToken();
-    return new AuthenticationResult(
+    AuthenticatedPrincipal principal =
         principal(
             jwt.getSubject(),
             jwt.getClaimAsString("sid"),
             AuthenticationMethod.OIDC,
-            expiresAt(jwt)),
-        jwt.getTokenValue(),
-        grantReader.read(current.getAuthorities()));
+            expiresAt(jwt));
+    assertEnabled(principal, jwt.getTokenValue());
+    return new AuthenticationResult(
+        principal, jwt.getTokenValue(), grantReader.read(current.getAuthorities()));
   }
 
   private AuthenticatedPrincipal principal(IdentityProvider.IssuedIdentityToken token) {
@@ -92,6 +95,19 @@ public class AuthenticationService {
 
   public void revokeCurrent() {
     identityProvider.revokeToken(currentJwt.current().getToken().getTokenValue());
+  }
+
+  private void assertEnabled(AuthenticatedPrincipal principal, String token) {
+    if (!UserStatus.DISABLED.equals(principal.userStatus())) {
+      return;
+    }
+    ApiException disabled = ApiException.forbidden("user_disabled", "User is disabled.");
+    try {
+      identityProvider.revokeToken(token);
+    } catch (RuntimeException exception) {
+      disabled.addSuppressed(exception);
+    }
+    throw disabled;
   }
 
   private OffsetDateTime expiresAt(Jwt jwt) {

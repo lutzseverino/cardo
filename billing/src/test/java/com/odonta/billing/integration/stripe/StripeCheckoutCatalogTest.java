@@ -17,11 +17,15 @@ class StripeCheckoutCatalogTest {
             new StripeProperties(
                 "sk_test_123",
                 "whsec_123",
-                List.of(new StripeProperties.CheckoutPrice("price_clinic", "clinic"))));
+                List.of(
+                    new StripeProperties.CheckoutPrice("price_clinic", "clinic"),
+                    new StripeProperties.CheckoutPrice("price_polity", "polity"))));
 
     StripeProperties.CheckoutPrice price = catalog.findByProduct("clinic");
+    StripeProperties.CheckoutPrice polityPrice = catalog.findByProduct("polity");
 
     assertThat(price.id()).isEqualTo("price_clinic");
+    assertThat(polityPrice.id()).isEqualTo("price_polity");
   }
 
   @Test

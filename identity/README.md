@@ -1,7 +1,9 @@
 # Identity
 
 Identity owns Odonta users, authentication, sessions, and the authenticated
-principal exposed to products.
+principal exposed to products. Identity also owns global user status: disabling
+an Identity user disables that subject in the identity provider and ends
+provider sessions, without changing product-local memberships or grants.
 
 ## Product Integration
 
@@ -21,7 +23,9 @@ auto-configures the shared Spring Security pieces for product services:
 
 Products still own product access. Identity must not silently grant clinic,
 workforce, or other product-domain permissions as a side effect of user creation
-or login.
+or login. Products issue product grants from their own flows by staging
+`GrantPlan` instances with product-owned client authorities and resource
+actions.
 
 Example product configuration:
 

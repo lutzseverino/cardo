@@ -4,5 +4,5 @@ import java.util.UUID;
 
 public interface BillingEntitlementsClient {
 
-  Integer requireTenantLimit(UUID subjectId, String product);
+  BillingEntitlement require(UUID subjectId, String product);
 }

@@ -32,6 +32,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
@@ -184,7 +186,11 @@ public class UserService {
       user.changeOperationalStatus(input.status());
     }
     users.saveAndFlush(user);
-    return getResult(id);
+    UserResult result = getResult(id);
+    if (input.status() != null) {
+      syncIdentityEnabled(user.getKeycloakSubject(), UserStatus.ACTIVE.equals(input.status()));
+    }
+    return result;
   }
 
   @Transactional
@@ -218,6 +224,20 @@ public class UserService {
     return users
         .findProjectedByKeycloakSubject(keycloakSubject)
         .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
+  }
+
+  private void syncIdentityEnabled(String subject, boolean enabled) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      identityProvider.setIdentityEnabled(subject, enabled);
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            identityProvider.setIdentityEnabled(subject, enabled);
+          }
+        });
   }
 
   private List<String> normalizedAuthorizationSubjects(Collection<String> authorizationSubjects) {

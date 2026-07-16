@@ -128,6 +128,27 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   }
 
   @Override
+  public void setIdentityEnabled(String subject, boolean enabled) {
+    try {
+      rest.put()
+          .uri("/admin/realms/{realm}/users/{subject}", properties.realm(), subject)
+          .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
+          .body(new KeycloakUserStatus(enabled))
+          .retrieve()
+          .toBodilessEntity();
+      if (!enabled) {
+        rest.post()
+            .uri("/admin/realms/{realm}/users/{subject}/logout", properties.realm(), subject)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
+            .retrieve()
+            .toBodilessEntity();
+      }
+    } catch (RestClientResponseException exception) {
+      throw providerException(exception);
+    }
+  }
+
+  @Override
   public void ensureUserIdClaimMapped(List<String> clientIds) {
     Optional.ofNullable(clientIds).orElseGet(List::of).stream()
         .filter(Objects::nonNull)
@@ -256,6 +277,8 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       String firstName,
       boolean enabled,
       List<KeycloakCredential> credentials) {}
+
+  private record KeycloakUserStatus(boolean enabled) {}
 
   private record KeycloakCredential(String type, String value, boolean temporary) {}
 

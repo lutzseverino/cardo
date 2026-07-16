@@ -14,11 +14,13 @@ import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSec
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.client.RestClient;
 
 class IdentityProductAuthAutoConfigurationTest {
 
@@ -47,7 +49,46 @@ class IdentityProductAuthAutoConfigurationTest {
           assertThat(application).hasSingleBean(AuthenticatedUserReader.class);
           assertThat(application).hasSingleBean(MethodSecurityExpressionHandler.class);
           assertThat(application).hasSingleBean(BearerTokenResolver.class);
+          assertThat(application).doesNotHaveBean(ActiveTokenValidator.class);
+          assertThat(application).doesNotHaveBean(ActiveTokenValidationFilter.class);
         });
+  }
+
+  @Test
+  void autoConfiguresActiveTokenValidationWhenEnabled() {
+    context
+        .withBean(RestClient.Builder.class, RestClient::builder)
+        .withPropertyValues(
+            "odonta.identity.product-auth.active-token-validation.enabled=true",
+            "odonta.identity.product-auth.active-token-validation.introspection-uri=https://identity.test/introspect",
+            "odonta.identity.product-auth.active-token-validation.client-id=clinic",
+            "odonta.identity.product-auth.active-token-validation.client-secret=clinic-secret")
+        .run(
+            application -> {
+              assertThat(application).hasSingleBean(ActiveTokenValidator.class);
+              assertThat(application).hasSingleBean(ActiveTokenValidationFilter.class);
+              assertThat(application)
+                  .getBean(FilterRegistrationBean.class)
+                  .extracting(FilterRegistrationBean::isEnabled)
+                  .isEqualTo(false);
+            });
+  }
+
+  @Test
+  void rejectsIncompleteActiveTokenValidationConfiguration() {
+    context
+        .withBean(RestClient.Builder.class, RestClient::builder)
+        .withPropertyValues(
+            "odonta.identity.product-auth.active-token-validation.enabled=true",
+            "odonta.identity.product-auth.active-token-validation.client-id=clinic",
+            "odonta.identity.product-auth.active-token-validation.client-secret=clinic-secret")
+        .run(
+            application -> {
+              assertThat(application).hasFailed();
+              assertThat(application.getStartupFailure())
+                  .hasRootCauseInstanceOf(IllegalStateException.class)
+                  .hasRootCauseMessage("Active token validation requires an introspection URI.");
+            });
   }
 
   @Test

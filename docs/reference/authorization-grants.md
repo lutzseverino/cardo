@@ -19,6 +19,9 @@ revocations from application flows.
   actions and client authorities to assign or revoke.
 - The authorization module applies plans asynchronously through
   `AuthorizationAdminClient` and retries failed publications.
+- Product flows grant product client authorities through
+  `GrantPlan.builder().grantAuthorities(...)`. The resource-server client id and
+  authority names in that call belong to the flow owner, not to Identity.
 - Grant application is idempotent. Existing resource capabilities are widened
   without removing capabilities, and existing resource-action grants are
   detected before writes. The provider adapter must preserve that property for
@@ -41,6 +44,13 @@ revocations from application flows.
 - Permission constants remain in types such as `WorkspacePermissions`. They name
   the authorization vocabulary; planners decide when and to whom that
   vocabulary is assigned or revoked.
+- Role or bundle contents are product-owned even when stored as generic
+  authorization access-profile records. Authorization owns the storage shape;
+  the product owns which authorities or resource actions a profile contains.
+- Identity planners may grant only identity-owned authorities such as profile
+  read/write. Identity must not grant product authorities such as clinic,
+  workforce, or polity permissions as a side effect of user creation,
+  authentication, or global status changes.
 - Flow services persist domain state and stage the plan. They do not call
   an authorization provider directly.
 - Effective-grant readers expose current authorization state. They do not own

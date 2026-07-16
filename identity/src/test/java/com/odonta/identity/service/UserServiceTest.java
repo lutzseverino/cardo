@@ -3,6 +3,7 @@ package com.odonta.identity.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -40,6 +41,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -112,6 +114,72 @@ class UserServiceTest {
         .hasMessage("Invited is not an operational user status.");
 
     verify(users, never()).saveAndFlush(any(User.class));
+    verify(identityProvider, never()).setIdentityEnabled(any(), anyBoolean());
+  }
+
+  @Test
+  void disablesProviderIdentityWhenUserIsDisabled() {
+    UUID userId = UUID.randomUUID();
+    User user = new User("kc-user-1", "a@b.com", "A");
+    UserProjection updated = projection(UserStatus.DISABLED);
+    UserService service = service();
+    when(users.findById(userId)).thenReturn(Optional.of(user));
+    when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
+
+    assertThat(
+            service.update(
+                userId, new UpdateUserInput(null, FieldUpdate.absent(), UserStatus.DISABLED)))
+        .extracting(result -> result.id(), result -> result.status())
+        .containsExactly(updated.getId(), UserStatus.DISABLED);
+
+    InOrder order = inOrder(users, identityProvider);
+    order.verify(users).saveAndFlush(user);
+    order.verify(identityProvider).setIdentityEnabled("kc-user-1", false);
+  }
+
+  @Test
+  void enablesProviderIdentityWhenUserIsActivated() {
+    UUID userId = UUID.randomUUID();
+    User user = new User("kc-user-1", "a@b.com", "A");
+    user.changeOperationalStatus(UserStatus.DISABLED);
+    UserProjection updated = projection(UserStatus.ACTIVE);
+    UserService service = service();
+    when(users.findById(userId)).thenReturn(Optional.of(user));
+    when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
+
+    assertThat(
+            service.update(
+                userId, new UpdateUserInput(null, FieldUpdate.absent(), UserStatus.ACTIVE)))
+        .extracting(result -> result.id(), result -> result.status())
+        .containsExactly(updated.getId(), UserStatus.ACTIVE);
+
+    InOrder order = inOrder(users, identityProvider);
+    order.verify(users).saveAndFlush(user);
+    order.verify(identityProvider).setIdentityEnabled("kc-user-1", true);
+  }
+
+  @Test
+  void defersProviderStatusSyncUntilAfterCommitWhenTransactionSynchronizationIsActive() {
+    UUID userId = UUID.randomUUID();
+    User user = new User("kc-user-1", "a@b.com", "A");
+    UserProjection updated = projection(UserStatus.DISABLED);
+    UserService service = service();
+    when(users.findById(userId)).thenReturn(Optional.of(user));
+    when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
+
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      service.update(userId, new UpdateUserInput(null, FieldUpdate.absent(), UserStatus.DISABLED));
+
+      verify(identityProvider, never()).setIdentityEnabled(any(), anyBoolean());
+
+      TransactionSynchronizationManager.getSynchronizations()
+          .forEach(synchronization -> synchronization.afterCommit());
+
+      verify(identityProvider).setIdentityEnabled("kc-user-1", false);
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
   }
 
   @Test

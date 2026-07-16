@@ -6,8 +6,10 @@ portal sessions, and provider webhook ingestion.
 ## Product Integration
 
 Products use `billing-client` as the stable Java contract for entitlement
-checks. `billing-client-http` provides the HTTP implementation and Spring Boot
-auto-configuration for service-to-service calls to Billing.
+checks. It returns billing-owned entitlement state; products decide how product
+limits apply to their domain workflows. `billing-client-http` provides the HTTP
+implementation and Spring Boot auto-configuration for service-to-service calls
+to Billing.
 
 There is no product integration module yet. Add one only if real products repeat
 the same entitlement guard, checkout, or portal wiring beyond the existing

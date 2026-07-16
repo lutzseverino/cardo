@@ -1,18 +1,18 @@
 <div align="center">
     <h1 align="center">Platform</h1>
-    <p>Backend capabilities that can be shared by multiple products.</p>
+    <p>Service capabilities that can be shared by multiple products.</p>
     <p>
         <img alt="status" src="https://img.shields.io/badge/status-consolidated-0f172a">
-        <img alt="backend" src="https://img.shields.io/badge/backend-spring_boot-111827">
+        <img alt="service" src="https://img.shields.io/badge/service-spring_boot-111827">
         <img alt="docs" src="https://img.shields.io/badge/docs-diataxis-1f2937">
     </p>
 </div>
 
 ## Overview
 
-Platform contains backend capabilities that can be shared by multiple products.
+Platform contains service capabilities that can be shared by multiple products.
 
-It is the place for backend concerns that are reusable across product boundaries: shared service primitives, product-neutral mechanics, integrations, and contracts that more than one product can depend on.
+It is the place for service concerns that are reusable across product boundaries: shared service primitives, product-neutral mechanics, integrations, and contracts that more than one product can depend on.
 
 ## Boundary
 
@@ -22,9 +22,19 @@ Product-specific language, behavior, persistence, and policies should stay in th
 
 ## Development
 
+From the repository root:
+
+```bash
+pnpm test:services
+pnpm compile:services
+```
+
+Or from the service workspace:
+
 ```bash
 cd services
-mvn validate
+mvn test
+mvn compile
 ```
 
 ## Documentation

@@ -32,9 +32,11 @@ the same wiring and the packaged shape can stay product-neutral.
 Use `identity-product-auth` when a product accepts logged-in Odonta users. The
 module auto-configures the shared Spring Security pieces: JWT authority
 conversion, permission evaluation, authenticated-user reading, method security,
-resource-server setup, and session-cookie bearer token resolution.
+resource-server setup, session-cookie bearer token resolution, and optional
+active-token validation through the identity provider introspection endpoint.
 
-Products still configure their issuer and public product paths:
+Products still configure their issuer, public product paths, and active-token
+validation credentials:
 
 ```yaml
 spring:
@@ -51,7 +53,22 @@ odonta:
     product-auth:
       public-paths:
         - ${odonta.api.base-path}/workforce
+      active-token-validation:
+        enabled: true
+        introspection-uri: ${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token/introspect
+        client-id: ${KEYCLOAK_CLIENT_ID}
+        client-secret: ${KEYCLOAK_CLIENT_SECRET}
+        cache-ttl: 10s
+        cache-max-entries: 2048
+        connect-timeout: 2s
+        read-timeout: 2s
 ```
+
+When enabled, active-token validation fails closed and caches only positive
+introspection responses for the configured TTL. Keep the TTL short so global
+Identity disablement is enforced quickly for already-issued JWTs. Keep
+introspection timeouts low because product requests wait on the fail-closed
+validation path.
 
 When another platform capability starts to leak repeated product ceremony, first
 convert one active product and then Clinic. If the shape is still clear, keep it.

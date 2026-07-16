@@ -6,9 +6,12 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.odonta.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
+import com.odonta.billing.client.BillingEntitlement;
+import com.odonta.billing.client.BillingEntitlementStatus;
 import com.odonta.billing.client.BillingEntitlementsClient;
 import com.odonta.billing.client.http.generated.EntitlementResponse;
 import com.odonta.billing.client.http.generated.api.EntitlementsApi;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -42,13 +45,33 @@ class HttpBillingEntitlementsClientTest {
   }
 
   @Test
-  void returnsTenantLimitAcrossTheGeneratedClientBoundary() {
+  void returnsEntitlementAcrossTheGeneratedClientBoundary() {
     EntitlementsApi entitlements = mock(EntitlementsApi.class);
     HttpBillingEntitlementsClient client = new HttpBillingEntitlementsClient(entitlements);
     UUID subjectId = UUID.randomUUID();
+    UUID entitlementId = UUID.randomUUID();
+    OffsetDateTime createdAt = OffsetDateTime.parse("2026-06-29T05:00:00Z");
     when(entitlements.requireSubjectEntitlement(subjectId, "clinic"))
-        .thenReturn(new EntitlementResponse().tenantLimit(3));
+        .thenReturn(
+            new EntitlementResponse()
+                .id(entitlementId)
+                .subjectId(subjectId)
+                .product("clinic")
+                .status(EntitlementResponse.StatusEnum.ACTIVE)
+                .tenantLimit(3)
+                .seatLimit(12)
+                .createdAt(createdAt)
+                .updatedAt(createdAt.plusHours(1)));
 
-    assertThat(client.requireTenantLimit(subjectId, "clinic")).isEqualTo(3);
+    BillingEntitlement entitlement = client.require(subjectId, "clinic");
+
+    assertThat(entitlement.id()).isEqualTo(entitlementId);
+    assertThat(entitlement.subjectId()).isEqualTo(subjectId);
+    assertThat(entitlement.product()).isEqualTo("clinic");
+    assertThat(entitlement.status()).isEqualTo(BillingEntitlementStatus.ACTIVE);
+    assertThat(entitlement.tenantLimit()).isEqualTo(3);
+    assertThat(entitlement.seatLimit()).isEqualTo(12);
+    assertThat(entitlement.createdAt()).isEqualTo(createdAt);
+    assertThat(entitlement.updatedAt()).isEqualTo(createdAt.plusHours(1));
   }
 }

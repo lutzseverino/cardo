@@ -32,6 +32,8 @@ odonta:
       checkout-prices:
         - id: ${STRIPE_CLINIC_PRICE_ID:}
           product: clinic
+        - id: ${STRIPE_POLITY_PRICE_ID:}
+          product: polity
 
 server:
   port: ${BILLING_PORT:8085}

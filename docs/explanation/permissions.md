@@ -14,6 +14,7 @@ Each product owns its own permission catalog. The shared authorization boundary 
 
 - Product services own product language: resources, actions, grant templates, and the events that create or revoke access.
 - The authorization boundary owns reusable mechanics and provider-facing integration.
+- Authorization may store generic access profiles or role-bundle records, but products own the contents of those profiles.
 - Identity owns identity behavior. It should not silently grant product access as a side effect of user creation.
 - Runtime checks should evaluate explicit grants rather than contextual fallbacks such as "self or admin" unless those fallbacks are modeled as grants.
 
