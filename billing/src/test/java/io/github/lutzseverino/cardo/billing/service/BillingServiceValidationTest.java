@@ -8,6 +8,7 @@ import io.github.lutzseverino.cardo.billing.mapper.EntitlementApplicationMapper;
 import io.github.lutzseverino.cardo.billing.model.CreateCheckoutSessionInput;
 import io.github.lutzseverino.cardo.billing.provider.BillingProvider;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementRepository;
+import io.github.lutzseverino.cardo.billing.workflow.CreateCheckoutSessionWorkflow;
 import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.UUID;
@@ -24,12 +25,12 @@ class BillingServiceValidationTest {
 
   @Autowired private EntitlementRepository entitlements;
 
-  @Autowired private CheckoutSessionService checkoutSessions;
+  @Autowired private CreateCheckoutSessionWorkflow checkoutSessions;
 
   @Autowired private EntitlementService entitlementService;
 
   @Test
-  void validatesRequestsAtTheServiceBoundary() {
+  void validatesRequestsAtTheWorkflowBoundary() {
     CreateCheckoutSessionInput input =
         new CreateCheckoutSessionInput(
             "   ",
@@ -73,8 +74,8 @@ class BillingServiceValidationTest {
     }
 
     @Bean
-    CheckoutSessionService checkoutSessions(BillingProvider provider) {
-      return new CheckoutSessionService(provider);
+    CreateCheckoutSessionWorkflow checkoutSessions(BillingProvider provider) {
+      return new CreateCheckoutSessionWorkflow(provider, mock(CustomerService.class));
     }
 
     @Bean

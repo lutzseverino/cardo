@@ -10,9 +10,7 @@ import com.stripe.param.checkout.SessionCreateParams.Mode;
 import com.stripe.param.checkout.SessionCreateParams.SubscriptionData;
 import io.github.lutzseverino.cardo.billing.config.StripeProperties;
 import io.github.lutzseverino.cardo.billing.model.BillingSessionResult;
-import io.github.lutzseverino.cardo.billing.model.Customer;
 import io.github.lutzseverino.cardo.billing.provider.BillingProvider;
-import io.github.lutzseverino.cardo.billing.service.CustomerService;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import java.net.URI;
 import java.util.UUID;
@@ -25,14 +23,45 @@ public class StripeBillingProvider implements BillingProvider {
 
   static final String PROVIDER = "stripe";
 
-  private final CustomerService customers;
   private final StripeCheckoutCatalog prices;
   private final StripeClient stripe;
 
   @Override
+  public String name() {
+    return PROVIDER;
+  }
+
+  @Override
+  public String createCustomer(UUID subjectId) {
+    try {
+      com.stripe.model.Customer customer =
+          stripe
+              .v1()
+              .customers()
+              .create(
+                  CustomerCreateParams.builder()
+                      .putMetadata("subject_id", subjectId.toString())
+                      .build());
+      return customer.getId();
+    } catch (StripeException exception) {
+      throw ApiException.of(
+          502, "billing_customer_create_failed", "Customer could not be created.");
+    }
+  }
+
+  @Override
+  public void deleteCustomer(String providerCustomerId) {
+    try {
+      stripe.v1().customers().delete(providerCustomerId);
+    } catch (StripeException exception) {
+      throw ApiException.of(
+          502, "billing_customer_delete_failed", "Customer could not be deleted.");
+    }
+  }
+
+  @Override
   public BillingSessionResult createCheckoutSession(
-      UUID subjectId, String product, URI successUrl, URI cancelUrl) {
-    Customer customer = customers.getOrCreate(subjectId, PROVIDER, () -> createCustomer(subjectId));
+      UUID subjectId, String providerCustomerId, String product, URI successUrl, URI cancelUrl) {
     StripeProperties.CheckoutPrice price = prices.findByProduct(product);
 
     try {
@@ -44,7 +73,7 @@ public class StripeBillingProvider implements BillingProvider {
               .create(
                   SessionCreateParams.builder()
                       .setMode(Mode.SUBSCRIPTION)
-                      .setCustomer(customer.getProviderCustomerId())
+                      .setCustomer(providerCustomerId)
                       .setSuccessUrl(successUrl.toString())
                       .setCancelUrl(cancelUrl.toString())
                       .putMetadata("subject_id", subjectId.toString())
@@ -64,8 +93,7 @@ public class StripeBillingProvider implements BillingProvider {
   }
 
   @Override
-  public BillingSessionResult createPortalSession(UUID subjectId, URI returnUrl) {
-    Customer customer = customers.getOrCreate(subjectId, PROVIDER, () -> createCustomer(subjectId));
+  public BillingSessionResult createPortalSession(String providerCustomerId, URI returnUrl) {
     try {
       com.stripe.model.billingportal.Session session =
           stripe
@@ -74,30 +102,13 @@ public class StripeBillingProvider implements BillingProvider {
               .sessions()
               .create(
                   com.stripe.param.billingportal.SessionCreateParams.builder()
-                      .setCustomer(customer.getProviderCustomerId())
+                      .setCustomer(providerCustomerId)
                       .setReturnUrl(returnUrl.toString())
                       .build());
       return new BillingSessionResult(session.getId(), session.getUrl());
     } catch (StripeException exception) {
       throw ApiException.of(
           502, "billing_portal_session_create_failed", "Portal session could not be created.");
-    }
-  }
-
-  private String createCustomer(UUID subjectId) {
-    try {
-      com.stripe.model.Customer customer =
-          stripe
-              .v1()
-              .customers()
-              .create(
-                  CustomerCreateParams.builder()
-                      .putMetadata("subject_id", subjectId.toString())
-                      .build());
-      return customer.getId();
-    } catch (StripeException exception) {
-      throw ApiException.of(
-          502, "billing_customer_create_failed", "Customer could not be created.");
     }
   }
 }

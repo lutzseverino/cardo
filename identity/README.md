@@ -27,6 +27,14 @@ or login. Products issue product grants from their own flows by staging
 `GrantPlan` instances with product-owned client authorities and resource
 actions.
 
+Invited-user credential setup and provisional deletion are durable operations.
+Credential setup delegates password/profile entry to Keycloak's action flow;
+Cardo never receives the password. Identity persists the operation before the
+provider call, performs provider work outside database transactions, and
+reconciles with leases and bounded retry. The operation response exposes its
+status and action expiry. Provisional deletion follows the same model and is
+queryable after the request, including after the local user row is gone.
+
 Example product configuration:
 
 ```yaml

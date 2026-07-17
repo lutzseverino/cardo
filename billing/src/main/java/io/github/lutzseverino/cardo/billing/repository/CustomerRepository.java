@@ -7,8 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
-  Optional<Customer> findBySubjectIdAndProvider(UUID subjectId, String provider);
+  Optional<CustomerProjection> findProjectedBySubjectIdAndProvider(UUID subjectId, String provider);
 
-  Optional<Customer> findByProviderAndProviderCustomerId(
+  Optional<CustomerProjection> findProjectedByProviderAndProviderCustomerId(
       String provider, String providerCustomerId);
 }

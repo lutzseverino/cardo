@@ -6,7 +6,6 @@ import io.github.lutzseverino.cardo.common.model.EmailAddress;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import io.github.lutzseverino.cardo.identity.authorization.IdentityGrantPlanner;
 import io.github.lutzseverino.cardo.identity.mapper.UserApplicationMapper;
-import io.github.lutzseverino.cardo.identity.model.CompleteProvisionalUserInput;
 import io.github.lutzseverino.cardo.identity.model.CreateProvisionalUserInput;
 import io.github.lutzseverino.cardo.identity.model.CreateUserInput;
 import io.github.lutzseverino.cardo.identity.model.UpdateCurrentUserInput;
@@ -25,9 +24,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,8 @@ import org.springframework.validation.annotation.Validated;
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+  private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
   private final UserRepository users;
   private final UserApplicationMapper mapper;
@@ -83,41 +87,6 @@ public class UserService {
                                 () ->
                                     ApiException.conflict(
                                         "user_exists", "A user with this email exists."))));
-  }
-
-  @Transactional
-  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
-  public UserResult completeProvisional(UUID id, @Valid CompleteProvisionalUserInput input) {
-    User user =
-        users
-            .findById(id)
-            .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
-    if (!UserStatus.INVITED.equals(user.getStatus())) {
-      throw ApiException.conflict("user_already_complete", "User is already complete.");
-    }
-
-    user.complete(input.name());
-    users.saveAndFlush(user);
-    identityProvider.completePasswordIdentity(
-        user.getKeycloakSubject(), input.password(), input.name());
-    return getResult(user.getId());
-  }
-
-  @Transactional
-  @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
-  public void cancelProvisional(UUID id) {
-    User user =
-        users
-            .findById(id)
-            .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
-    if (!UserStatus.INVITED.equals(user.getStatus())) {
-      throw ApiException.conflict("user_already_complete", "User is already complete.");
-    }
-
-    String subject = user.getKeycloakSubject();
-    users.delete(user);
-    users.flush();
-    identityProvider.deleteIdentity(subject);
   }
 
   @PreAuthorize(
@@ -252,21 +221,48 @@ public class UserService {
       Function<IdentityProvider.ProvisionedIdentity, User> factory,
       Supplier<UserResult> duplicateUser) {
     IdentityProvider.ProvisionedIdentity identity = provision.get();
+    AtomicBoolean compensated = deleteIdentityOnRollback(identity.subject());
     try {
       User created = users.saveAndFlush(factory.apply(identity));
       identityProvider.bindUserId(identity.subject(), created.getId());
       grants.stage(identityGrantPlanner.creation(created));
       return getResult(created.getId());
     } catch (DataIntegrityViolationException exception) {
-      deleteIdentity(identity.subject(), exception);
+      deleteIdentity(identity.subject(), compensated, exception);
       return duplicateUser.get();
     } catch (RuntimeException exception) {
-      deleteIdentity(identity.subject(), exception);
+      deleteIdentity(identity.subject(), compensated, exception);
       throw exception;
     }
   }
 
-  private void deleteIdentity(String subject, RuntimeException original) {
+  private AtomicBoolean deleteIdentityOnRollback(String subject) {
+    AtomicBoolean compensated = new AtomicBoolean();
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      return compensated;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCompletion(int status) {
+            if (status != STATUS_COMMITTED && compensated.compareAndSet(false, true)) {
+              try {
+                identityProvider.deleteIdentity(subject);
+              } catch (RuntimeException exception) {
+                logger.error(
+                    "Failed to delete provisioned identity {} after rollback", subject, exception);
+              }
+            }
+          }
+        });
+    return compensated;
+  }
+
+  private void deleteIdentity(
+      String subject, AtomicBoolean compensated, RuntimeException original) {
+    if (!compensated.compareAndSet(false, true)) {
+      return;
+    }
     try {
       identityProvider.deleteIdentity(subject);
     } catch (RuntimeException compensationFailure) {

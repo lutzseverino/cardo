@@ -8,6 +8,7 @@ import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -61,20 +62,50 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   }
 
   @Override
-  public void completePasswordIdentity(String subject, String password, String name) {
+  public void requestCredentialSetup(String subject, Duration lifespan) {
     try {
       rest.put()
-          .uri("/admin/realms/{realm}/users/{subject}", properties.realm(), subject)
+          .uri(
+              builder ->
+                  builder
+                      .path("/admin/realms/{realm}/users/{subject}/execute-actions-email")
+                      .queryParam("client_id", properties.credentialSetupClientId())
+                      .queryParam("redirect_uri", properties.credentialSetupRedirectUri())
+                      .queryParam("lifespan", lifespan.toSeconds())
+                      .build(properties.realm(), subject))
           .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
-          .body(new KeycloakUser(null, null, name, true, null))
+          .body(List.of("UPDATE_PASSWORD", "UPDATE_PROFILE"))
           .retrieve()
           .toBodilessEntity();
-      rest.put()
-          .uri("/admin/realms/{realm}/users/{subject}/reset-password", properties.realm(), subject)
-          .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
-          .body(passwordCredential(password))
-          .retrieve()
-          .toBodilessEntity();
+    } catch (RestClientResponseException exception) {
+      throw providerException(exception);
+    }
+  }
+
+  @Override
+  public Optional<CompletedIdentityProfile> completedIdentityProfile(String subject) {
+    try {
+      KeycloakUserDetails user =
+          rest.get()
+              .uri("/admin/realms/{realm}/users/{subject}", properties.realm(), subject)
+              .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
+              .retrieve()
+              .body(KeycloakUserDetails.class);
+      List<KeycloakCredentialSummary> credentials =
+          rest.get()
+              .uri("/admin/realms/{realm}/users/{subject}/credentials", properties.realm(), subject)
+              .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
+              .retrieve()
+              .body(new org.springframework.core.ParameterizedTypeReference<>() {});
+      if (user == null
+          || user.firstName() == null
+          || user.firstName().isBlank()
+          || credentials == null
+          || credentials.stream()
+              .noneMatch(credential -> PASSWORD_CREDENTIAL_TYPE.equals(credential.type()))) {
+        return Optional.empty();
+      }
+      return Optional.of(new CompletedIdentityProfile(user.firstName()));
     } catch (RestClientResponseException exception) {
       throw providerException(exception);
     }
@@ -89,6 +120,9 @@ public class KeycloakIdentityProvider implements IdentityProvider {
           .retrieve()
           .toBodilessEntity();
     } catch (RestClientResponseException exception) {
+      if (exception.getStatusCode().value() == 404) {
+        return;
+      }
       throw providerException(exception);
     }
   }
@@ -279,6 +313,10 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       List<KeycloakCredential> credentials) {}
 
   private record KeycloakUserStatus(boolean enabled) {}
+
+  private record KeycloakUserDetails(String firstName) {}
+
+  private record KeycloakCredentialSummary(String type) {}
 
   private record KeycloakCredential(String type, String value, boolean temporary) {}
 

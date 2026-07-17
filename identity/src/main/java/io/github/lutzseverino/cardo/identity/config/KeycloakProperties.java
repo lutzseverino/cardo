@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.identity.config;
 
+import java.net.URI;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -9,4 +10,6 @@ public record KeycloakProperties(
     String realm,
     String clientId,
     String clientSecret,
+    String credentialSetupClientId,
+    URI credentialSetupRedirectUri,
     List<String> userIdClaimClientIds) {}

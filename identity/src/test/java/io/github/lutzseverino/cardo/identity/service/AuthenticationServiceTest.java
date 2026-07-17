@@ -8,8 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrantAuthorityReader;
-import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
@@ -17,12 +15,11 @@ import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.reader.AuthenticatedPrincipalReader;
-import io.github.lutzseverino.cardo.identity.reader.CurrentJwtReader;
+import io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenGrantReader;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 
 class AuthenticationServiceTest {
 
@@ -30,17 +27,10 @@ class AuthenticationServiceTest {
   private final AuthenticatedPrincipalReader principals = mock(AuthenticatedPrincipalReader.class);
   private final RequestingPartyTokenClient requestingPartyTokens =
       mock(RequestingPartyTokenClient.class);
-  private final CurrentJwtReader currentJwt = mock(CurrentJwtReader.class);
-  private final JwtDecoder jwtDecoder = mock(JwtDecoder.class);
+  private final AuthorizationTokenGrantReader tokenGrants =
+      mock(AuthorizationTokenGrantReader.class);
   private final AuthenticationService service =
-      new AuthenticationService(
-          identityProvider,
-          principals,
-          requestingPartyTokens,
-          currentJwt,
-          jwtDecoder,
-          new KeycloakAuthoritiesConverter(),
-          new EffectiveGrantAuthorityReader());
+      new AuthenticationService(identityProvider, principals, requestingPartyTokens, tokenGrants);
 
   @Test
   void rejectsAndRevokesPasswordTokenForDisabledUser() {

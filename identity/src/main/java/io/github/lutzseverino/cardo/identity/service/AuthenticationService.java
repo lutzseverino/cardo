@@ -1,8 +1,5 @@
 package io.github.lutzseverino.cardo.identity.service;
 
-import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrant;
-import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrantAuthorityReader;
-import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenRequest;
 import io.github.lutzseverino.cardo.common.api.ApiException;
@@ -11,21 +8,16 @@ import io.github.lutzseverino.cardo.identity.model.AuthenticateInput;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
+import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.reader.AuthenticatedPrincipalReader;
-import io.github.lutzseverino.cardo.identity.reader.CurrentJwtReader;
+import io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenGrantReader;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.Collection;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -37,10 +29,7 @@ public class AuthenticationService {
   private final IdentityProvider identityProvider;
   private final AuthenticatedPrincipalReader principals;
   private final RequestingPartyTokenClient requestingPartyTokens;
-  private final CurrentJwtReader currentJwt;
-  private final JwtDecoder jwtDecoder;
-  private final KeycloakAuthoritiesConverter authorities;
-  private final EffectiveGrantAuthorityReader grantReader;
+  private final AuthorizationTokenGrantReader tokenGrants;
 
   public AuthenticationResult authenticate(@Valid AuthenticateInput input) {
     return authenticate(input.email(), input.password());
@@ -58,21 +47,19 @@ public class AuthenticationService {
                 RequestingPartyTokenRequest.allPermissions(
                     token.token(), IdentityPermissions.CLIENT_ID))
             .token();
-    return new AuthenticationResult(principal, authorizationToken, grants(authorizationToken));
+    return new AuthenticationResult(
+        principal, authorizationToken, tokenGrants.read(authorizationToken));
   }
 
-  public AuthenticationResult getCurrentPrincipal() {
-    var current = currentJwt.current();
-    Jwt jwt = current.getToken();
+  public AuthenticationResult getCurrent(CurrentAuthentication current) {
     AuthenticatedPrincipal principal =
         principal(
-            jwt.getSubject(),
-            jwt.getClaimAsString("sid"),
+            current.authorizationSubject(),
+            current.sessionId(),
             AuthenticationMethod.OIDC,
-            expiresAt(jwt));
-    assertEnabled(principal, jwt.getTokenValue());
-    return new AuthenticationResult(
-        principal, jwt.getTokenValue(), grantReader.read(current.getAuthorities()));
+            current.expiresAt());
+    assertEnabled(principal, current.accessToken());
+    return new AuthenticationResult(principal, current.accessToken(), current.grants());
   }
 
   private AuthenticatedPrincipal principal(IdentityProvider.IssuedIdentityToken token) {
@@ -93,8 +80,8 @@ public class AuthenticationService {
                     "authenticated_principal_not_found", "Authenticated principal not found."));
   }
 
-  public void revokeCurrent() {
-    identityProvider.revokeToken(currentJwt.current().getToken().getTokenValue());
+  public void revoke(String accessToken) {
+    identityProvider.revokeToken(accessToken);
   }
 
   private void assertEnabled(AuthenticatedPrincipal principal, String token) {
@@ -108,16 +95,5 @@ public class AuthenticationService {
       disabled.addSuppressed(exception);
     }
     throw disabled;
-  }
-
-  private OffsetDateTime expiresAt(Jwt jwt) {
-    return jwt.getExpiresAt() == null
-        ? null
-        : OffsetDateTime.ofInstant(jwt.getExpiresAt(), ZoneOffset.UTC);
-  }
-
-  private List<EffectiveGrant> grants(String token) {
-    Collection<GrantedAuthority> grantedAuthorities = authorities.convert(jwtDecoder.decode(token));
-    return grantReader.read(grantedAuthorities);
   }
 }

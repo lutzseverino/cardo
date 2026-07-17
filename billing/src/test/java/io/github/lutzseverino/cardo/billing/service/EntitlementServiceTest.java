@@ -56,7 +56,7 @@ class EntitlementServiceTest {
     UUID subjectId = UUID.randomUUID();
     EntitlementService service =
         new EntitlementService(entitlements, new EntitlementApplicationMapperImpl());
-    when(entitlements.findBySubjectId(subjectId)).thenReturn(List.of());
+    when(entitlements.findEntitiesBySubjectId(subjectId)).thenReturn(List.of());
 
     service.replaceActive(subjectId, List.of(new EntitlementSyncItem("clinic", 1, 5)));
 

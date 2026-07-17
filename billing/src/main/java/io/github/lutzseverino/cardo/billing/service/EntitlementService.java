@@ -50,7 +50,7 @@ public class EntitlementService {
   public void replaceActive(UUID subjectId, Collection<EntitlementSyncItem> activeItems) {
     Map<String, EntitlementSyncItem> activeByProduct = activeByProduct(activeItems);
 
-    for (Entitlement entitlement : entitlements.findBySubjectId(subjectId)) {
+    for (Entitlement entitlement : entitlements.findEntitiesBySubjectId(subjectId)) {
       EntitlementSyncItem active = activeByProduct.remove(entitlement.getProduct());
       if (active == null) {
         entitlement.setStatus(EntitlementStatus.CANCELED);

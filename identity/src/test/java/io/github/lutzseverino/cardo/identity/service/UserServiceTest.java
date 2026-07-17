@@ -16,7 +16,6 @@ import io.github.lutzseverino.cardo.common.model.FieldUpdate;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import io.github.lutzseverino.cardo.identity.authorization.IdentityGrantPlanner;
 import io.github.lutzseverino.cardo.identity.mapper.UserApplicationMapperImpl;
-import io.github.lutzseverino.cardo.identity.model.CompleteProvisionalUserInput;
 import io.github.lutzseverino.cardo.identity.model.CreateProvisionalUserInput;
 import io.github.lutzseverino.cardo.identity.model.CreateUserInput;
 import io.github.lutzseverino.cardo.identity.model.UpdateCurrentUserInput;
@@ -41,6 +40,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
@@ -85,6 +85,33 @@ class UserServiceTest {
         .isSameAs(failure);
 
     verify(identityProvider).deleteIdentity("kc-user-1");
+  }
+
+  @Test
+  void deletesProvisionedIdentityWhenTheOwningTransactionRollsBackAfterCreation() {
+    UserService service = service();
+    UUID userId = UUID.randomUUID();
+    when(users.findProjectedByEmail("owner@example.com")).thenReturn(Optional.empty());
+    when(identityProvider.provisionPasswordIdentity("owner@example.com", "password-1", "Owner"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("kc-user-1"));
+    when(users.saveAndFlush(any(User.class)))
+        .thenAnswer(invocation -> persisted(invocation, userId));
+    when(users.findProjectedById(userId)).thenReturn(Optional.of(projection(UserStatus.ACTIVE)));
+
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      service.create(new CreateUserInput("owner@example.com", "password-1", "Owner"));
+      verify(identityProvider, never()).deleteIdentity("kc-user-1");
+
+      TransactionSynchronizationManager.getSynchronizations()
+          .forEach(
+              synchronization ->
+                  synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+      verify(identityProvider).deleteIdentity("kc-user-1");
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
   }
 
   @Test
@@ -198,56 +225,6 @@ class UserServiceTest {
 
     assertThat(user.getAvatarUrl()).isNull();
     verify(users).saveAndFlush(user);
-  }
-
-  @Test
-  void flushesCompletionBeforeCompletingProviderIdentity() {
-    UUID userId = UUID.randomUUID();
-    User user = User.invited("kc-user-1", "employee@example.com");
-    UserProjection completed = projection(UserStatus.ACTIVE);
-    UserService service = service();
-    ReflectionTestUtils.setField(user, "id", userId);
-    when(users.findById(userId)).thenReturn(Optional.of(user));
-    when(users.saveAndFlush(user)).thenReturn(user);
-    when(users.findProjectedById(userId)).thenReturn(Optional.of(completed));
-
-    assertThat(
-            service.completeProvisional(
-                userId, new CompleteProvisionalUserInput("Employee", "password-1")))
-        .extracting(result -> result.id(), result -> result.status())
-        .containsExactly(completed.getId(), UserStatus.ACTIVE);
-
-    InOrder order = inOrder(users, identityProvider);
-    order.verify(users).saveAndFlush(user);
-    order.verify(identityProvider).completePasswordIdentity("kc-user-1", "password-1", "Employee");
-  }
-
-  @Test
-  void cancelsOnlyProvisionalUsers() {
-    UUID userId = UUID.randomUUID();
-    User user = User.invited("kc-user-1", "employee@example.com");
-    UserService service = service();
-    when(users.findById(userId)).thenReturn(Optional.of(user));
-
-    service.cancelProvisional(userId);
-
-    InOrder order = inOrder(users, identityProvider);
-    order.verify(users).delete(user);
-    order.verify(users).flush();
-    order.verify(identityProvider).deleteIdentity("kc-user-1");
-  }
-
-  @Test
-  void rejectsCancellingCompletedUsers() {
-    UUID userId = UUID.randomUUID();
-    UserService service = service();
-    when(users.findById(userId)).thenReturn(Optional.of(new User("kc-user-1", "a@b.com", "A")));
-
-    assertThatThrownBy(() -> service.cancelProvisional(userId))
-        .isInstanceOf(ApiException.class)
-        .hasMessage("User is already complete.");
-
-    verify(identityProvider, never()).deleteIdentity(any());
   }
 
   @Test

@@ -1,175 +1,154 @@
 package io.github.lutzseverino.cardo.invite.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.lutzseverino.cardo.authorization.access.AccessGrant;
-import io.github.lutzseverino.cardo.authorization.access.AccessProfileProjection;
-import io.github.lutzseverino.cardo.authorization.access.AccessProfileService;
-import io.github.lutzseverino.cardo.authorization.grant.GrantPlan;
-import io.github.lutzseverino.cardo.authorization.grant.Grants;
-import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUser;
-import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
-import io.github.lutzseverino.cardo.identity.client.ProvisionalUser;
-import io.github.lutzseverino.cardo.invite.authorization.InvitationGrantPlanner;
+import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
-import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapperImpl;
+import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapper;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
 import io.github.lutzseverino.cardo.invite.model.Invitation;
-import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
+import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
+import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationProjection;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
+import java.net.URI;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith(MockitoExtension.class)
 class InvitationServiceTest {
 
-  private static final UUID TENANT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-  private static final UUID ACCESS_PROFILE_ID =
-      UUID.fromString("22222222-2222-2222-2222-222222222222");
-  private static final UUID INVITED_USER_ID =
-      UUID.fromString("33333333-3333-3333-3333-333333333333");
-
-  @Mock private AccessProfileService accessProfiles;
-  @Mock private EmailSender email;
-  @Mock private Grants grants;
-  @Mock private IdentityUsersClient identityUsers;
-  @Mock private InvitationGrantPlanner invitationGrantPlanner;
-  @Mock private InvitationRepository invitations;
-
   @Test
-  void cancelsProvisionalUserWhenInvitationPersistenceFails() {
-    InvitationService service = service();
-    RuntimeException failure = new RuntimeException("database unavailable");
-    when(accessProfiles.availableProfile(ACCESS_PROFILE_ID, "clinic", TENANT_ID))
-        .thenReturn(Optional.of(accessProfile()));
-    when(identityUsers.createProvisional(any())).thenReturn(identityUser());
-    when(invitations.saveAndFlush(any(Invitation.class))).thenThrow(failure);
+  void rejectsAnAcceptanceTimestampBeforeTheInvitationCreationWindow() {
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    InvitationProjection projection = mock(InvitationProjection.class);
+    UUID invitationId = UUID.randomUUID();
+    OffsetDateTime createdAt = OffsetDateTime.now().minusDays(1);
+    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(projection));
+    when(projection.getProduct()).thenReturn("clinic");
+    when(projection.getCreatedAt()).thenReturn(createdAt);
+    InvitationService service = service(invitations);
 
-    assertThatThrownBy(() -> service.create(inviter(), input())).isSameAs(failure);
-
-    verify(identityUsers).cancelProvisional(INVITED_USER_ID);
+    assertThatThrownBy(
+            () -> service.requirePending(invitationId, "clinic", createdAt.minusMinutes(6)))
+        .isInstanceOf(ApiException.class)
+        .extracting(exception -> ((ApiException) exception).code())
+        .isEqualTo("invitation_acceptance_time_invalid");
   }
 
   @Test
-  void keepsOriginalFailureWhenCompensationFails() {
-    InvitationService service = service();
-    RuntimeException failure = new RuntimeException("database unavailable");
-    RuntimeException compensationFailure = new RuntimeException("identity unavailable");
-    when(accessProfiles.availableProfile(ACCESS_PROFILE_ID, "clinic", TENANT_ID))
-        .thenReturn(Optional.of(accessProfile()));
-    when(identityUsers.createProvisional(any())).thenReturn(identityUser());
-    when(invitations.saveAndFlush(any(Invitation.class))).thenThrow(failure);
-    doThrow(compensationFailure).when(identityUsers).cancelProvisional(INVITED_USER_ID);
+  void rejectsAnAcceptanceTimestampBeyondTheFutureClockSkewWindow() {
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    InvitationProjection projection = mock(InvitationProjection.class);
+    UUID invitationId = UUID.randomUUID();
+    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(projection));
+    when(projection.getProduct()).thenReturn("clinic");
+    when(projection.getCreatedAt()).thenReturn(OffsetDateTime.now().minusDays(1));
+    InvitationService service = service(invitations);
 
-    assertThatThrownBy(() -> service.create(inviter(), input()))
-        .isSameAs(failure)
-        .satisfies(
-            exception ->
-                assertThat(exception.getSuppressed()).containsExactly(compensationFailure));
+    assertThatThrownBy(
+            () ->
+                service.requirePending(invitationId, "clinic", OffsetDateTime.now().plusMinutes(6)))
+        .isInstanceOf(ApiException.class)
+        .extracting(exception -> ((ApiException) exception).code())
+        .isEqualTo("invitation_acceptance_time_invalid");
   }
 
   @Test
-  void resolvesProfileGrantsBeforePlanningAcceptance() {
-    InvitationService service = service();
-    InvitationProjection invitation = mock(InvitationProjection.class);
+  void revokesThroughTheInvitationOwnerAndReturnsTheUpdatedProjection() {
+    InvitationDelivery delivery = mock(InvitationDelivery.class);
+    InvitationApplicationMapper mapper = mock(InvitationApplicationMapper.class);
+    InvitationRepository invitations = mock(InvitationRepository.class);
     Invitation entity = mock(Invitation.class);
-    GrantPlan plan = mock(GrantPlan.class);
-    List<AccessGrant> accessGrants = List.of(new AccessGrant("clinic:clinic", null, "read"));
-    when(invitation.getId()).thenReturn(UUID.randomUUID());
-    when(invitation.getTenantId()).thenReturn(TENANT_ID);
-    when(invitation.getTenantResourceType()).thenReturn("clinic:clinic");
-    when(invitation.getAccessProfileId()).thenReturn(ACCESS_PROFILE_ID);
-    when(invitation.getInvitedUserId()).thenReturn(INVITED_USER_ID);
-    when(invitation.getStatus()).thenReturn(InvitationStatus.PENDING);
-    when(invitation.getCreatedAt()).thenReturn(OffsetDateTime.now());
-    when(invitations.findProjectedByToken("token")).thenReturn(Optional.of(invitation));
-    when(invitations.findById(invitation.getId())).thenReturn(Optional.of(entity));
-    when(accessProfiles.grants(ACCESS_PROFILE_ID)).thenReturn(accessGrants);
-    when(invitationGrantPlanner.acceptance(
-            TENANT_ID, "clinic:clinic", "employee-subject", accessGrants))
-        .thenReturn(plan);
+    InvitationProjection projection = mock(InvitationProjection.class);
+    io.github.lutzseverino.cardo.invite.model.InvitationResult result =
+        mock(io.github.lutzseverino.cardo.invite.model.InvitationResult.class);
+    UUID invitationId = UUID.randomUUID();
+    when(invitations.findEntityById(invitationId)).thenReturn(Optional.of(entity));
+    when(entity.getProduct()).thenReturn("clinic");
+    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(projection));
+    when(mapper.toResult(projection)).thenReturn(result);
+    InvitationService service =
+        new InvitationService(
+            delivery,
+            mapper,
+            new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),
+            invitations);
 
-    service.accept("token", new AuthenticatedUser(INVITED_USER_ID, "employee-subject", "Employee"));
+    org.assertj.core.api.Assertions.assertThat(service.revoke(invitationId, "clinic"))
+        .isSameAs(result);
 
-    verify(invitationGrantPlanner)
-        .acceptance(TENANT_ID, "clinic:clinic", "employee-subject", accessGrants);
-    verify(grants).stage(plan);
+    verify(entity).revoke(any(java.time.OffsetDateTime.class));
   }
 
-  private InvitationService service() {
-    return new InvitationService(
-        accessProfiles,
-        email,
-        grants,
-        identityUsers,
-        invitationGrantPlanner,
-        new InvitationApplicationMapperImpl(),
-        new InvitationProperties(Duration.ofHours(72), "https://app.example.com"),
-        invitations);
+  @Test
+  void serializesCreateRequestsBeforeCheckingIdempotency() {
+    InvitationDelivery delivery = mock(InvitationDelivery.class);
+    InvitationApplicationMapper mapper = mock(InvitationApplicationMapper.class);
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    InvitationService service =
+        new InvitationService(
+            delivery,
+            mapper,
+            new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),
+            invitations);
+    CreateInvitationInput input = input();
+
+    service.findCreated("clinic", input);
+
+    org.mockito.InOrder order = org.mockito.Mockito.inOrder(invitations);
+    order.verify(invitations).lockCreation("clinic", input.requestId());
+    order.verify(invitations).findProjectedByProductAndRequestId("clinic", input.requestId());
   }
 
-  private AuthenticatedUser inviter() {
-    return new AuthenticatedUser(
-        UUID.fromString("44444444-4444-4444-4444-444444444444"), "owner-subject", "Owner");
+  @Test
+  void stagesInvitationDeliveryInTheOwningTransaction() {
+    InvitationDelivery delivery = mock(InvitationDelivery.class);
+    InvitationApplicationMapper mapper = mock(InvitationApplicationMapper.class);
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    Invitation saved = mock(Invitation.class);
+    InvitationProjection projection = mock(InvitationProjection.class);
+    UUID invitationId = UUID.randomUUID();
+    when(saved.getId()).thenReturn(invitationId);
+    when(invitations.saveAndFlush(any(Invitation.class))).thenReturn(saved);
+    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(projection));
+    InvitationService service =
+        new InvitationService(
+            delivery,
+            mapper,
+            new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),
+            invitations);
+    CreateInvitationInput input = input();
+
+    service.create("clinic", input, UUID.randomUUID(), "subject-1");
+
+    verify(delivery).stage(invitationId);
   }
 
   private CreateInvitationInput input() {
     return new CreateInvitationInput(
-        TENANT_ID, "clinic:clinic", "employee@example.com", ACCESS_PROFILE_ID);
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        "clinic:clinic",
+        "user@example.com",
+        "clinic:employee",
+        List.of(new InvitationGrantInput("clinic:clinic", "read")),
+        UUID.randomUUID(),
+        URI.create("https://app.example.com/invitations"));
   }
 
-  private ProvisionalUser identityUser() {
-    return new ProvisionalUser(INVITED_USER_ID, "employee-subject");
-  }
-
-  private AccessProfileProjection accessProfile() {
-    return new TestAccessProfileProjection();
-  }
-
-  private record TestAccessProfileProjection() implements AccessProfileProjection {
-
-    @Override
-    public UUID getId() {
-      return ACCESS_PROFILE_ID;
-    }
-
-    @Override
-    public String getProduct() {
-      return "clinic";
-    }
-
-    @Override
-    public UUID getTenantId() {
-      return TENANT_ID;
-    }
-
-    @Override
-    public String getName() {
-      return "Employee";
-    }
-
-    @Override
-    public String getDescription() {
-      return null;
-    }
-
-    @Override
-    public boolean isTemplate() {
-      return false;
-    }
+  private InvitationService service(InvitationRepository invitations) {
+    return new InvitationService(
+        mock(InvitationDelivery.class),
+        mock(InvitationApplicationMapper.class),
+        new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),
+        invitations);
   }
 }

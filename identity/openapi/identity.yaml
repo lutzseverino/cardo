@@ -182,30 +182,46 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-  /identity/users/{userId}/completion:
+  /identity/users/{userId}/credential-setup/{operationId}:
     parameters:
       - $ref: "#/components/parameters/UserId"
+      - $ref: "#/components/parameters/OperationId"
     post:
       tags: [Users]
-      operationId: completeProvisionalUser
-      summary: Complete an invited identity user by adding profile data and a password.
+      operationId: requestCredentialSetup
+      summary: Durably request Keycloak-owned credential setup for an invited user.
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CompleteProvisionalUserRequest"
+      parameters:
+        - $ref: "#/components/parameters/CredentialSetupNotAfter"
       responses:
-        "201":
-          description: Provisional user completed.
+        "202":
+          description: Credential setup operation accepted.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+                $ref: "#/components/schemas/IdentityOperationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Users]
+      operationId: getCredentialSetup
+      summary: Get the durable credential setup operation.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Credential setup operation found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityOperationResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -224,8 +240,12 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "204":
-          description: Provisional user cancelled.
+        "202":
+          description: Durable provisional deletion accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityOperationResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -234,6 +254,25 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Users]
+      operationId: getProvisionalDeletion
+      summary: Get the durable provisional deletion operation.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Provisional deletion operation found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityOperationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /identity/users/{userId}:
     parameters:
       - $ref: "#/components/parameters/UserId"
@@ -356,6 +395,21 @@ components:
       schema:
         type: string
         format: uuid
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CredentialSetupNotAfter:
+      name: notAfter
+      in: query
+      required: true
+      description: Hard invitation deadline after which credential setup must not complete.
+      schema:
+        type: string
+        format: date-time
   responses:
     BadRequest:
       $ref: "../../common/openapi/errors.yaml#/components/responses/BadRequest"
@@ -439,16 +493,41 @@ components:
         email:
           type: string
           format: email
-    CompleteProvisionalUserRequest:
+    IdentityOperationStatus:
+      type: string
+      enum: [requested, awaiting_user, completed, failed]
+    IdentityOperationResponse:
       type: object
-      required: [name, password]
+      required: [id, userId, status, attemptCount, createdAt, updatedAt]
       properties:
-        name:
+        id:
           type: string
-          minLength: 1
-        password:
+          format: uuid
+        userId:
           type: string
-          minLength: 8
+          format: uuid
+        status:
+          $ref: "#/components/schemas/IdentityOperationStatus"
+        attemptCount:
+          type: integer
+          format: int32
+        lastError:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     UpdateUserRequest:
       type: object
       properties:

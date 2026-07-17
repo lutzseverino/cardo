@@ -5,12 +5,16 @@ import java.util.UUID;
 
 public record InvitationResult(
     UUID id,
+    UUID requestId,
     UUID tenantId,
     String tenantResourceType,
-    UUID accessProfileId,
+    String accessProfile,
     String invitedEmail,
     UUID invitedUserId,
+    UUID invitedBy,
     InvitationStatus status,
+    OffsetDateTime expiresAt,
     OffsetDateTime acceptedAt,
+    OffsetDateTime revokedAt,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {}

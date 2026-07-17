@@ -1,15 +1,17 @@
 package io.github.lutzseverino.cardo.identity.client.http;
 
+import io.github.lutzseverino.cardo.identity.client.IdentityOperation;
+import io.github.lutzseverino.cardo.identity.client.IdentityOperationStatus;
 import io.github.lutzseverino.cardo.identity.client.IdentityUser;
 import io.github.lutzseverino.cardo.identity.client.IdentityUserStatus;
 import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
 import io.github.lutzseverino.cardo.identity.client.ProvisionalUser;
-import io.github.lutzseverino.cardo.identity.client.http.generated.CompleteProvisionalUserRequest;
 import io.github.lutzseverino.cardo.identity.client.http.generated.CreateProvisionalUserRequest;
 import io.github.lutzseverino.cardo.identity.client.http.generated.SearchUsersRequest;
 import io.github.lutzseverino.cardo.identity.client.http.generated.UserResponse;
 import io.github.lutzseverino.cardo.identity.client.http.generated.UserStatus;
 import io.github.lutzseverino.cardo.identity.client.http.generated.api.UsersApi;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -30,15 +32,24 @@ final class HttpIdentityUsersClient implements IdentityUsersClient {
   }
 
   @Override
-  public ProvisionalUser completeProvisional(UUID userId, String name, String password) {
-    return toProvisionalUser(
-        users.completeProvisionalUser(
-            userId, new CompleteProvisionalUserRequest().name(name).password(password)));
+  public IdentityOperation requestCredentialSetup(
+      UUID userId, UUID operationId, OffsetDateTime notAfter) {
+    return toOperation(users.requestCredentialSetup(userId, operationId, notAfter));
   }
 
   @Override
-  public void cancelProvisional(UUID userId) {
-    users.cancelProvisionalUser(userId);
+  public IdentityOperation getCredentialSetup(UUID userId, UUID operationId) {
+    return toOperation(users.getCredentialSetup(userId, operationId));
+  }
+
+  @Override
+  public IdentityOperation cancelProvisional(UUID userId) {
+    return toOperation(users.cancelProvisionalUser(userId));
+  }
+
+  @Override
+  public IdentityOperation getProvisionalDeletion(UUID userId) {
+    return toOperation(users.getProvisionalDeletion(userId));
   }
 
   @Override
@@ -70,6 +81,21 @@ final class HttpIdentityUsersClient implements IdentityUsersClient {
         user.getEmailVerified(),
         user.getCreatedAt(),
         user.getUpdatedAt());
+  }
+
+  private IdentityOperation toOperation(
+      io.github.lutzseverino.cardo.identity.client.http.generated.IdentityOperationResponse
+          operation) {
+    return new IdentityOperation(
+        operation.getId(),
+        operation.getUserId(),
+        IdentityOperationStatus.valueOf(operation.getStatus().name()),
+        operation.getAttemptCount(),
+        operation.getLastError(),
+        operation.getExpiresAt(),
+        operation.getCompletedAt(),
+        operation.getCreatedAt(),
+        operation.getUpdatedAt());
   }
 
   private IdentityUserStatus toStatus(UserStatus status) {

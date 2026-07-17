@@ -37,6 +37,13 @@ There is no HTTP client module because Authorization does not own an HTTP
 runtime. Keep using the embedded Java APIs unless Authorization is deliberately
 extracted into a service.
 
+`AccessProfileService` exposes access-profile queries through `AccessProfileResult`; persistence
+projections remain internal to the embedded application boundary.
+Grant and revocation plans are durable after commit. Stale incomplete publications,
+including work interrupted by a process crash, are retried after
+`cardo.authorization.plans.retry-delay` (default `PT1M`). Processors must remain
+idempotent because delivery is at least once.
+
 ## Documentation
 
 Start with the [Authorization documentation index](docs/README.md).

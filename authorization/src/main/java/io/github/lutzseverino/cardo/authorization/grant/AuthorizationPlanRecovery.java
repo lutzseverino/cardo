@@ -1,24 +1,27 @@
 package io.github.lutzseverino.cardo.authorization.grant;
 
-import org.springframework.modulith.events.FailedEventPublications;
-import org.springframework.modulith.events.ResubmissionOptions;
+import java.time.Duration;
+import java.time.Instant;
+import org.springframework.modulith.events.IncompleteEventPublications;
 import org.springframework.scheduling.annotation.Scheduled;
 
 class AuthorizationPlanRecovery {
 
-  private final FailedEventPublications publications;
+  private final IncompleteEventPublications publications;
+  private final Duration retryDelay;
 
-  AuthorizationPlanRecovery(FailedEventPublications publications) {
+  AuthorizationPlanRecovery(IncompleteEventPublications publications, Duration retryDelay) {
     this.publications = publications;
+    this.retryDelay = retryDelay;
   }
 
   @Scheduled(fixedDelayString = "${cardo.authorization.plans.retry-delay:PT1M}")
-  void retryFailed() {
-    publications.resubmit(
-        ResubmissionOptions.defaults()
-            .withFilter(
-                publication ->
-                    publication.getEvent() instanceof GrantPlan
-                        || publication.getEvent() instanceof RevocationPlan));
+  void retryIncomplete() {
+    Instant cutoff = Instant.now().minus(retryDelay);
+    publications.resubmitIncompletePublications(
+        publication ->
+            publication.getPublicationDate().isBefore(cutoff)
+                && (publication.getEvent() instanceof GrantPlan
+                    || publication.getEvent() instanceof RevocationPlan));
   }
 }
