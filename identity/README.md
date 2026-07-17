@@ -43,3 +43,8 @@ cardo:
       public-paths:
         - ${product.api.base-path}/status
 ```
+
+## Documentation
+
+Start with the [Identity documentation index](docs/README.md). Cross-project
+architecture and conventions remain in the [Cardo documentation](../docs/README.md).

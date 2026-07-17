@@ -40,3 +40,9 @@ for Keycloak.
 
 This module does not define product resources, product grants, entitlement
 rules, invite lifecycles, or tenant lookup. Those remain product-owned.
+
+## Documentation
+
+Start with the [Identity Product Auth documentation index](docs/README.md).
+Cross-project architecture and conventions remain in the
+[Cardo documentation](../../docs/README.md).

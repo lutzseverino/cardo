@@ -18,3 +18,8 @@ client modules.
 Products still own product catalog meaning, tenant limits in domain workflows,
 and the decision about which product operation requires an entitlement. Billing
 must not silently grant product-domain access.
+
+## Documentation
+
+Start with the [Billing documentation index](docs/README.md). Cross-project
+architecture and conventions remain in the [Cardo documentation](../docs/README.md).
