@@ -20,7 +20,7 @@ behavior or provide a generic plugin framework.
 | --- | --- |
 | Identity | Application users, profiles, provider integration, sessions, and stable user clients |
 | Authorization | Resource vocabulary, permission evaluation, durable grant staging, and provider adapters |
-| Invite | Resource-scoped invitation tokens, expiry, provisional identity completion, and access-profile grant staging |
+| Invite | Resource-scoped invitation delivery, expiry, provisional identity completion, lifecycle state, and grant-snapshot staging |
 | Billing | Customers, Stripe checkout and portal integration, entitlements, and stable billing clients |
 | Common | Shared API errors, audit and personal-data markers, value objects, and validation |
 | OpenAPI Support | Reusable generated-transport and PATCH conversion helpers |
@@ -28,7 +28,7 @@ behavior or provide a generic plugin framework.
 ## Integration Contract
 
 Applications consume the narrow client artifacts they need and keep policy
-local. Identity and Billing expose transport-independent client interfaces
+local. Identity, Invite, and Billing expose transport-independent client interfaces
 with separate HTTP implementations. Authorization is embedded because grant
 staging participates in the application transaction that produces the grant.
 

@@ -15,7 +15,9 @@ Request ------> Input ------> operation <---- domain model
 Response <------ Result <-----+-------------- Projection
 ```
 
-The application layer is the stable center. Transport contracts may be regenerated, and persistence queries may change for performance or storage reasons, without forcing either concern into the application service contract.
+The application layer is the stable center. Transport contracts may be regenerated, and
+persistence queries may change for performance or storage reasons, without forcing either concern
+into the service or workflow contract.
 
 This model intentionally accepts small mapping classes even when two shapes currently look identical. The ceremony makes ownership visible and prevents an accidental structural similarity from becoming a long-lived coupling.
 
@@ -36,7 +38,9 @@ Two mapper roles are sufficient for the normal flow:
 - The transport mapper translates between transport-owned and application-owned types.
 - The application mapper translates persistence projections into application results.
 
-The service invokes the application mapper because it coordinates the repository and works in application results. This does not make the service itself the adapter; the mapper performs the adaptation and the service decides when it occurs.
+The service or workflow that owns the operation invokes the application mapper because it
+coordinates the repository and works in application results. This does not make the application
+owner an adapter: the mapper performs the translation, while the owner decides when it occurs.
 
 The controller invokes the transport mapper because it owns the inbound transport interaction. Neither mapper needs to know the types on the other side of the application layer.
 
@@ -54,7 +58,13 @@ A projection is not required for every result. A workflow may produce an explici
 
 CRUD vocabulary is appropriate when the operation genuinely creates, reads, updates, or removes a resource. It becomes misleading when an operation represents a domain transition, such as activation, cancellation, restoration, approval, rejection, or completion.
 
-Named workflows should keep their domain verbs in endpoint operation names, application methods, and operation-specific inputs or results. They still follow `Request -> Input` and `Result -> Response`; they do not need a separate architectural pattern.
+Named workflow actions should keep their domain verbs in endpoint operation names, application
+methods, and operation-specific inputs or results. They still follow `Request -> Input` and
+`Result -> Response`.
+
+A workflow-shaped endpoint does not automatically require a `...Workflow` component. A transition
+that belongs to one stable owner remains a service method. A `...Workflow` application entrypoint
+is introduced when the use case coordinates independent owners or effects.
 
 Queries also extend beyond CRUD reads. Summaries, reports, searches, and composite views may use projections designed for those query shapes and map them into operation-specific results.
 
@@ -77,11 +87,11 @@ For a plain unpaginated collection, a direct list communicates the shape more cl
 For a create operation, a typical path is:
 
 ```text
-CreateResourceRequest -> CreateResourceInput -> service -> ResourceResult -> ResourceResponse
+CreateResourceRequest -> CreateResourceInput -> application owner -> ResourceResult -> ResourceResponse
 ```
 
 For a repository-backed query, the persistence side participates without becoming part of the
-service contract:
+application contract:
 
 ```text
 repository -> ResourceProjection -> ApplicationMapper -> ResourceResult
@@ -91,7 +101,7 @@ For a partial update, the transport adapter preserves field presence before invo
 application boundary:
 
 ```text
-UpdateResourceRequest -> ResourcePatchAdapter -> UpdateResourceInput -> service
+UpdateResourceRequest -> ResourcePatchAdapter -> UpdateResourceInput -> application owner
 ```
 
 The patch adapter is omitted for create, complete replacement, and workflow operations. Those
@@ -100,7 +110,7 @@ inputs or results.
 
 ## Implications
 
-- Generated transport types remain replaceable and do not define application service APIs.
+- Generated transport types remain replaceable and do not define service or workflow APIs.
 - Repository queries can optimize their projections without leaking those choices to controllers.
 - Mapping code is split by boundary, so a mapper does not accumulate unrelated types or orchestration.
 - Supporting domain and infrastructure concepts retain vocabulary appropriate to their own responsibilities.
@@ -108,4 +118,5 @@ inputs or results.
 - Small features carry some repetitive mapping ceremony. Consistency is preferred because the same mechanics continue to work when a feature grows.
 - A dedicated repository adapter layer may be introduced when it owns meaningful persistence behavior, but it is not required solely to hide an application mapper call.
 
-The authoritative vocabulary and rules are listed in [Application Boundary Types](../reference/application-boundary-types.md).
+The authoritative vocabulary and ownership rules are listed in
+[Application Boundaries](../reference/application-boundaries.md).

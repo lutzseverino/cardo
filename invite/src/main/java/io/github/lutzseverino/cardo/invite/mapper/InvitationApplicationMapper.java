@@ -9,6 +9,12 @@ import org.mapstruct.Mapper;
 public interface InvitationApplicationMapper {
 
   @BeanMapping(
-      ignoreUnmappedSourceProperties = {"invitedAuthorizationSubject", "invitedBy", "token"})
+      ignoreUnmappedSourceProperties = {
+        "product",
+        "grants",
+        "invitedAuthorizationSubject",
+        "acceptUrlBase",
+        "token"
+      })
   InvitationResult toResult(InvitationProjection projection);
 }

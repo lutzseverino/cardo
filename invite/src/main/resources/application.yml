@@ -24,15 +24,37 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:${cardo.invite.keycloak.base-url}/realms/${cardo.invite.keycloak.realm}}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_STARTTLS:false}
 
 cardo:
   api:
     version: v1
     base-path: /api/${cardo.api.version}
   invite:
+    completion:
+      dispatch-delay: ${INVITATION_COMPLETION_DISPATCH_DELAY:5s}
+      poll-delay: ${INVITATION_COMPLETION_POLL_DELAY:15s}
+      retry-base-delay: ${INVITATION_COMPLETION_RETRY_BASE_DELAY:5s}
+      claim-lease: ${INVITATION_COMPLETION_CLAIM_LEASE:1m}
+      max-attempts: ${INVITATION_COMPLETION_MAX_ATTEMPTS:12}
+      batch-size: ${INVITATION_COMPLETION_BATCH_SIZE:50}
+    delivery:
+      from: ${INVITE_MAIL_FROM:no-reply@localhost}
     invitation:
       ttl: 72h
-      web-url: ${WEB_URL:http://localhost:3000}
+      acceptance-clock-skew: 5m
+    product-callers:
+      allowed-client-ids: ${INVITE_PRODUCT_CLIENT_IDS:}
     keycloak:
       base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
       realm: ${KEYCLOAK_REALM:cardo}
@@ -43,7 +65,7 @@ cardo:
       base-url: ${IDENTITY_BASE_URL:http://localhost:8081/api/v1}
 
 server:
-  port: ${INVITE_PORT:8084}
+  port: ${INVITE_PORT:8083}
 
 management:
   endpoints:

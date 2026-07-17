@@ -6,9 +6,7 @@ import io.github.lutzseverino.cardo.identity.api.model.AuthenticateRequest;
 import io.github.lutzseverino.cardo.identity.api.model.AuthenticatedPrincipalResponse;
 import io.github.lutzseverino.cardo.identity.api.model.GrantedResourceResponse;
 import io.github.lutzseverino.cardo.identity.api.model.ResourceGrantResponse;
-import io.github.lutzseverino.cardo.identity.api.model.UserResponse;
 import io.github.lutzseverino.cardo.identity.model.AuthenticateInput;
-import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
 import io.github.lutzseverino.cardo.openapi.mapping.OpenApiNullableConversions;
 import io.github.lutzseverino.cardo.openapi.mapping.UriResponseConversions;
@@ -20,6 +18,7 @@ import org.mapstruct.Mapping;
     config = IdentityMapperConfig.class,
     uses = {
       IdentityTransportConversions.class,
+      UserTransportMapper.class,
       OpenApiNullableConversions.class,
       UriResponseConversions.class
     })
@@ -34,24 +33,6 @@ public interface AuthenticationTransportMapper {
   @Mapping(target = "authProviderId", source = "principal.authProviderId")
   @Mapping(target = "expiresAt", source = "principal.expiresAt")
   AuthenticatedPrincipalResponse toResponse(AuthenticationResult result);
-
-  @Mapping(target = "id", source = "userId")
-  @Mapping(target = "authorizationSubject", source = "keycloakSubject")
-  @Mapping(target = "email", source = "userEmail")
-  @Mapping(target = "name", source = "userName")
-  @Mapping(target = "avatarUrl", source = "userAvatarUrl", qualifiedByName = "toNullableUri")
-  @Mapping(target = "status", source = "userStatus")
-  @Mapping(target = "emailVerified", source = "userEmailVerified")
-  @Mapping(target = "createdAt", source = "userCreatedAt")
-  @Mapping(target = "updatedAt", source = "userUpdatedAt")
-  @BeanMapping(
-      ignoreUnmappedSourceProperties = {
-        "sessionId",
-        "authenticationMethod",
-        "authProviderId",
-        "expiresAt"
-      })
-  UserResponse toResponse(AuthenticatedPrincipal principal);
 
   ResourceGrantResponse toResponse(EffectiveGrant grant);
 

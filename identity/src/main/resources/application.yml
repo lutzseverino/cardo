@@ -38,10 +38,20 @@ cardo:
       realm: ${KEYCLOAK_REALM:cardo}
       client-id: ${KEYCLOAK_CLIENT_ID:cardo-identity}
       client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+      credential-setup-client-id: ${KEYCLOAK_CREDENTIAL_SETUP_CLIENT_ID:cardo-web}
+      credential-setup-redirect-uri: ${KEYCLOAK_CREDENTIAL_SETUP_REDIRECT_URI:http://localhost:3000/invitations/completed}
       user-id-claim-client-ids:
         - ${cardo.identity.keycloak.client-id}
         - identity
         - billing
+    operations:
+      dispatch-delay: ${IDENTITY_OPERATION_DISPATCH_DELAY:5s}
+      poll-delay: ${IDENTITY_OPERATION_POLL_DELAY:15s}
+      credential-setup-timeout: ${KEYCLOAK_CREDENTIAL_SETUP_LIFESPAN:24h}
+      retry-base-delay: ${IDENTITY_OPERATION_RETRY_BASE_DELAY:5s}
+      claim-lease: ${IDENTITY_OPERATION_CLAIM_LEASE:1m}
+      max-attempts: ${IDENTITY_OPERATION_MAX_ATTEMPTS:12}
+      batch-size: ${IDENTITY_OPERATION_BATCH_SIZE:50}
 
 server:
   port: ${IDENTITY_PORT:8081}

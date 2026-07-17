@@ -7,6 +7,8 @@ import io.github.lutzseverino.cardo.identity.api.model.AuthenticatedPrincipalRes
 import io.github.lutzseverino.cardo.identity.config.SessionProperties;
 import io.github.lutzseverino.cardo.identity.mapper.AuthenticationTransportMapper;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
+import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
+import io.github.lutzseverino.cardo.identity.reader.CurrentJwtReader;
 import io.github.lutzseverino.cardo.identity.service.AuthenticationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ public class SessionController implements SessionsApi {
   private final SessionProperties properties;
   private final AuthenticationTransportMapper mapper;
   private final AuthenticationService authenticationService;
+  private final CurrentJwtReader currentJwt;
 
   @Override
   public ResponseEntity<AuthenticatedPrincipalResponse> authenticate(
@@ -40,13 +43,14 @@ public class SessionController implements SessionsApi {
 
   @Override
   public ResponseEntity<AuthenticatedPrincipalResponse> getCurrentPrincipal() {
-    AuthenticationResult authentication = authenticationService.getCurrentPrincipal();
+    CurrentAuthentication current = currentJwt.current();
+    AuthenticationResult authentication = authenticationService.getCurrent(current);
     return ResponseEntity.ok(mapper.toResponse(authentication));
   }
 
   @Override
   public ResponseEntity<Void> deleteCurrentSession() {
-    authenticationService.revokeCurrent();
+    authenticationService.revoke(currentJwt.current().accessToken());
     return ResponseEntity.noContent()
         .header(HttpHeaders.SET_COOKIE, SessionCookies.expire(properties.cookieName()).toString())
         .build();

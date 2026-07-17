@@ -4,8 +4,8 @@ import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader
 import io.github.lutzseverino.cardo.billing.api.CheckoutSessionsApi;
 import io.github.lutzseverino.cardo.billing.api.model.CheckoutSessionResponse;
 import io.github.lutzseverino.cardo.billing.api.model.CreateCheckoutSessionRequest;
-import io.github.lutzseverino.cardo.billing.mapper.BillingSessionTransportMapper;
-import io.github.lutzseverino.cardo.billing.service.CheckoutSessionService;
+import io.github.lutzseverino.cardo.billing.mapper.CheckoutSessionTransportMapper;
+import io.github.lutzseverino.cardo.billing.workflow.CreateCheckoutSessionWorkflow;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CheckoutSessionController implements CheckoutSessionsApi {
 
-  private final BillingSessionTransportMapper mapper;
-  private final CheckoutSessionService checkoutSessions;
+  private final CheckoutSessionTransportMapper mapper;
+  private final CreateCheckoutSessionWorkflow createCheckoutSession;
   private final AuthenticatedUserReader users;
 
   @Override
@@ -27,7 +27,7 @@ public class CheckoutSessionController implements CheckoutSessionsApi {
       @Valid CreateCheckoutSessionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
-            mapper.toCheckoutResponse(
-                checkoutSessions.create(users.currentUser().id(), mapper.toInput(request))));
+            mapper.toResponse(
+                createCheckoutSession.create(users.currentUser().id(), mapper.toInput(request))));
   }
 }

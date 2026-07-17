@@ -1,7 +1,9 @@
 package io.github.lutzseverino.cardo.identity.provider;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface IdentityProvider {
@@ -10,7 +12,9 @@ public interface IdentityProvider {
 
   ProvisionedIdentity provisionProvisionalIdentity(String email);
 
-  void completePasswordIdentity(String subject, String password, String name);
+  void requestCredentialSetup(String subject, Duration lifespan);
+
+  Optional<CompletedIdentityProfile> completedIdentityProfile(String subject);
 
   void deleteIdentity(String subject);
 
@@ -25,6 +29,8 @@ public interface IdentityProvider {
   void revokeToken(String token);
 
   record ProvisionedIdentity(String subject) {}
+
+  record CompletedIdentityProfile(String name) {}
 
   record IssuedIdentityToken(
       String token, OffsetDateTime expiresAt, String subject, String sessionId) {}

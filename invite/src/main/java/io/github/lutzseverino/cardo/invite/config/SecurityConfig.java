@@ -1,7 +1,6 @@
 package io.github.lutzseverino.cardo.invite.config;
 
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
-import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader;
 import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvaluator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -31,11 +30,6 @@ public class SecurityConfig {
   }
 
   @Bean
-  AuthenticatedUserReader authenticatedUserReader() {
-    return new AuthenticatedUserReader();
-  }
-
-  @Bean
   MethodSecurityExpressionHandler methodSecurityExpressionHandler(
       PermissionEvaluator permissionEvaluator) {
     DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
@@ -60,9 +54,9 @@ public class SecurityConfig {
                     .requestMatchers(
                         "/openapi.json", "/docs/**", "/swagger-ui/**", "/v3/api-docs/**")
                     .permitAll()
-                    .requestMatchers(HttpMethod.GET, basePath + "/invitations/*")
+                    .requestMatchers(HttpMethod.GET, basePath + "/invite")
                     .permitAll()
-                    .requestMatchers(HttpMethod.POST, basePath + "/invitations/*/completion")
+                    .requestMatchers(HttpMethod.GET, basePath + "/invitation-tokens/*")
                     .permitAll()
                     .anyRequest()
                     .authenticated())

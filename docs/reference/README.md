@@ -30,7 +30,8 @@ Use the [reference template](../_templates/reference.template.md) for new refere
 
 ## Documents
 
-- [Application Boundary Types](application-boundary-types.md)
+- [Application Boundaries](application-boundaries.md)
+- [Cardo Application Boundary Layout](cardo-application-boundary-layout.md)
 - [Authorization Grant Lifecycle](authorization-grants.md)
 - [Data Protection Contracts](data-protection-contracts.md)
 - [Generated Client Code](generated-client-code.md)

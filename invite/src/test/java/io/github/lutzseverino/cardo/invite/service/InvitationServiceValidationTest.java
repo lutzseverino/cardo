@@ -4,17 +4,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import io.github.lutzseverino.cardo.authorization.access.AccessProfileService;
-import io.github.lutzseverino.cardo.authorization.grant.Grants;
-import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUser;
 import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
-import io.github.lutzseverino.cardo.invite.authorization.InvitationGrantPlanner;
 import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
 import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapperImpl;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
+import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
+import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
+import io.github.lutzseverino.cardo.invite.workflow.CreateInvitationWorkflow;
 import jakarta.validation.ConstraintViolationException;
+import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,24 +26,31 @@ import org.springframework.validation.beanvalidation.MethodValidationPostProcess
 @SpringJUnitConfig(InvitationServiceValidationTest.Config.class)
 class InvitationServiceValidationTest {
 
-  @Autowired private AccessProfileService accessProfiles;
-
   @Autowired private IdentityUsersClient identityUsers;
 
   @Autowired private InvitationRepository invitations;
 
   @Autowired private InvitationService invitationService;
 
+  @Autowired private CreateInvitationWorkflow createInvitation;
+
   @Test
   void validatesRequestsAtTheServiceBoundary() {
     CreateInvitationInput input =
         new CreateInvitationInput(
-            UUID.randomUUID(), "clinic", "employee@example.com", UUID.randomUUID());
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "clinic",
+            "employee@example.com",
+            "clinic:employee",
+            List.of(new InvitationGrantInput("clinic:clinic", "read")),
+            UUID.randomUUID(),
+            URI.create("https://clinic.example.com/invitations"));
 
-    assertThatThrownBy(() -> invitationService.create(inviter(), input))
+    assertThatThrownBy(() -> createInvitation.create("clinic", input))
         .isInstanceOf(ConstraintViolationException.class);
 
-    verifyNoInteractions(accessProfiles, identityUsers, invitations);
+    verifyNoInteractions(identityUsers, invitations);
   }
 
   @Test
@@ -53,8 +61,23 @@ class InvitationServiceValidationTest {
     verifyNoInteractions(invitations);
   }
 
-  private AuthenticatedUser inviter() {
-    return new AuthenticatedUser(UUID.randomUUID(), "owner-subject", "Owner");
+  @Test
+  void rejectsAnAcceptanceUrlThatCannotSafelyReceiveTheTokenPath() {
+    CreateInvitationInput input =
+        new CreateInvitationInput(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "clinic:clinic",
+            "employee@example.com",
+            "clinic:employee",
+            List.of(new InvitationGrantInput("clinic:clinic", "read")),
+            UUID.randomUUID(),
+            URI.create("https://clinic.example.com/invitations?source=email"));
+
+    assertThatThrownBy(() -> createInvitation.create("clinic", input))
+        .isInstanceOf(ConstraintViolationException.class);
+
+    verifyNoInteractions(identityUsers, invitations);
   }
 
   static class Config {
@@ -65,23 +88,8 @@ class InvitationServiceValidationTest {
     }
 
     @Bean
-    AccessProfileService accessProfiles() {
-      return mock(AccessProfileService.class);
-    }
-
-    @Bean
-    Grants grants() {
-      return mock(Grants.class);
-    }
-
-    @Bean
-    InvitationGrantPlanner invitationGrantPlanner() {
-      return new InvitationGrantPlanner();
-    }
-
-    @Bean
-    EmailSender email() {
-      return mock(EmailSender.class);
+    InvitationDelivery invitationDelivery() {
+      return mock(InvitationDelivery.class);
     }
 
     @Bean
@@ -91,7 +99,7 @@ class InvitationServiceValidationTest {
 
     @Bean
     InvitationProperties invitationProperties() {
-      return new InvitationProperties(Duration.ofHours(72), "https://app.example.com");
+      return new InvitationProperties(Duration.ofHours(72), Duration.ofMinutes(5));
     }
 
     @Bean
@@ -101,22 +109,20 @@ class InvitationServiceValidationTest {
 
     @Bean
     InvitationService invitationService(
-        AccessProfileService accessProfiles,
-        EmailSender email,
-        Grants grants,
-        IdentityUsersClient identityUsers,
-        InvitationGrantPlanner invitationGrantPlanner,
+        InvitationDelivery invitationDelivery,
         InvitationProperties invitationProperties,
         InvitationRepository invitations) {
       return new InvitationService(
-          accessProfiles,
-          email,
-          grants,
-          identityUsers,
-          invitationGrantPlanner,
+          invitationDelivery,
           new InvitationApplicationMapperImpl(),
           invitationProperties,
           invitations);
+    }
+
+    @Bean
+    CreateInvitationWorkflow createInvitationWorkflow(
+        IdentityUsersClient identityUsers, InvitationService invitations) {
+      return new CreateInvitationWorkflow(identityUsers, invitations);
     }
   }
 }

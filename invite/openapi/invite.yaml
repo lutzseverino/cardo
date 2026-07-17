@@ -3,9 +3,9 @@ info:
   title: Invite API
   version: 0.1.0
   description: >
-    Invite owns cross-product invitation lifecycle operations. Product-specific
-    access is expressed through tenant resource types and authorization access
-    profiles instead of product-owned invite models.
+    Invite owns cross-product invitation tokens, expiry, delivery, provisional
+    identity completion, lifecycle state, and generic access-grant staging.
+    Product services own the domain decision to create or accept an invitation.
   license:
     name: Proprietary
 servers:
@@ -14,7 +14,9 @@ tags:
   - name: Invite
     description: Invite service metadata.
   - name: Invitations
-    description: Cross-product invitations.
+    description: Product-service invitation operations.
+  - name: Invitation Tokens
+    description: Token-based invitation operations used by product acceptance flows.
 paths:
   /invite:
     get:
@@ -32,7 +34,7 @@ paths:
     post:
       tags: [Invitations]
       operationId: createInvitation
-      summary: Create an invitation.
+      summary: Create an invitation for the authenticated product service.
       security:
         - bearerAuth: []
       requestBody:
@@ -54,15 +56,17 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /invitations/{token}:
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /invitations/{invitationId}:
     parameters:
-      - $ref: "#/components/parameters/InvitationToken"
+      - $ref: "#/components/parameters/InvitationId"
     get:
       tags: [Invitations]
       operationId: getInvitation
-      summary: Get a pending invitation by token.
+      summary: Get an invitation owned by the authenticated product service.
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Invitation found.
@@ -70,58 +74,131 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InvitationResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "410":
-          $ref: "#/components/responses/Gone"
-  /invitations/{token}/completion:
-    parameters:
-      - $ref: "#/components/parameters/InvitationToken"
-    post:
-      tags: [Invitations]
-      operationId: completeInvitation
-      summary: Complete an invitation by finishing the invited identity user.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CompleteInvitationRequest"
-      responses:
-        "201":
-          description: Invitation completed.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InvitationCompletionResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "410":
-          $ref: "#/components/responses/Gone"
-  /invitations/{token}/acceptance:
-    parameters:
-      - $ref: "#/components/parameters/InvitationToken"
-    post:
-      tags: [Invitations]
-      operationId: acceptInvitation
-      summary: Accept an invitation with the current authenticated user.
-      security:
-        - bearerAuth: []
-      responses:
-        "204":
-          description: Invitation accepted.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /invitations/{invitationId}/acceptance:
+    parameters:
+      - $ref: "#/components/parameters/InvitationId"
+    post:
+      tags: [Invitations]
+      operationId: acceptInvitation
+      summary: Accept an invitation after the product has completed its domain transition.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInvitationRequest"
+      responses:
+        "200":
+          description: Invitation accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "410":
           $ref: "#/components/responses/Gone"
+  /invitations/{invitationId}/revocation:
+    parameters:
+      - $ref: "#/components/parameters/InvitationId"
+    post:
+      tags: [Invitations]
+      operationId: revokeInvitation
+      summary: Revoke a pending invitation.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Invitation revoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /invitation-tokens/{token}:
+    parameters:
+      - $ref: "#/components/parameters/InvitationToken"
+    get:
+      tags: [Invitation Tokens]
+      operationId: getInvitationByToken
+      summary: Inspect a pending invitation using its secret token.
+      responses:
+        "200":
+          description: Invitation found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationTokenResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+  /invitation-tokens/{token}/completion:
+    parameters:
+      - $ref: "#/components/parameters/InvitationToken"
+    post:
+      tags: [Invitation Tokens]
+      operationId: requestInvitationCompletion
+      summary: Durably request Keycloak-owned credential setup without accepting the invitation.
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: Credential setup saga accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationCompletionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+    get:
+      tags: [Invitation Tokens]
+      operationId: getInvitationCompletion
+      summary: Get the durable credential setup saga status.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Credential setup saga found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationCompletionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   securitySchemes:
     bearerAuth:
@@ -129,6 +206,13 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    InvitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     InvitationToken:
       name: token
       in: path
@@ -160,10 +244,35 @@ components:
     InvitationStatus:
       type: string
       enum: [pending, accepted, revoked]
+    InvitationGrantRequest:
+      type: object
+      required: [resourceType, action]
+      properties:
+        resourceType:
+          type: string
+          minLength: 1
+          pattern: "^[^:]+:[^:]+$"
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
+        action:
+          type: string
+          minLength: 1
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
     CreateInvitationRequest:
       type: object
-      required: [tenantId, tenantResourceType, email, accessProfileId]
+      required:
+        - requestId
+        - tenantId
+        - tenantResourceType
+        - email
+        - accessProfile
+        - grants
+        - invitedBy
+        - acceptUrlBase
       properties:
+        requestId:
+          type: string
+          format: uuid
+          description: Product-generated idempotency identifier.
         tenantId:
           type: string
           format: uuid
@@ -177,33 +286,141 @@ components:
           type: string
           format: email
           x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
-        accessProfileId:
-          type: string
-          format: uuid
-    CompleteInvitationRequest:
-      type: object
-      required: [name, password]
-      properties:
-        name:
+        accessProfile:
           type: string
           minLength: 1
+          pattern: "^[^:]+:.+$"
+          description: Product-owned stable profile reference retained for audit.
           x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
-        password:
+        grants:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/InvitationGrantRequest"
+        invitedBy:
           type: string
-          minLength: 8
-          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
+          format: uuid
+          description: Identity user that authorized the product invitation.
+        acceptUrlBase:
+          type: string
+          format: uri
+          description: Product-owned URL base; Invite appends the secret token as one path segment.
+    InvitationCompletionStatus:
+      type: string
+      enum: [requested, awaiting_identity, completed, failed]
+    InvitationCompletionResponse:
+      type: object
+      required:
+        - id
+        - invitationId
+        - invitedUserId
+        - status
+        - attemptCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        invitationId:
+          type: string
+          format: uuid
+        invitedUserId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/InvitationCompletionStatus"
+        attemptCount:
+          type: integer
+          format: int32
+        lastError:
+          type: string
+          nullable: true
+        actionExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AcceptInvitationRequest:
+      type: object
+      required: [acceptedAt]
+      properties:
+        acceptedAt:
+          type: string
+          format: date-time
+          description: >
+            Time the product committed its domain acceptance transition. Invite
+            bounds this assertion against invitation creation and current server
+            time using its configured clock-skew allowance.
     InvitationResponse:
       type: object
       required:
         - id
+        - requestId
         - tenantId
         - tenantResourceType
-        - accessProfileId
+        - accessProfile
         - invitedEmail
         - invitedUserId
+        - invitedBy
         - status
+        - expiresAt
         - createdAt
         - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        tenantResourceType:
+          type: string
+        accessProfile:
+          type: string
+        invitedEmail:
+          type: string
+          format: email
+        invitedUserId:
+          type: string
+          format: uuid
+        invitedBy:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expiresAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          nullable: true
+          format: date-time
+        revokedAt:
+          type: string
+          nullable: true
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    InvitationTokenResponse:
+      type: object
+      required: [id, tenantId, tenantResourceType, invitedEmail, expiresAt]
       properties:
         id:
           type: string
@@ -213,25 +430,10 @@ components:
           format: uuid
         tenantResourceType:
           type: string
-        accessProfileId:
-          type: string
-          format: uuid
         invitedEmail:
           type: string
           format: email
-        invitedUserId:
-          type: string
-          format: uuid
-        status:
-          $ref: "#/components/schemas/InvitationStatus"
-        acceptedAt:
-          type: string
-          nullable: true
-          format: date-time
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
+        expiresAt:
           type: string
           format: date-time
     CreateInvitationResponse:
@@ -243,9 +445,3 @@ components:
         acceptUrl:
           type: string
           format: uri
-    InvitationCompletionResponse:
-      type: object
-      required: [ok]
-      properties:
-        ok:
-          type: boolean

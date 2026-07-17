@@ -10,7 +10,7 @@ the same wiring and the packaged shape can stay product-neutral.
 | --- | --- | --- | --- | --- |
 | Identity | users, authentication, sessions, authenticated principal | `identity-client` | `identity-client-http` | `identity-product-auth` for accepting logged-in Cardo users |
 | Authorization | resource naming, permission evaluation, access profiles, grant staging, provider adapters | embedded Java APIs | none while authorization has no HTTP owner | embedded mechanics and docs |
-| Invite | invitation tokens, expiry, provisional identity completion, access-profile grant staging | none yet | none yet | products call the service API until a stable client is earned |
+| Invite | invitation tokens, expiry, delivery, provisional identity completion, lifecycle state, grant-snapshot staging | `invite-client` | `invite-client-http` | none until multiple products repeat durable invite orchestration |
 | Billing | customers, entitlements, checkout, portal, provider webhooks | `billing-client` | `billing-client-http` | none until products repeat billing guard or flow wiring |
 | Common | shared API errors, data markers, value objects, validation, cookie helpers | embedded Java APIs | none | none |
 | OpenAPI Support | generated transport mapping helpers and PATCH presence conversion | embedded Java APIs | none | none |
@@ -23,6 +23,10 @@ the same wiring and the packaged shape can stay product-neutral.
 - Keep invitation token lifecycle in Invite. Products own why an invitation is
   created, what resource it targets, and any domain lifecycle surrounding
   acceptance.
+- Treat Invite as an external owner from product workflows. Persist the
+  product-domain transition and a durable integration command together, then
+  invoke Invite after commit. Use the product invitation UUID as Invite's
+  `requestId` so create retries are idempotent.
 - Keep Authorization product-neutral. It provides mechanics; products decide
   which resources and actions exist.
 - Prefer Maven modules and Spring Boot auto-configuration when they match the
@@ -70,6 +74,36 @@ introspection responses for the configured TTL. Keep the TTL short so global
 Identity disablement is enforced quickly for already-issued JWTs. Keep
 introspection timeouts low because product requests wait on the fail-closed
 validation path.
+
+Use `invite-client` for compile-time product code and `invite-client-http` as a
+runtime dependency. Configure `cardo.invite.client.base-url` with the Invite
+`/api/v1` base URL. The HTTP client obtains a service token from the shared
+client-credentials provider; Invite derives product ownership from that token's
+OAuth client identifier.
+
+Invite's service also requires a positive product-caller boundary. Add the
+product OAuth client identifier to
+`cardo.invite.product-callers.allowed-client-ids`, create the `product-service`
+client role on the `cardo-invite` Keycloak client, and grant that role only to
+the product client's service account. Invite requires the resulting
+`cardo-invite:product-service` authority, the `cardo-invite` audience, and the
+allowlist entry; merely lacking a Cardo end-user claim never makes a token a
+service token.
+
+Invite create, accept, and revoke calls are integration effects. A product must
+not place them inside a local transaction and assume atomicity. Dispatch them
+from a durable command or outbox after the product transaction commits, and
+retry failures. Invite create is idempotent for `(product, requestId)`; accept
+and revoke are idempotent in their matching terminal state. Carry the product's
+committed acceptance timestamp in the durable accept command; Invite evaluates
+expiry against that business timestamp rather than the eventual retry time.
+
+Invitation credential setup is asynchronous and does not carry a password.
+Call the completion request and poll the same invitation-scoped completion
+resource until it is `completed` or `failed`. Failure is durable, and an
+explicit repeat of the same request restarts exhausted or expired work.
+Completion only establishes the Identity user; it never accepts the product
+invitation or applies the product's domain transition.
 
 When another Cardo capability starts to leak repeated product ceremony, first
 convert one active product and then a second independent consumer. If the shape

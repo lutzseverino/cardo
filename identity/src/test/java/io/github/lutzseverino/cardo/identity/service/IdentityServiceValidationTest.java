@@ -4,22 +4,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrantAuthorityReader;
 import io.github.lutzseverino.cardo.authorization.grant.Grants;
-import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.identity.authorization.IdentityGrantPlanner;
 import io.github.lutzseverino.cardo.identity.mapper.UserApplicationMapperImpl;
 import io.github.lutzseverino.cardo.identity.model.CreateUserInput;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.reader.AuthenticatedPrincipalReader;
-import io.github.lutzseverino.cardo.identity.reader.CurrentJwtReader;
+import io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenGrantReader;
 import io.github.lutzseverino.cardo.identity.repository.UserRepository;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
 
@@ -95,23 +92,8 @@ class IdentityServiceValidationTest {
     }
 
     @Bean
-    CurrentJwtReader currentJwt() {
-      return mock(CurrentJwtReader.class);
-    }
-
-    @Bean
-    JwtDecoder jwtDecoder() {
-      return mock(JwtDecoder.class);
-    }
-
-    @Bean
-    KeycloakAuthoritiesConverter keycloakAuthoritiesConverter() {
-      return new KeycloakAuthoritiesConverter();
-    }
-
-    @Bean
-    EffectiveGrantAuthorityReader effectiveGrantAuthorityReader() {
-      return new EffectiveGrantAuthorityReader();
+    AuthorizationTokenGrantReader tokenGrants() {
+      return mock(AuthorizationTokenGrantReader.class);
     }
 
     @Bean
@@ -129,18 +111,9 @@ class IdentityServiceValidationTest {
         IdentityProvider identityProvider,
         AuthenticatedPrincipalReader principals,
         RequestingPartyTokenClient requestingPartyTokens,
-        CurrentJwtReader currentJwt,
-        JwtDecoder jwtDecoder,
-        KeycloakAuthoritiesConverter authorities,
-        EffectiveGrantAuthorityReader grantReader) {
+        AuthorizationTokenGrantReader tokenGrants) {
       return new AuthenticationService(
-          identityProvider,
-          principals,
-          requestingPartyTokens,
-          currentJwt,
-          jwtDecoder,
-          authorities,
-          grantReader);
+          identityProvider, principals, requestingPartyTokens, tokenGrants);
     }
   }
 }

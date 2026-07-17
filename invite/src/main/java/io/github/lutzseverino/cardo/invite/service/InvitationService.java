@@ -1,128 +1,202 @@
 package io.github.lutzseverino.cardo.invite.service;
 
-import io.github.lutzseverino.cardo.authorization.access.AccessProfileService;
-import io.github.lutzseverino.cardo.authorization.grant.Grants;
-import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUser;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.common.model.EmailAddress;
-import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
-import io.github.lutzseverino.cardo.identity.client.ProvisionalUser;
-import io.github.lutzseverino.cardo.invite.InvitePermissions;
-import io.github.lutzseverino.cardo.invite.authorization.InvitationGrantPlanner;
 import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
 import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapper;
-import io.github.lutzseverino.cardo.invite.model.CompleteInvitationInput;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationResult;
 import io.github.lutzseverino.cardo.invite.model.Invitation;
+import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
 import io.github.lutzseverino.cardo.invite.model.InvitationResult;
 import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
+import io.github.lutzseverino.cardo.invite.model.InvitationTokenResult;
+import io.github.lutzseverino.cardo.invite.model.PendingInvitation;
+import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationProjection;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.net.URI;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Base64;
+import java.util.LinkedHashSet;
+import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
 @Service
-@RequiredArgsConstructor
 public class InvitationService {
 
-  private final Clock clock = Clock.systemUTC();
-  private final SecureRandom random = new SecureRandom();
-  private final AccessProfileService accessProfiles;
-  private final EmailSender email;
-  private final Grants grants;
-  private final IdentityUsersClient identityUsers;
-  private final InvitationGrantPlanner invitationGrantPlanner;
+  private final Clock clock;
+  private final SecureRandom random;
+  private final InvitationDelivery delivery;
   private final InvitationApplicationMapper mapper;
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
 
-  public InvitationResult get(@NotBlank String token) {
-    return mapper.toResult(validInvitation(token));
+  @Autowired
+  public InvitationService(
+      InvitationDelivery delivery,
+      InvitationApplicationMapper mapper,
+      InvitationProperties properties,
+      InvitationRepository invitations) {
+    this(Clock.systemUTC(), new SecureRandom(), delivery, mapper, properties, invitations);
   }
 
-  @Transactional
-  @PreAuthorize(
-      "hasPermission(#input.tenantId, #input.tenantResourceType, '"
-          + InvitePermissions.WRITE
-          + "')")
+  InvitationService(
+      Clock clock,
+      SecureRandom random,
+      InvitationDelivery delivery,
+      InvitationApplicationMapper mapper,
+      InvitationProperties properties,
+      InvitationRepository invitations) {
+    this.clock = clock;
+    this.random = random;
+    this.delivery = delivery;
+    this.mapper = mapper;
+    this.properties = properties;
+    this.invitations = invitations;
+  }
+
+  public InvitationTokenResult get(@NotBlank String token) {
+    InvitationProjection invitation = requirePendingProjection(token);
+    return new InvitationTokenResult(
+        invitation.getId(),
+        invitation.getTenantId(),
+        invitation.getTenantResourceType(),
+        invitation.getInvitedEmail(),
+        invitation.getExpiresAt());
+  }
+
+  public InvitationResult get(UUID invitationId, @NotBlank String product) {
+    InvitationProjection invitation = getProjection(invitationId);
+    requireOwner(invitation.getProduct(), product);
+    return mapper.toResult(invitation);
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Optional<CreateInvitationResult> findCreated(
+      @NotBlank String product, @Valid CreateInvitationInput input) {
+    invitations.lockCreation(product, input.requestId());
+    return invitations
+        .findProjectedByProductAndRequestId(product, input.requestId())
+        .map(
+            invitation -> {
+              requireSameRequest(invitation, product, input);
+              return toCreateResult(invitation);
+            });
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
   public CreateInvitationResult create(
-      AuthenticatedUser inviter, @Valid CreateInvitationInput input) {
-    accessProfiles
-        .availableProfile(
-            input.accessProfileId(), product(input.tenantResourceType()), input.tenantId())
-        .orElseThrow(
-            () -> ApiException.notFound("access_profile_not_found", "Access profile not found."));
-    ProvisionalUser invited = identityUsers.createProvisional(input.email());
-    try {
-      String token = generateInvitationToken();
-      Invitation invitation =
-          invitations.saveAndFlush(
-              new Invitation(
-                  input.tenantId(),
-                  input.tenantResourceType(),
-                  input.accessProfileId(),
-                  EmailAddress.of(input.email()).value(),
-                  invited.id(),
-                  invited.authorizationSubject(),
-                  inviter.id(),
-                  token));
-      String acceptUrl = "%s/invitations/%s".formatted(properties.webUrl(), token);
-      email.sendInvitation(input.email(), acceptUrl);
-      return new CreateInvitationResult(
-          mapper.toResult(getProjection(invitation.getId())), acceptUrl);
-    } catch (RuntimeException exception) {
-      cancelProvisionalUser(invited.id(), exception);
-      throw exception;
-    }
+      @NotBlank String product,
+      @Valid CreateInvitationInput input,
+      UUID invitedUserId,
+      String invitedAuthorizationSubject) {
+    String token = generateToken();
+    OffsetDateTime expiresAt = OffsetDateTime.now(clock).plus(properties.ttl());
+    Invitation invitation =
+        invitations.saveAndFlush(
+            new Invitation(
+                input.requestId(),
+                product,
+                input.tenantId(),
+                input.tenantResourceType(),
+                input.accessProfile(),
+                input.grants(),
+                EmailAddress.of(input.email()).value(),
+                invitedUserId,
+                invitedAuthorizationSubject,
+                input.invitedBy(),
+                input.acceptUrlBase(),
+                expiresAt,
+                token));
+    String acceptUrl = invitationUrl(input.acceptUrlBase(), token);
+    delivery.stage(invitation.getId());
+    return new CreateInvitationResult(
+        mapper.toResult(getProjection(invitation.getId())), acceptUrl);
   }
 
-  @Transactional
-  public void complete(@NotBlank String token, @Valid CompleteInvitationInput input) {
-    InvitationProjection invitation = validInvitation(token);
-    ProvisionalUser completed =
-        identityUsers.completeProvisional(
-            invitation.getInvitedUserId(), input.name(), input.password());
-    accept(invitation, completed.id(), completed.authorizationSubject());
-  }
-
-  @Transactional
-  public void accept(@NotBlank String token, AuthenticatedUser user) {
-    InvitationProjection invitation = validInvitation(token);
-    if (!invitation.getInvitedUserId().equals(user.id())) {
-      throw ApiException.forbidden(
-          "invitation_user_mismatch", "This invitation was created for another user.");
-    }
-    accept(invitation, user.id(), user.authorizationSubject());
-  }
-
-  private void accept(InvitationProjection invitation, UUID userId, String authorizationSubject) {
-    Invitation entity =
+  public PendingInvitation requirePending(@NotBlank String token, @NotBlank String product) {
+    InvitationProjection invitation =
         invitations
-            .findById(invitation.getId())
+            .findProjectedByToken(token)
             .orElseThrow(
                 () -> ApiException.notFound("invitation_not_found", "Invitation not found."));
-    entity.accept(OffsetDateTime.now(clock));
-    grants.stage(
-        invitationGrantPlanner.acceptance(
-            invitation.getTenantId(),
-            invitation.getTenantResourceType(),
-            authorizationSubject,
-            accessProfiles.grants(invitation.getAccessProfileId())));
+    requireOwner(invitation.getProduct(), product);
+    requirePending(invitation);
+    return toPending(invitation);
   }
 
-  private InvitationProjection validInvitation(String token) {
+  @Transactional(propagation = Propagation.MANDATORY)
+  public PendingInvitation requirePendingForUpdate(
+      @NotBlank String token, @NotBlank String product) {
+    Invitation invitation =
+        invitations
+            .findEntityByTokenForUpdate(token)
+            .orElseThrow(
+                () -> ApiException.notFound("invitation_not_found", "Invitation not found."));
+    requireOwner(invitation.getProduct(), product);
+    if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
+      throw ApiException.gone("invitation_unavailable", "Invitation is no longer available.");
+    }
+    if (!invitation.getExpiresAt().isAfter(OffsetDateTime.now(clock))) {
+      throw ApiException.gone("invitation_expired", "Invitation expired.");
+    }
+    return new PendingInvitation(
+        invitation.getId(),
+        invitation.getProduct(),
+        invitation.getTenantId(),
+        invitation.getTenantResourceType(),
+        invitation.getAccessProfile(),
+        invitation.grantInputs(),
+        invitation.getInvitedUserId(),
+        invitation.getInvitedAuthorizationSubject(),
+        invitation.getExpiresAt());
+  }
+
+  public UUID requireOwnedId(@NotBlank String token, @NotBlank String product) {
+    InvitationProjection invitation =
+        invitations
+            .findProjectedByToken(token)
+            .orElseThrow(
+                () -> ApiException.notFound("invitation_not_found", "Invitation not found."));
+    requireOwner(invitation.getProduct(), product);
+    return invitation.getId();
+  }
+
+  public PendingInvitation requirePending(
+      UUID invitationId, @NotBlank String product, OffsetDateTime acceptedAt) {
+    InvitationProjection invitation = getProjection(invitationId);
+    requireOwner(invitation.getProduct(), product);
+    requirePlausibleAcceptanceTime(invitation, acceptedAt);
+    requirePending(invitation, acceptedAt);
+    return toPending(invitation);
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public boolean accept(UUID invitationId, OffsetDateTime acceptedAt) {
+    return getEntity(invitationId).accept(acceptedAt);
+  }
+
+  @Transactional
+  public InvitationResult revoke(UUID invitationId, @NotBlank String product) {
+    Invitation invitation = getEntity(invitationId);
+    requireOwner(invitation.getProduct(), product);
+    invitation.revoke(OffsetDateTime.now(clock));
+    return mapper.toResult(getProjection(invitationId));
+  }
+
+  private InvitationProjection requirePendingProjection(String token) {
     InvitationProjection invitation =
         invitations
             .findProjectedByToken(token)
@@ -131,7 +205,7 @@ public class InvitationService {
     if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
       throw ApiException.gone("invitation_unavailable", "Invitation is no longer available.");
     }
-    if (invitation.getCreatedAt().plus(properties.ttl()).isBefore(OffsetDateTime.now(clock))) {
+    if (!invitation.getExpiresAt().isAfter(OffsetDateTime.now(clock))) {
       throw ApiException.gone("invitation_expired", "Invitation expired.");
     }
     return invitation;
@@ -143,21 +217,98 @@ public class InvitationService {
         .orElseThrow(() -> ApiException.notFound("invitation_not_found", "Invitation not found."));
   }
 
-  private String product(String tenantResourceType) {
-    return tenantResourceType.substring(0, tenantResourceType.indexOf(':'));
+  private Invitation getEntity(UUID id) {
+    return invitations
+        .findEntityById(id)
+        .orElseThrow(() -> ApiException.notFound("invitation_not_found", "Invitation not found."));
   }
 
-  private String generateInvitationToken() {
+  private PendingInvitation toPending(InvitationProjection invitation) {
+    return new PendingInvitation(
+        invitation.getId(),
+        invitation.getProduct(),
+        invitation.getTenantId(),
+        invitation.getTenantResourceType(),
+        invitation.getAccessProfile(),
+        invitation.getGrants().stream()
+            .map(grant -> new InvitationGrantInput(grant.getResourceType(), grant.getAction()))
+            .toList(),
+        invitation.getInvitedUserId(),
+        invitation.getInvitedAuthorizationSubject(),
+        invitation.getExpiresAt());
+  }
+
+  private CreateInvitationResult toCreateResult(InvitationProjection invitation) {
+    return new CreateInvitationResult(
+        mapper.toResult(invitation),
+        invitationUrl(URI.create(invitation.getAcceptUrlBase()), invitation.getToken()));
+  }
+
+  private void requirePending(InvitationProjection invitation) {
+    requirePending(invitation, OffsetDateTime.now(clock));
+  }
+
+  private void requirePending(InvitationProjection invitation, OffsetDateTime effectiveAt) {
+    if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
+      throw ApiException.gone("invitation_unavailable", "Invitation is no longer available.");
+    }
+    if (!invitation.getExpiresAt().isAfter(effectiveAt)) {
+      throw ApiException.gone("invitation_expired", "Invitation expired.");
+    }
+  }
+
+  private void requirePlausibleAcceptanceTime(
+      InvitationProjection invitation, OffsetDateTime acceptedAt) {
+    Duration skew = properties.acceptanceClockSkew();
+    OffsetDateTime now = OffsetDateTime.now(clock);
+    if (acceptedAt.isBefore(invitation.getCreatedAt().minus(skew))
+        || acceptedAt.isAfter(now.plus(skew))) {
+      throw ApiException.badRequest(
+          "invitation_acceptance_time_invalid",
+          "The product acceptance time is outside the allowed clock-skew window.");
+    }
+  }
+
+  private void requireOwner(String owner, String caller) {
+    if (!owner.equals(caller)) {
+      throw ApiException.forbidden(
+          "invitation_product_mismatch", "This invitation belongs to another product.");
+    }
+  }
+
+  private void requireSameRequest(
+      InvitationProjection invitation, String product, CreateInvitationInput input) {
+    requireOwner(invitation.getProduct(), product);
+    boolean same =
+        invitation.getTenantId().equals(input.tenantId())
+            && invitation.getTenantResourceType().equals(input.tenantResourceType())
+            && invitation.getAccessProfile().equals(input.accessProfile())
+            && invitation.getInvitedEmail().equals(EmailAddress.of(input.email()).value())
+            && invitation.getInvitedBy().equals(input.invitedBy())
+            && URI.create(invitation.getAcceptUrlBase()).equals(input.acceptUrlBase())
+            && new LinkedHashSet<>(
+                    invitation.getGrants().stream()
+                        .map(
+                            grant ->
+                                new InvitationGrantInput(
+                                    grant.getResourceType(), grant.getAction()))
+                        .toList())
+                .equals(new LinkedHashSet<>(input.grants()));
+    if (!same) {
+      throw ApiException.conflict(
+          "invitation_request_conflict",
+          "The invitation request identifier was already used with different data.");
+    }
+  }
+
+  private String generateToken() {
     byte[] bytes = new byte[32];
     random.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
-  private void cancelProvisionalUser(UUID userId, RuntimeException original) {
-    try {
-      identityUsers.cancelProvisional(userId);
-    } catch (RuntimeException compensationFailure) {
-      original.addSuppressed(compensationFailure);
-    }
+  private String invitationUrl(URI base, String token) {
+    String value = base.toString();
+    return (value.endsWith("/") ? value : value + "/") + token;
   }
 }

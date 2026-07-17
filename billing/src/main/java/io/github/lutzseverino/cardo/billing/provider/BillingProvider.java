@@ -6,8 +6,14 @@ import java.util.UUID;
 
 public interface BillingProvider {
 
-  BillingSessionResult createCheckoutSession(
-      UUID subjectId, String product, URI successUrl, URI cancelUrl);
+  String name();
 
-  BillingSessionResult createPortalSession(UUID subjectId, URI returnUrl);
+  String createCustomer(UUID subjectId);
+
+  void deleteCustomer(String providerCustomerId);
+
+  BillingSessionResult createCheckoutSession(
+      UUID subjectId, String providerCustomerId, String product, URI successUrl, URI cancelUrl);
+
+  BillingSessionResult createPortalSession(String providerCustomerId, URI returnUrl);
 }

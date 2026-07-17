@@ -3,10 +3,10 @@ package io.github.lutzseverino.cardo.billing.integration.stripe;
 import io.github.lutzseverino.cardo.billing.config.StripeProperties;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import java.util.List;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-@Service
+@Component
 class StripeCheckoutCatalog {
 
   private final List<StripeProperties.CheckoutPrice> prices;

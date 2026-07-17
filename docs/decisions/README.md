@@ -31,3 +31,4 @@ Use the [decision template](../_templates/decision.template.md) for new decision
 ## Records
 
 - [Keep Authorization Embedded Until It Owns HTTP](0001-keep-authorization-embedded-until-it-owns-http.md)
+- [Use Durable Identity Credential-Setup Sagas](0002-use-durable-identity-credential-setup-sagas.md)

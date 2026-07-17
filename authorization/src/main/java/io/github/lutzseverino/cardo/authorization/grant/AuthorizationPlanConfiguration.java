@@ -1,10 +1,12 @@
 package io.github.lutzseverino.cardo.authorization.grant;
 
 import io.github.lutzseverino.cardo.authorization.AuthorizationAdminClient;
+import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.modulith.events.FailedEventPublications;
+import org.springframework.modulith.events.IncompleteEventPublications;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableScheduling
@@ -42,7 +44,9 @@ public class AuthorizationPlanConfiguration {
   }
 
   @Bean
-  AuthorizationPlanRecovery authorizationPlanRecovery(FailedEventPublications publications) {
-    return new AuthorizationPlanRecovery(publications);
+  AuthorizationPlanRecovery authorizationPlanRecovery(
+      IncompleteEventPublications publications,
+      @Value("${cardo.authorization.plans.retry-delay:PT1M}") Duration retryDelay) {
+    return new AuthorizationPlanRecovery(publications, retryDelay);
   }
 }

@@ -4,8 +4,8 @@ import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader
 import io.github.lutzseverino.cardo.billing.api.PortalSessionsApi;
 import io.github.lutzseverino.cardo.billing.api.model.CreatePortalSessionRequest;
 import io.github.lutzseverino.cardo.billing.api.model.PortalSessionResponse;
-import io.github.lutzseverino.cardo.billing.mapper.BillingSessionTransportMapper;
-import io.github.lutzseverino.cardo.billing.service.PortalSessionService;
+import io.github.lutzseverino.cardo.billing.mapper.PortalSessionTransportMapper;
+import io.github.lutzseverino.cardo.billing.workflow.CreatePortalSessionWorkflow;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PortalSessionController implements PortalSessionsApi {
 
-  private final BillingSessionTransportMapper mapper;
-  private final PortalSessionService portalSessions;
+  private final PortalSessionTransportMapper mapper;
+  private final CreatePortalSessionWorkflow createPortalSession;
   private final AuthenticatedUserReader users;
 
   @Override
@@ -27,7 +27,7 @@ public class PortalSessionController implements PortalSessionsApi {
       @Valid CreatePortalSessionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
-            mapper.toPortalResponse(
-                portalSessions.create(users.currentUser().id(), mapper.toInput(request))));
+            mapper.toResponse(
+                createPortalSession.create(users.currentUser().id(), mapper.toInput(request))));
   }
 }

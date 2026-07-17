@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
+import io.github.lutzseverino.cardo.identity.client.IdentityOperation;
+import io.github.lutzseverino.cardo.identity.client.IdentityOperationStatus;
 import io.github.lutzseverino.cardo.identity.client.IdentityUser;
 import io.github.lutzseverino.cardo.identity.client.IdentityUserStatus;
 import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
@@ -106,5 +108,32 @@ class HttpIdentityUsersClientTest {
     ArgumentCaptor<SearchUsersRequest> request = ArgumentCaptor.forClass(SearchUsersRequest.class);
     verify(users).searchUsers(request.capture());
     assertThat(request.getValue().getAuthorizationSubjects()).containsExactly("subject-1");
+  }
+
+  @Test
+  void mapsInspectableProvisionalDeletionOperations() {
+    UsersApi users = mock(UsersApi.class);
+    HttpIdentityUsersClient client = new HttpIdentityUsersClient(users);
+    UUID userId = UUID.randomUUID();
+    UUID operationId = UUID.randomUUID();
+    OffsetDateTime now = OffsetDateTime.parse("2026-07-17T12:00:00Z");
+    io.github.lutzseverino.cardo.identity.client.http.generated.IdentityOperationResponse response =
+        new io.github.lutzseverino.cardo.identity.client.http.generated.IdentityOperationResponse()
+            .id(operationId)
+            .userId(userId)
+            .status(
+                io.github.lutzseverino.cardo.identity.client.http.generated.IdentityOperationStatus
+                    .REQUESTED)
+            .attemptCount(0)
+            .createdAt(now)
+            .updatedAt(now);
+    when(users.cancelProvisionalUser(userId)).thenReturn(response);
+    when(users.getProvisionalDeletion(userId)).thenReturn(response);
+
+    IdentityOperation expected =
+        new IdentityOperation(
+            operationId, userId, IdentityOperationStatus.REQUESTED, 0, null, null, null, now, now);
+    assertThat(client.cancelProvisional(userId)).isEqualTo(expected);
+    assertThat(client.getProvisionalDeletion(userId)).isEqualTo(expected);
   }
 }

@@ -3,7 +3,9 @@ package io.github.lutzseverino.cardo.authorization.access;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 
+@Service
 public class AccessProfileService {
 
   private final AccessProfileRepository profiles;
@@ -15,13 +17,12 @@ public class AccessProfileService {
     this.grants = grants;
   }
 
-  public List<AccessProfileProjection> availableProfiles(String product, UUID tenantId) {
-    return profiles.findAvailable(product, tenantId);
+  public List<AccessProfileResult> listAvailable(String product, UUID tenantId) {
+    return profiles.findAvailable(product, tenantId).stream().map(this::toResult).toList();
   }
 
-  public Optional<AccessProfileProjection> availableProfile(
-      UUID profileId, String product, UUID tenantId) {
-    return profiles.findAvailableById(profileId, product, tenantId);
+  public Optional<AccessProfileResult> getAvailable(UUID profileId, String product, UUID tenantId) {
+    return profiles.findAvailableById(profileId, product, tenantId).map(this::toResult);
   }
 
   public List<AccessGrant> grants(UUID profileId) {
@@ -30,5 +31,15 @@ public class AccessProfileService {
             grant ->
                 new AccessGrant(grant.getResourceType(), grant.getResourceId(), grant.getAction()))
         .toList();
+  }
+
+  private AccessProfileResult toResult(AccessProfileProjection profile) {
+    return new AccessProfileResult(
+        profile.getId(),
+        profile.getProduct(),
+        profile.getTenantId(),
+        profile.getName(),
+        profile.getDescription(),
+        profile.isTemplate());
   }
 }
