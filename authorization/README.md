@@ -36,3 +36,9 @@ own product policy.
 There is no HTTP client module because Authorization does not own an HTTP
 runtime. Keep using the embedded Java APIs unless Authorization is deliberately
 extracted into a service.
+
+## Documentation
+
+Start with the [Authorization documentation index](docs/README.md).
+Cross-project architecture and conventions remain in the
+[Cardo documentation](../docs/README.md).

@@ -16,3 +16,8 @@ only if multiple products repeat the same invite lifecycle wiring.
 Products still own why an invitation is created, which tenant/resource it
 targets, which access profile is used, and what product lifecycle should happen
 around acceptance.
+
+## Documentation
+
+Start with the [Invite documentation index](docs/README.md). Cross-project
+architecture and conventions remain in the [Cardo documentation](../docs/README.md).

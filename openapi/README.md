@@ -44,3 +44,9 @@ operation-specific adapters, enum conversions, and application inputs. There is
 no HTTP client or product integration module here; products import
 `openapi-support` only when the shared conversion helpers remove local mapping
 noise.
+
+## Documentation
+
+Start with the [OpenAPI Support documentation index](docs/README.md).
+Cross-project architecture and conventions remain in the
+[Cardo documentation](../docs/README.md).

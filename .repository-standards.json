@@ -1,8 +1,22 @@
 {
-  "standards-version": 1,
-  "standards-release": "1.0.3",
+  "standards-version": 2,
+  "standards-release": "1.1.0",
   "profiles": ["common", "documentation", "spring-boot"],
   "variables": {},
+  "boundaries": [
+    {"path": ".", "type": "repository", "title": "Cardo"},
+    {"path": "common", "type": "project", "title": "Common"},
+    {"path": "openapi", "type": "project", "title": "OpenAPI Support"},
+    {"path": "authorization", "type": "project", "title": "Authorization"},
+    {"path": "identity", "type": "project", "title": "Identity"},
+    {"path": "identity/client", "type": "project", "title": "Identity Client API"},
+    {"path": "identity/client-http", "type": "project", "title": "Identity HTTP Client"},
+    {"path": "identity/product-auth", "type": "project", "title": "Identity Product Auth"},
+    {"path": "invite", "type": "project", "title": "Invite"},
+    {"path": "billing", "type": "project", "title": "Billing"},
+    {"path": "billing/client", "type": "project", "title": "Billing Client API"},
+    {"path": "billing/client-http", "type": "project", "title": "Billing HTTP Client"}
+  ],
   "local-fragments": {
     ".gitignore": [".repository-standards/gitignore.local"]
   },

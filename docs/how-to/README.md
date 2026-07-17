@@ -11,7 +11,6 @@ How-to guides help a reader complete a specific task.
 
 ## Do Not Use This Section For
 
-- broad learning paths; use [Tutorials](../tutorials/README.md)
 - conceptual explanations; use [Explanation](../explanation/README.md)
 - factual contracts; use [Reference](../reference/README.md)
 - ephemeral notes that are not intended as durable documentation
