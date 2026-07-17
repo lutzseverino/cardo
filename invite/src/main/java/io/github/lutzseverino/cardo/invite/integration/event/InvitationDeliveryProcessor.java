@@ -14,7 +14,12 @@ class InvitationDeliveryProcessor {
   private final InvitationRepository invitations;
 
   InvitationDeliveryProcessor(InvitationSender sender, InvitationRepository invitations) {
-    this.clock = Clock.systemUTC();
+    this(Clock.systemUTC(), sender, invitations);
+  }
+
+  InvitationDeliveryProcessor(
+      Clock clock, InvitationSender sender, InvitationRepository invitations) {
+    this.clock = clock;
     this.sender = sender;
     this.invitations = invitations;
   }
@@ -25,7 +30,7 @@ class InvitationDeliveryProcessor {
             .findProjectedById(delivery.invitationId())
             .orElseThrow(() -> new IllegalStateException("Invitation delivery target not found."));
     if (!InvitationStatus.PENDING.equals(invitation.getStatus())
-        || invitation.getExpiresAt().isBefore(OffsetDateTime.now(clock))) {
+        || !invitation.getExpiresAt().isAfter(OffsetDateTime.now(clock))) {
       return;
     }
     sender.send(

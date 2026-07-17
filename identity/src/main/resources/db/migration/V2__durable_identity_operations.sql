@@ -13,7 +13,6 @@ CREATE TABLE identity_operations (
   version bigint NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT uk_identity_operations_user_type UNIQUE (user_id, operation_type),
   CONSTRAINT chk_identity_operations_type
     CHECK (operation_type IN ('CREDENTIAL_SETUP', 'PROVISIONAL_DELETION')),
   CONSTRAINT chk_identity_operations_status
@@ -27,3 +26,7 @@ CREATE TABLE identity_operations (
 
 CREATE INDEX idx_identity_operations_ready
   ON identity_operations (status, next_attempt_at, created_at);
+
+CREATE UNIQUE INDEX uk_identity_operations_active_user_type
+  ON identity_operations (user_id, operation_type)
+  WHERE status IN ('REQUESTED', 'AWAITING_USER');

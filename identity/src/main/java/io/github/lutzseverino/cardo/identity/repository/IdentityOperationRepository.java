@@ -1,9 +1,11 @@
 package io.github.lutzseverino.cardo.identity.repository;
 
 import io.github.lutzseverino.cardo.identity.model.IdentityOperation;
+import io.github.lutzseverino.cardo.identity.model.IdentityOperationStatus;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationType;
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,7 +17,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface IdentityOperationRepository extends JpaRepository<IdentityOperation, UUID> {
 
-  Optional<IdentityOperation> findEntityByUserIdAndType(UUID userId, IdentityOperationType type);
+  Optional<IdentityOperation> findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+      UUID userId, IdentityOperationType type);
+
+  Optional<IdentityOperation> findFirstEntityByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(
+      UUID userId, IdentityOperationType type, Collection<IdentityOperationStatus> statuses);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select operation from IdentityOperation operation where operation.id = :id")

@@ -9,7 +9,9 @@ import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.provider.InvitationSender;
 import io.github.lutzseverino.cardo.invite.repository.InvitationProjection;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
+import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -59,6 +61,24 @@ class InvitationDeliveryProcessorTest {
     when(invitation.getExpiresAt()).thenReturn(OffsetDateTime.now().minusDays(1));
 
     processor(sender, invitations).deliver(new InvitationDeliveryRequested(invitationId));
+
+    verifyNoInteractions(sender);
+  }
+
+  @Test
+  void doesNotDeliverAtTheExactExpiryDeadline() {
+    OffsetDateTime deadline = OffsetDateTime.parse("2030-07-17T10:00:00Z");
+    InvitationSender sender = mock(InvitationSender.class);
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    InvitationProjection invitation = mock(InvitationProjection.class);
+    UUID invitationId = UUID.randomUUID();
+    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(invitation));
+    when(invitation.getStatus()).thenReturn(InvitationStatus.PENDING);
+    when(invitation.getExpiresAt()).thenReturn(deadline);
+
+    new InvitationDeliveryProcessor(
+            Clock.fixed(deadline.toInstant(), ZoneOffset.UTC), sender, invitations)
+        .deliver(new InvitationDeliveryRequested(invitationId));
 
     verifyNoInteractions(sender);
   }

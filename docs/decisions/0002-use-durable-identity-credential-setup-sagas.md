@@ -35,6 +35,9 @@ operation row is the durable saga state and dispatch work item for that service:
   reschedule, complete, or fail work using optimistic concurrency and retry leases.
 - Cross-service requests are idempotent. A repeated operation id with different ownership data is
   rejected.
+- Identity retains terminal credential-setup history while allowing at most one active setup
+  operation per user. A later invitation may create a new operation after the earlier operation
+  reaches a terminal state.
 - Invite serializes operation creation on the invitation row, so concurrent equivalent requests
   resolve to the same operation rather than leaking a uniqueness failure.
 - The invitation's hard expiry is persisted and propagated to Identity. It caps the Keycloak

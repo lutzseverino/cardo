@@ -16,8 +16,11 @@ import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationProjection;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
 import java.net.URI;
+import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -132,6 +135,25 @@ class InvitationServiceTest {
     verify(delivery).stage(invitationId);
   }
 
+  @Test
+  void tokenIsExpiredAtTheExactDeadline() {
+    OffsetDateTime deadline = OffsetDateTime.parse("2030-07-17T10:00:00Z");
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    InvitationProjection projection = mock(InvitationProjection.class);
+    when(invitations.findProjectedByToken("token-1")).thenReturn(Optional.of(projection));
+    when(projection.getStatus())
+        .thenReturn(io.github.lutzseverino.cardo.invite.model.InvitationStatus.PENDING);
+    when(projection.getExpiresAt()).thenReturn(deadline);
+
+    assertThatThrownBy(
+            () ->
+                service(invitations, Clock.fixed(deadline.toInstant(), ZoneOffset.UTC))
+                    .get("token-1"))
+        .isInstanceOf(ApiException.class)
+        .extracting(exception -> ((ApiException) exception).code())
+        .isEqualTo("invitation_expired");
+  }
+
   private CreateInvitationInput input() {
     return new CreateInvitationInput(
         UUID.randomUUID(),
@@ -146,6 +168,16 @@ class InvitationServiceTest {
 
   private InvitationService service(InvitationRepository invitations) {
     return new InvitationService(
+        mock(InvitationDelivery.class),
+        mock(InvitationApplicationMapper.class),
+        new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),
+        invitations);
+  }
+
+  private InvitationService service(InvitationRepository invitations, Clock clock) {
+    return new InvitationService(
+        clock,
+        new SecureRandom(),
         mock(InvitationDelivery.class),
         mock(InvitationApplicationMapper.class),
         new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),

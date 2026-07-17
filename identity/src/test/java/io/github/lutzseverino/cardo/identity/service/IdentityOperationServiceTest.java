@@ -2,6 +2,8 @@ package io.github.lutzseverino.cardo.identity.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -37,9 +39,11 @@ class IdentityOperationServiceTest {
     User invited = User.invited("subject-1", "employee@example.com");
     when(users.findEntityByIdForUpdate(USER_ID)).thenReturn(Optional.of(invited));
     when(operations.findById(OPERATION_ID)).thenReturn(Optional.empty());
-    when(operations.findEntityByUserIdAndType(USER_ID, IdentityOperationType.CREDENTIAL_SETUP))
+    when(operations.findFirstEntityByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(
+            eq(USER_ID), eq(IdentityOperationType.CREDENTIAL_SETUP), anyCollection()))
         .thenReturn(Optional.empty());
-    when(operations.findEntityByUserIdAndType(USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
+    when(operations.findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+            USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
         .thenReturn(Optional.empty());
     when(operations.saveAndFlush(org.mockito.ArgumentMatchers.any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -59,9 +63,11 @@ class IdentityOperationServiceTest {
     when(users.findEntityByIdForUpdate(USER_ID))
         .thenReturn(Optional.of(User.invited("subject-1", "employee@example.com")));
     when(operations.findById(OPERATION_ID)).thenReturn(Optional.empty());
-    when(operations.findEntityByUserIdAndType(USER_ID, IdentityOperationType.CREDENTIAL_SETUP))
+    when(operations.findFirstEntityByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(
+            eq(USER_ID), eq(IdentityOperationType.CREDENTIAL_SETUP), anyCollection()))
         .thenReturn(Optional.empty());
-    when(operations.findEntityByUserIdAndType(USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
+    when(operations.findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+            USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
         .thenReturn(Optional.of(deletion));
 
     assertThatThrownBy(
@@ -79,7 +85,8 @@ class IdentityOperationServiceTest {
     UserRepository users = mock(UserRepository.class);
     IdentityOperation deletion = failedDeletion();
     User active = new User("subject-1", "employee@example.com", "Employee");
-    when(operations.findEntityByUserIdAndType(USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
+    when(operations.findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+            USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
         .thenReturn(Optional.of(deletion));
     when(users.findEntityByIdForUpdate(USER_ID)).thenReturn(Optional.of(active));
 
@@ -97,13 +104,72 @@ class IdentityOperationServiceTest {
     IdentityOperation deletion =
         IdentityOperation.provisionalDeletion(OPERATION_ID, USER_ID, "subject-1", NOW);
     deletion.complete(NOW);
-    when(operations.findEntityByUserIdAndType(USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
+    when(operations.findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+            USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
         .thenReturn(Optional.of(deletion));
 
     assertThat(service(operations, users).requestProvisionalDeletion(USER_ID).status())
         .isEqualTo(IdentityOperationStatus.COMPLETED);
 
     verify(users, never()).findEntityByIdForUpdate(USER_ID);
+  }
+
+  @Test
+  void newInvitationCanStartAfterAnEarlierCredentialSetupReachedTerminalState() {
+    IdentityOperationRepository operations = mock(IdentityOperationRepository.class);
+    UserRepository users = mock(UserRepository.class);
+    UUID nextOperationId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    when(users.findEntityByIdForUpdate(USER_ID))
+        .thenReturn(Optional.of(User.invited("subject-1", "employee@example.com")));
+    when(operations.findById(nextOperationId)).thenReturn(Optional.empty());
+    when(operations.findFirstEntityByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(
+            eq(USER_ID), eq(IdentityOperationType.CREDENTIAL_SETUP), anyCollection()))
+        .thenReturn(Optional.empty());
+    when(operations.findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+            USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
+        .thenReturn(Optional.empty());
+    when(operations.saveAndFlush(org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    var result =
+        service(operations, users)
+            .requestCredentialSetup(nextOperationId, USER_ID, NOT_AFTER.plusDays(1));
+
+    assertThat(result.id()).isEqualTo(nextOperationId);
+    assertThat(result.status()).isEqualTo(IdentityOperationStatus.REQUESTED);
+  }
+
+  @Test
+  void failedOperationCannotRestartWhileANewerCredentialSetupIsActive() {
+    IdentityOperationRepository operations = mock(IdentityOperationRepository.class);
+    UserRepository users = mock(UserRepository.class);
+    IdentityOperation failed =
+        IdentityOperation.credentialSetup(OPERATION_ID, USER_ID, "subject-1", NOT_AFTER, NOW);
+    failed.expire("Previous invitation expired.", NOW);
+    IdentityOperation active =
+        IdentityOperation.credentialSetup(
+            UUID.fromString("33333333-3333-3333-3333-333333333333"),
+            USER_ID,
+            "subject-1",
+            NOT_AFTER.plusDays(1),
+            NOW);
+    when(users.findEntityByIdForUpdate(USER_ID))
+        .thenReturn(Optional.of(User.invited("subject-1", "employee@example.com")));
+    when(operations.findById(OPERATION_ID)).thenReturn(Optional.of(failed));
+    when(operations.findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+            USER_ID, IdentityOperationType.PROVISIONAL_DELETION))
+        .thenReturn(Optional.empty());
+    when(operations.findFirstEntityByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(
+            eq(USER_ID), eq(IdentityOperationType.CREDENTIAL_SETUP), anyCollection()))
+        .thenReturn(Optional.of(active));
+
+    assertThatThrownBy(
+            () ->
+                service(operations, users).requestCredentialSetup(OPERATION_ID, USER_ID, NOT_AFTER))
+        .isInstanceOf(ApiException.class)
+        .hasMessage("Credential setup is already active under another operation identifier.");
+
+    assertThat(failed.getStatus()).isEqualTo(IdentityOperationStatus.FAILED);
   }
 
   private IdentityOperation failedDeletion() {

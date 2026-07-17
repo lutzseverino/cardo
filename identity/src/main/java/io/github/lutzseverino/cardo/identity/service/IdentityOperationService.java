@@ -18,6 +18,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -28,6 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class IdentityOperationService {
+
+  private static final Set<IdentityOperationStatus> ACTIVE_STATUSES =
+      Set.of(IdentityOperationStatus.REQUESTED, IdentityOperationStatus.AWAITING_USER);
 
   private final Clock clock = Clock.systemUTC();
   private final IdentityOperationRepository operations;
@@ -54,6 +58,9 @@ public class IdentityOperationService {
       }
       requireNoDeletion(userId);
       requireCredentialSetupStatus(user, operation, now);
+      if (IdentityOperationStatus.FAILED.equals(operation.getStatus())) {
+        requireNoOtherActiveCredentialSetup(userId, operationId);
+      }
       operation.retry(now);
       return toResult(operation);
     }
@@ -61,8 +68,7 @@ public class IdentityOperationService {
       throw ApiException.conflict(
           "credential_setup_expired", "Credential setup deadline already passed.");
     }
-    operations
-        .findEntityByUserIdAndType(userId, IdentityOperationType.CREDENTIAL_SETUP)
+    findActiveOperation(userId, IdentityOperationType.CREDENTIAL_SETUP)
         .ifPresent(
             operation -> {
               throw ApiException.conflict(
@@ -90,7 +96,7 @@ public class IdentityOperationService {
   public IdentityOperationResult requestProvisionalDeletion(UUID userId) {
     OffsetDateTime now = now();
     Optional<IdentityOperation> observed =
-        operations.findEntityByUserIdAndType(userId, IdentityOperationType.PROVISIONAL_DELETION);
+        findLatestOperation(userId, IdentityOperationType.PROVISIONAL_DELETION);
     if (observed
         .map(IdentityOperation::getStatus)
         .filter(IdentityOperationStatus.COMPLETED::equals)
@@ -101,14 +107,15 @@ public class IdentityOperationService {
     Optional<User> lockedUser = users.findEntityByIdForUpdate(userId);
     if (lockedUser.isEmpty()) {
       return operations
-          .findEntityByUserIdAndType(userId, IdentityOperationType.PROVISIONAL_DELETION)
+          .findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+              userId, IdentityOperationType.PROVISIONAL_DELETION)
           .filter(operation -> IdentityOperationStatus.COMPLETED.equals(operation.getStatus()))
           .map(this::toResult)
           .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
     }
 
     Optional<IdentityOperation> existing =
-        operations.findEntityByUserIdAndType(userId, IdentityOperationType.PROVISIONAL_DELETION);
+        findLatestOperation(userId, IdentityOperationType.PROVISIONAL_DELETION);
     if (existing.isPresent()) {
       IdentityOperation operation = existing.orElseThrow();
       if (IdentityOperationStatus.COMPLETED.equals(operation.getStatus())) {
@@ -132,7 +139,8 @@ public class IdentityOperationService {
   @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public IdentityOperationResult getProvisionalDeletion(UUID userId) {
     return operations
-        .findEntityByUserIdAndType(userId, IdentityOperationType.PROVISIONAL_DELETION)
+        .findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(
+            userId, IdentityOperationType.PROVISIONAL_DELETION)
         .map(this::toResult)
         .orElseThrow(
             () ->
@@ -238,8 +246,7 @@ public class IdentityOperationService {
   }
 
   private void requireNoDeletion(UUID userId) {
-    operations
-        .findEntityByUserIdAndType(userId, IdentityOperationType.PROVISIONAL_DELETION)
+    findLatestOperation(userId, IdentityOperationType.PROVISIONAL_DELETION)
         .ifPresent(
             operation -> {
               throw ApiException.conflict(
@@ -265,17 +272,32 @@ public class IdentityOperationService {
   }
 
   private void requireNoCredentialSetup(UUID userId) {
-    operations
-        .findEntityByUserIdAndType(userId, IdentityOperationType.CREDENTIAL_SETUP)
-        .filter(
-            operation ->
-                !IdentityOperationStatus.FAILED.equals(operation.getStatus())
-                    && !IdentityOperationStatus.COMPLETED.equals(operation.getStatus()))
+    findActiveOperation(userId, IdentityOperationType.CREDENTIAL_SETUP)
         .ifPresent(
             operation -> {
               throw ApiException.conflict(
                   "identity_activation_pending", "Credential setup is pending for this identity.");
             });
+  }
+
+  private void requireNoOtherActiveCredentialSetup(UUID userId, UUID operationId) {
+    findActiveOperation(userId, IdentityOperationType.CREDENTIAL_SETUP)
+        .filter(operation -> !operation.getId().equals(operationId))
+        .ifPresent(
+            operation -> {
+              throw ApiException.conflict(
+                  "identity_operation_conflict",
+                  "Credential setup is already active under another operation identifier.");
+            });
+  }
+
+  private Optional<IdentityOperation> findLatestOperation(UUID userId, IdentityOperationType type) {
+    return operations.findFirstEntityByUserIdAndTypeOrderByCreatedAtDesc(userId, type);
+  }
+
+  private Optional<IdentityOperation> findActiveOperation(UUID userId, IdentityOperationType type) {
+    return operations.findFirstEntityByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(
+        userId, type, ACTIVE_STATUSES);
   }
 
   private User requireUser(UUID userId) {

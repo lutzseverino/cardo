@@ -7,7 +7,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -19,12 +18,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(
-    name = "identity_operations",
-    uniqueConstraints =
-        @UniqueConstraint(
-            name = "uk_identity_operations_user_type",
-            columnNames = {"user_id", "operation_type"}))
+@Table(name = "identity_operations")
 public class IdentityOperation extends AuditedEntity {
 
   @Id private UUID id;

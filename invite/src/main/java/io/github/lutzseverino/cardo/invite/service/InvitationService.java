@@ -26,7 +26,7 @@ import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,15 +34,38 @@ import org.springframework.validation.annotation.Validated;
 
 @Validated
 @Service
-@RequiredArgsConstructor
 public class InvitationService {
 
-  private final Clock clock = Clock.systemUTC();
-  private final SecureRandom random = new SecureRandom();
+  private final Clock clock;
+  private final SecureRandom random;
   private final InvitationDelivery delivery;
   private final InvitationApplicationMapper mapper;
   private final InvitationProperties properties;
   private final InvitationRepository invitations;
+
+  @Autowired
+  public InvitationService(
+      InvitationDelivery delivery,
+      InvitationApplicationMapper mapper,
+      InvitationProperties properties,
+      InvitationRepository invitations) {
+    this(Clock.systemUTC(), new SecureRandom(), delivery, mapper, properties, invitations);
+  }
+
+  InvitationService(
+      Clock clock,
+      SecureRandom random,
+      InvitationDelivery delivery,
+      InvitationApplicationMapper mapper,
+      InvitationProperties properties,
+      InvitationRepository invitations) {
+    this.clock = clock;
+    this.random = random;
+    this.delivery = delivery;
+    this.mapper = mapper;
+    this.properties = properties;
+    this.invitations = invitations;
+  }
 
   public InvitationTokenResult get(@NotBlank String token) {
     InvitationProjection invitation = requirePendingProjection(token);
@@ -182,7 +205,7 @@ public class InvitationService {
     if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
       throw ApiException.gone("invitation_unavailable", "Invitation is no longer available.");
     }
-    if (invitation.getExpiresAt().isBefore(OffsetDateTime.now(clock))) {
+    if (!invitation.getExpiresAt().isAfter(OffsetDateTime.now(clock))) {
       throw ApiException.gone("invitation_expired", "Invitation expired.");
     }
     return invitation;
