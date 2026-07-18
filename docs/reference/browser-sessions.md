@@ -6,9 +6,10 @@ implementation target; browser-session consumers are not production-ready until 
 Identity, product-auth, authorization, product, frontend, and deployment slices are complete.
 
 Identity currently implements access/refresh cookie creation, rotation, expiry, refresh-token
-logout, cookie authentication for current-session routes, and exact `identity` audience validation.
-The CSRF, product exchange, grant receipt, product adoption, browser, and deployment requirements in
-this reference remain pending.
+logout, cookie authentication for current-session routes, exact `identity` audience validation,
+CSRF bootstrap, Identity session-mutation enforcement, and cookie-selected product CSRF
+enforcement. Product exchange, grant receipt, product adoption, browser, and deployment requirements
+in this reference remain pending.
 
 ## Supported Topology
 
@@ -36,9 +37,10 @@ cookie configuration.
 Local HTTP development uses explicitly configured non-prefixed cookie names with `Secure=false`.
 Local defaults are not valid production configuration.
 
-Identity selects the policy with `cardo.identity.session.mode=local|production`. Access and refresh
-cookie names, `refresh-cookie-path`, and `secure` are explicit properties under the same prefix.
-Production accepts only the names in the table and `Secure=true`; invalid policy fails startup.
+Identity selects the policy with `cardo.identity.session.mode=local|production`. Access, refresh,
+and CSRF cookie names, `refresh-cookie-path`, and `secure` are explicit properties under the same
+prefix. Production accepts only the names in the table and `Secure=true`; invalid policy fails
+startup.
 
 The provider session owns idle and absolute lifetime. A cookie `Max-Age` must not exceed the expiry
 of the credential stored in that cookie.
@@ -69,19 +71,24 @@ the same exact Identity-session audience as the cookie token.
 
 ## CSRF
 
-Before login, a browser calls public `GET /identity/sessions/csrf`. Identity returns `204` and sets a
-cryptographically random CSRF token when the cookie is absent. The browser sends the cookie value
-unchanged in `X-CSRF-TOKEN`; the header name is fixed by this contract.
+Before login, a browser calls public `GET /identity/sessions/csrf`. Identity returns `204` with
+`Cache-Control: no-store` and sets a cryptographically random CSRF token when the cookie is absent.
+The browser sends the cookie value unchanged in `X-CSRF-TOKEN`; the header name is fixed by this
+contract.
 
 CSRF validation applies to every unsafe Identity session endpoint, including login before a session
-exists, refresh, and logout. It also applies to every unsafe product request when cookie
-authentication is selected. Requests authenticated by an explicit valid Authorization header
-bypass CSRF validation. SameSite is defense in depth and does not replace the CSRF token.
+exists, refresh, and logout. Authorization headers do not bypass those controller-credential
+routes. It also applies to every unsafe product request when cookie authentication is selected. Any
+supplied Authorization header selects bearer authentication and bypasses CSRF validation; the
+resource-server filter then validates it and never falls back to the cookie. SameSite is defense in
+depth and does not replace the CSRF token.
 
 Identity and `identity-product-auth` reject a missing cookie, missing header, or non-matching value
 with `403`. The token remains stable through login and refresh, is recreated only when absent, and
 is expired on logout with the same production cookie attributes. The server does not persist the
 token; the host-only `__Host-` cookie and exact cookie/header match form the double-submit contract.
+Only Identity creates and expires the CSRF cookie. `identity-product-auth` uses a read-only token
+repository so product services cannot accidentally become alternate cookie issuers.
 
 ## Product Token Validation And Exchange
 
@@ -166,4 +173,6 @@ Cardo owns the shared Spring Security filter chain and these mechanics:
 
 Products contribute method-aware request matchers and authorization decisions through the
 product-auth configuration seam. They own public product routes and product authorization policy,
-but do not replace the shared filter chain or redeclare Cardo-owned security beans.
+but do not replace the shared filter chain or redeclare Cardo-owned security beans. The chain uses
+one coordinated cookie selector, bearer resolver, and read-only CSRF repository; generic product
+`BearerTokenResolver` or `CsrfTokenRepository` beans are not supported customization seams.

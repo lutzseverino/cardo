@@ -327,6 +327,9 @@ paths:
       tags: [Sessions]
       operationId: authenticate
       summary: Sign in with email and password.
+      security:
+        - csrfCookie: []
+          csrfHeader: []
       requestBody:
         required: true
         content:
@@ -349,13 +352,30 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: CSRF cookie or header is missing or invalid.
         "404":
           $ref: "#/components/responses/NotFound"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /identity/sessions/csrf:
+    get:
+      tags: [Sessions]
+      operationId: getCsrfToken
+      summary: Materialize the browser CSRF cookie when it is absent.
+      responses:
+        "204":
+          description: CSRF cookie is available. The token is not returned in the body.
+          headers:
+            Cache-Control:
+              description: Prevents browsers and intermediaries from caching token bootstrap.
+              schema:
+                type: string
+                example: no-store
+            Set-Cookie:
+              schema:
+                type: string
   /identity/sessions/current:
     get:
       tags: [Sessions]
@@ -381,13 +401,18 @@ paths:
       tags: [Sessions]
       operationId: deleteCurrentSession
       summary: Revoke the provider session from its refresh cookie and sign out locally.
+      security:
+        - csrfCookie: []
+          csrfHeader: []
       responses:
         "204":
-          description: Session deleted. Clears the HTTP-only access and refresh cookies.
+          description: Session deleted. Clears access, refresh, and CSRF cookies.
           headers:
             Set-Cookie:
               schema:
                 type: string
+        "403":
+          description: CSRF cookie or header is missing or invalid.
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
@@ -397,6 +422,9 @@ paths:
       tags: [Sessions]
       operationId: refreshCurrentSession
       summary: Refresh the provider session from its HTTP-only refresh cookie.
+      security:
+        - csrfCookie: []
+          csrfHeader: []
       responses:
         "200":
           description: Session refreshed. Replaces the HTTP-only access and refresh cookies.
@@ -411,7 +439,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: CSRF cookie or header is missing or invalid.
         "404":
           $ref: "#/components/responses/NotFound"
         "502":
@@ -428,6 +456,14 @@ components:
       type: apiKey
       in: cookie
       name: __Host-cardo.session
+    csrfCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-cardo.csrf
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
   parameters:
     UserId:
       name: userId

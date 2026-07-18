@@ -31,6 +31,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.web.csrf.CsrfToken;
 
 class SessionControllerTest {
 
@@ -86,9 +87,27 @@ class SessionControllerTest {
 
     assertThat(response.getStatusCode().value()).isEqualTo(204);
     assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
-        .hasSize(2)
-        .allSatisfy(cookie -> assertThat(cookie).contains("Max-Age=0"));
+        .hasSize(3)
+        .allSatisfy(cookie -> assertThat(cookie).contains("Max-Age=0"))
+        .anySatisfy(
+            cookie ->
+                assertThat(cookie)
+                    .startsWith("cardo.csrf=")
+                    .contains("Path=/", "SameSite=Lax")
+                    .doesNotContain("HttpOnly"));
     verify(authentication, never()).revoke(anyString());
+  }
+
+  @Test
+  void bootstrapForcesDeferredCsrfTokenCreation() {
+    CsrfToken csrfToken = mock(CsrfToken.class);
+    request.setAttribute(CsrfToken.class.getName(), csrfToken);
+
+    var response = controller.getCsrfToken();
+
+    assertThat(response.getStatusCode().value()).isEqualTo(204);
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
+    verify(csrfToken).getToken();
   }
 
   @Test
@@ -117,6 +136,11 @@ class SessionControllerTest {
 
   private SessionProperties localProperties() {
     return new SessionProperties(
-        Mode.LOCAL, "cardo.session", "cardo.refresh", "/api/v1/identity/sessions/current", false);
+        Mode.LOCAL,
+        "cardo.session",
+        "cardo.refresh",
+        "cardo.csrf",
+        "/api/v1/identity/sessions/current",
+        false);
   }
 }

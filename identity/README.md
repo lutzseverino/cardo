@@ -20,6 +20,7 @@ auto-configures the shared Spring Security pieces for product services:
 - method security
 - OAuth2 resource-server setup
 - session-cookie bearer token resolution
+- cookie-selected CSRF enforcement
 
 Products still own product access. Identity must not silently grant product-domain
 permissions as a side effect of user creation
@@ -29,9 +30,10 @@ actions.
 
 The accepted production [browser-session contract](../docs/reference/browser-sessions.md) requires
 one HTTPS origin for the product frontend, product API, and reverse-proxied Identity session routes.
-Identity implements the access/refresh cookie lifecycle, refresh rotation, refresh-token logout,
-and exact `identity` audience validation. CSRF, product-token exchange, and grant convergence remain
-dependent slices, so browser-session consumers are not yet production-ready.
+Identity implements the access/refresh cookie lifecycle, CSRF bootstrap and session-mutation
+enforcement, refresh rotation, refresh-token logout, and exact `identity` audience validation.
+Product-token exchange and grant convergence remain dependent slices, so browser-session consumers
+are not yet production-ready.
 
 ## Browser Session Configuration
 
@@ -44,6 +46,7 @@ cardo:
       mode: local
       access-cookie-name: cardo.session
       refresh-cookie-name: cardo.refresh
+      csrf-cookie-name: cardo.csrf
       refresh-cookie-path: ${cardo.api.base-path}/identity/sessions/current
       secure: false
 ```
@@ -57,6 +60,7 @@ cardo:
       mode: production
       access-cookie-name: __Host-cardo.session
       refresh-cookie-name: __Secure-cardo.refresh
+      csrf-cookie-name: __Host-cardo.csrf
       refresh-cookie-path: /api/v1/identity/sessions/current
       secure: true
 ```
@@ -65,7 +69,9 @@ Set the refresh path to the browser-visible current-session path when a gateway 
 prefix. Identity rejects production startup with insecure names or attributes. Cookie `Max-Age`
 comes from the corresponding credential expiry rather than configuration. The Identity RPT audience
 is the fixed resource catalog name `identity`; `cardo-identity` remains the separate confidential
-OAuth client.
+OAuth client. Browsers bootstrap the readable CSRF cookie with
+`GET /api/v1/identity/sessions/csrf` and echo it unchanged in `X-CSRF-TOKEN` for login, refresh, and
+logout. Identity alone creates and expires this cookie.
 
 Invited-user credential setup and provisional deletion are durable operations.
 Credential setup delegates password/profile entry to Keycloak's action flow;

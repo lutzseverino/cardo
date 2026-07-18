@@ -40,13 +40,15 @@ Use `identity-product-auth` when a product accepts logged-in Cardo users. The
 module auto-configures the shared Spring Security pieces: JWT authority
 conversion, permission evaluation, authenticated-user reading, method security,
 resource-server setup, session-cookie bearer token resolution, and optional active-token validation
-through the identity provider introspection endpoint.
+through the identity provider introspection endpoint. It also enforces double-submit CSRF on unsafe
+requests when the session cookie is selected and leaves explicit bearer requests to resource-server
+authentication.
 
 The current cookie-authenticated shape is not production-ready. The accepted
-[browser-session contract](browser-sessions.md) requires cookie-aware CSRF, Identity-session
-validation, server-side exchange for a product-audience requesting-party token, strict audience
-validation, and a method-aware product request-policy seam. Do not adopt browser cookie
-authentication in a production product until those dependent slices are implemented.
+[browser-session contract](browser-sessions.md) still requires Identity-session validation,
+server-side exchange for a product-audience requesting-party token, strict audience validation, and
+a method-aware product request-policy seam. Do not adopt browser cookie authentication in a
+production product until those dependent slices are implemented.
 
 Products currently configure their issuer, public product paths, and active-token validation
 credentials:
@@ -62,6 +64,8 @@ spring:
 cardo:
   identity:
     product-auth:
+      session-cookie-name: cardo.session
+      csrf-cookie-name: cardo.csrf
       public-paths:
         - ${product.api.base-path}/status
       active-token-validation:

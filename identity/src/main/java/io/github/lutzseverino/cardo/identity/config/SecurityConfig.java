@@ -13,7 +13,6 @@ import org.springframework.security.access.expression.method.DefaultMethodSecuri
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -21,6 +20,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
 @EnableMethodSecurity
@@ -56,6 +56,17 @@ public class SecurityConfig {
   }
 
   @Bean
+  CookieCsrfTokenRepository csrfTokenRepository(SessionProperties properties) {
+    CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+    repository.setCookieName(properties.csrfCookieName());
+    repository.setHeaderName("X-CSRF-TOKEN");
+    repository.setCookiePath("/");
+    repository.setCookieCustomizer(
+        cookie -> cookie.secure(properties.secure()).httpOnly(false).sameSite("Lax").path("/"));
+    return repository;
+  }
+
+  @Bean
   JwtDecoder jwtDecoder(
       @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer) {
     NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
@@ -72,11 +83,17 @@ public class SecurityConfig {
       HttpSecurity http,
       @Value("${cardo.api.base-path}") String basePath,
       KeycloakAuthoritiesConverter authorities,
-      BearerTokenResolver bearerTokens) {
+      BearerTokenResolver bearerTokens,
+      CookieCsrfTokenRepository csrfTokens) {
     JwtAuthenticationConverter jwt = new JwtAuthenticationConverter();
     jwt.setJwtGrantedAuthoritiesConverter(authorities);
 
-    return http.csrf(AbstractHttpConfigurer::disable)
+    return http.csrf(
+            csrf ->
+                csrf.csrfTokenRepository(csrfTokens)
+                    .csrfTokenRequestHandler(new HeaderOnlyCsrfTokenRequestHandler())
+                    .requireCsrfProtectionMatcher(
+                        new IdentitySessionCsrfProtectionMatcher(basePath)))
         .authorizeHttpRequests(
             requests ->
                 requests
@@ -90,6 +107,8 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, basePath + "/identity/users")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, basePath + "/identity/sessions")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, basePath + "/identity/sessions/csrf")
                     .permitAll()
                     .requestMatchers(
                         HttpMethod.POST, basePath + "/identity/sessions/current/refresh")

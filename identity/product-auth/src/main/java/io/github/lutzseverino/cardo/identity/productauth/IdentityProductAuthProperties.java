@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record IdentityProductAuthProperties(
     List<String> publicPaths,
     String sessionCookieName,
+    String csrfCookieName,
     ActiveTokenValidation activeTokenValidation) {
 
   public IdentityProductAuthProperties {
@@ -17,6 +18,11 @@ public record IdentityProductAuthProperties(
         sessionCookieName == null || sessionCookieName.isBlank()
             ? "cardo.session"
             : sessionCookieName;
+    csrfCookieName =
+        csrfCookieName == null || csrfCookieName.isBlank() ? "cardo.csrf" : csrfCookieName;
+    if (sessionCookieName.equals(csrfCookieName)) {
+      throw new IllegalArgumentException("session and CSRF cookie names must be distinct");
+    }
     activeTokenValidation =
         activeTokenValidation == null
             ? new ActiveTokenValidation(false, null, null, null, null, null, null, null)
