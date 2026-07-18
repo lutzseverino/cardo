@@ -19,6 +19,9 @@ final class IdentitySessionBearerTokenResolver implements BearerTokenResolver {
 
   @Override
   public String resolve(HttpServletRequest request) {
+    if (usesControllerCredentials(request)) {
+      return null;
+    }
     String token = authorizationHeader.resolve(request);
     if (token != null || !acceptsAccessCookie(request)) {
       return token;
@@ -40,5 +43,14 @@ final class IdentitySessionBearerTokenResolver implements BearerTokenResolver {
   private boolean acceptsAccessCookie(HttpServletRequest request) {
     String path = request.getRequestURI().substring(request.getContextPath().length());
     return HttpMethod.GET.matches(request.getMethod()) && currentSessionPath.equals(path);
+  }
+
+  private boolean usesControllerCredentials(HttpServletRequest request) {
+    String path = request.getRequestURI().substring(request.getContextPath().length());
+    String sessionsPath = currentSessionPath.substring(0, currentSessionPath.lastIndexOf('/'));
+    return (HttpMethod.POST.matches(request.getMethod()) && sessionsPath.equals(path))
+        || (HttpMethod.POST.matches(request.getMethod())
+            && (currentSessionPath + "/refresh").equals(path))
+        || (HttpMethod.DELETE.matches(request.getMethod()) && currentSessionPath.equals(path));
   }
 }

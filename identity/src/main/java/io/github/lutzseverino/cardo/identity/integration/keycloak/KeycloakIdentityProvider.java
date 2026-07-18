@@ -216,7 +216,7 @@ public class KeycloakIdentityProvider implements IdentityProvider {
           .retrieve()
           .toBodilessEntity();
     } catch (RestClientResponseException exception) {
-      throw providerException(exception);
+      throw sessionProviderException(exception);
     }
   }
 
@@ -272,7 +272,7 @@ public class KeycloakIdentityProvider implements IdentityProvider {
         throw ApiException.of(
             "invalid_credentials".equals(invalidCode) ? 400 : 401, invalidCode, invalidMessage);
       }
-      throw providerException(exception);
+      throw sessionProviderException(exception);
     }
   }
 
@@ -295,7 +295,7 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       }
       return introspection;
     } catch (RestClientResponseException exception) {
-      throw providerException(exception);
+      throw sessionProviderException(exception);
     }
   }
 
@@ -342,6 +342,12 @@ public class KeycloakIdentityProvider implements IdentityProvider {
         exception.getStatusCode().value(),
         "identity_provider_error",
         "Identity provider request failed.");
+  }
+
+  private ApiException sessionProviderException(RestClientResponseException exception) {
+    int upstreamStatus = exception.getStatusCode().value();
+    int status = upstreamStatus == 429 || upstreamStatus >= 500 ? 503 : 502;
+    return ApiException.of(status, "identity_provider_error", "Identity provider request failed.");
   }
 
   private void revokeAfterFailedIssue(String refreshToken, RuntimeException failure) {

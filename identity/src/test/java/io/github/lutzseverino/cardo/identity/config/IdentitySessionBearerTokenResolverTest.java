@@ -38,9 +38,23 @@ class IdentitySessionBearerTokenResolverTest {
     assertCookieIgnored("PATCH", "/api/v1/identity/users/me");
   }
 
+  @Test
+  void ignoresAuthorizationHeadersOnSessionEndpointsOwnedByControllerCredentials() {
+    assertHeaderIgnored("POST", "/api/v1/identity/sessions");
+    assertHeaderIgnored("POST", "/api/v1/identity/sessions/current/refresh");
+    assertHeaderIgnored("DELETE", "/api/v1/identity/sessions/current");
+  }
+
   private void assertCookieIgnored(String method, String path) {
     MockHttpServletRequest request = request(method, path);
     request.setCookies(new Cookie("cardo.session", "stale-token"));
+
+    assertThat(resolver.resolve(request)).isNull();
+  }
+
+  private void assertHeaderIgnored(String method, String path) {
+    MockHttpServletRequest request = request(method, path);
+    request.addHeader(HttpHeaders.AUTHORIZATION, "Malformed ambient credential");
 
     assertThat(resolver.resolve(request)).isNull();
   }

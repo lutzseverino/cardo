@@ -91,6 +91,24 @@ class AuthenticationServiceTest {
   }
 
   @Test
+  void normalizesUnexpectedAuthorizationProviderFailureAndRevokesTheProviderSession() {
+    when(identityProvider.issuePasswordSession("user@example.com", "password-1"))
+        .thenReturn(providerSession());
+    when(requestingPartyTokens.authorize(eq(identityAuthorizationRequest())))
+        .thenThrow(new IllegalStateException("unexpected provider response"));
+
+    assertThatThrownBy(() -> service.authenticate("user@example.com", "password-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(502);
+              assertThat(exception.code()).isEqualTo("identity_authorization_failed");
+            });
+
+    verify(identityProvider).revokeSession("refresh-token");
+  }
+
+  @Test
   void rejectsDisabledUserAndRevokesTheProviderSession() {
     when(identityProvider.issuePasswordSession("user@example.com", "password-1"))
         .thenReturn(providerSession());
@@ -99,6 +117,27 @@ class AuthenticationServiceTest {
     assertThatThrownBy(() -> service.authenticate("user@example.com", "password-1"))
         .isInstanceOf(ApiException.class)
         .hasMessage("User is disabled.");
+
+    verify(identityProvider).revokeSession("refresh-token");
+  }
+
+  @Test
+  void rejectsAuthorizationTokenForAnotherSubjectAndRevokesTheProviderSession() {
+    when(identityProvider.issuePasswordSession("user@example.com", "password-1"))
+        .thenReturn(providerSession());
+    when(requestingPartyTokens.authorize(identityAuthorizationRequest()))
+        .thenReturn(new RequestingPartyToken("identity-rpt"));
+    when(authorizationTokens.read("identity-rpt"))
+        .thenReturn(
+            new AuthorizationTokenResult("different-subject", ACCESS_EXPIRES_AT, List.of()));
+
+    assertThatThrownBy(() -> service.authenticate("user@example.com", "password-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(502);
+              assertThat(exception.code()).isEqualTo("identity_authorization_subject_mismatch");
+            });
 
     verify(identityProvider).revokeSession("refresh-token");
   }
@@ -128,7 +167,7 @@ class AuthenticationServiceTest {
     when(requestingPartyTokens.authorize(identityAuthorizationRequest()))
         .thenReturn(new RequestingPartyToken("identity-rpt"));
     when(authorizationTokens.read("identity-rpt"))
-        .thenReturn(new AuthorizationTokenResult(ACCESS_EXPIRES_AT, List.of()));
+        .thenReturn(new AuthorizationTokenResult("subject-1", ACCESS_EXPIRES_AT, List.of()));
     when(principals.findByKeycloakSubject("subject-1", "session-1", method, ACCESS_EXPIRES_AT))
         .thenReturn(Optional.of(principal(status, method)));
   }

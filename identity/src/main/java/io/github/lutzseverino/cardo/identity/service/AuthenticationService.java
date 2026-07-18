@@ -65,13 +65,14 @@ public class AuthenticationService {
   private SessionResult establish(
       IdentityProvider.IssuedSession providerSession, AuthenticationMethod authenticationMethod) {
     try {
-      String authorizationToken =
-          requestingPartyTokens
-              .authorize(
-                  RequestingPartyTokenRequest.allPermissions(
-                      providerSession.accessToken(), IdentityPermissions.CLIENT_ID))
-              .token();
+      String authorizationToken = authorize(providerSession.accessToken());
       AuthorizationTokenResult authorization = authorizationTokens.read(authorizationToken);
+      if (!providerSession.subject().equals(authorization.subject())) {
+        throw ApiException.of(
+            502,
+            "identity_authorization_subject_mismatch",
+            "Identity provider authorization token did not match the authenticated subject.");
+      }
       AuthenticatedPrincipal principal =
           principal(
               providerSession.subject(),
@@ -101,6 +102,26 @@ public class AuthenticationService {
             () ->
                 ApiException.notFound(
                     "authenticated_principal_not_found", "Authenticated principal not found."));
+  }
+
+  private String authorize(String providerAccessToken) {
+    try {
+      return requestingPartyTokens
+          .authorize(
+              RequestingPartyTokenRequest.allPermissions(
+                  providerAccessToken, IdentityPermissions.CLIENT_ID))
+          .token();
+    } catch (ApiException exception) {
+      throw exception;
+    } catch (RuntimeException exception) {
+      ApiException failure =
+          ApiException.of(
+              502,
+              "identity_authorization_failed",
+              "Identity provider did not establish authorization.");
+      failure.addSuppressed(exception);
+      throw failure;
+    }
   }
 
   private void assertEnabled(AuthenticatedPrincipal principal) {

@@ -118,7 +118,7 @@ class KeycloakIdentityProviderTest {
     server
         .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/revoke"))
         .andExpect(content().string(containsString("token=rotated-refresh")))
-        .andRespond(withNoContent());
+        .andRespond(withSuccess());
 
     assertThatThrownBy(() -> provider.refreshSession("old-refresh"))
         .isInstanceOfSatisfying(
@@ -155,7 +155,7 @@ class KeycloakIdentityProviderTest {
         .andExpect(method(POST))
         .andExpect(content().string(containsString("token=provider-refresh")))
         .andExpect(content().string(containsString("token_type_hint=refresh_token")))
-        .andRespond(withNoContent());
+        .andRespond(withSuccess());
 
     provider.revokeSession("provider-refresh");
 
@@ -175,7 +175,7 @@ class KeycloakIdentityProviderTest {
         .isInstanceOfSatisfying(
             ApiException.class,
             exception -> {
-              assertThat(exception.status()).isEqualTo(401);
+              assertThat(exception.status()).isEqualTo(502);
               assertThat(exception.code()).isEqualTo("identity_provider_error");
             });
   }
@@ -193,7 +193,7 @@ class KeycloakIdentityProviderTest {
         .isInstanceOfSatisfying(
             ApiException.class,
             exception -> {
-              assertThat(exception.status()).isEqualTo(401);
+              assertThat(exception.status()).isEqualTo(502);
               assertThat(exception.code()).isEqualTo("identity_provider_error");
             });
   }

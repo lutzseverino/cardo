@@ -348,6 +348,14 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /identity/sessions/current:
     get:
       tags: [Sessions]
@@ -365,6 +373,8 @@ paths:
                 $ref: "#/components/schemas/AuthenticatedPrincipalResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
     delete:
@@ -400,6 +410,10 @@ paths:
                 $ref: "#/components/schemas/AuthenticatedPrincipalResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
