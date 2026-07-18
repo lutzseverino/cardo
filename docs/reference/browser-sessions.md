@@ -5,6 +5,11 @@ product-token acquisition, CSRF, and post-grant authorization convergence. The c
 implementation target; browser-session consumers are not production-ready until the dependent
 Identity, product-auth, authorization, product, frontend, and deployment slices are complete.
 
+Identity currently implements access/refresh cookie creation, rotation, expiry, refresh-token
+logout, cookie authentication for current-session routes, and exact `identity` audience validation.
+The CSRF, product exchange, grant receipt, product adoption, browser, and deployment requirements in
+this reference remain pending.
+
 ## Supported Topology
 
 A browser-enabled product uses one HTTPS public origin for:
@@ -30,6 +35,10 @@ cookie configuration.
 
 Local HTTP development uses explicitly configured non-prefixed cookie names with `Secure=false`.
 Local defaults are not valid production configuration.
+
+Identity selects the policy with `cardo.identity.session.mode=local|production`. Access and refresh
+cookie names, `refresh-cookie-path`, and `secure` are explicit properties under the same prefix.
+Production accepts only the names in the table and `Secure=true`; invalid policy fails startup.
 
 The provider session owns idle and absolute lifetime. A cookie `Max-Age` must not exceed the expiry
 of the credential stored in that cookie.
@@ -98,13 +107,15 @@ The target configuration surface is:
 cardo:
   identity:
     product-auth:
-      identity-session-audience: cardo-identity
+      identity-session-audience: identity
       product-audience: polity
 ```
 
 `product-audience` is required and non-blank whenever product authentication is enabled;
 `identity-session-audience` is additionally required when session-cookie exchange is enabled. The
-values name Keycloak resource-server clients; they are not browser origins or API paths.
+values name Keycloak resource-server clients; they are not browser origins, API paths, or OAuth
+clients used for password and service-account grants. Cardo's current Identity resource audience is
+`identity`; the separate confidential OAuth client defaults to `cardo-identity`.
 
 Product exchange is uncached by default. A positive cache is permitted only with a bounded TTL and
 an explicit invalidation path that preserves grant-convergence and revocation behavior.

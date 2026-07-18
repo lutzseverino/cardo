@@ -17,7 +17,7 @@ tags:
   - name: Users
     description: Identity-owned user records.
   - name: Sessions
-    description: Login, current authenticated principal, and logout operations.
+    description: Login, refresh, current authenticated principal, and logout operations.
 paths:
   /identity:
     get:
@@ -335,7 +335,7 @@ paths:
               $ref: "#/components/schemas/AuthenticateRequest"
       responses:
         "201":
-          description: Session created. Also sets an HTTP-only session cookie.
+          description: Session created. Sets HTTP-only Identity access and refresh cookies.
           headers:
             Set-Cookie:
               schema:
@@ -352,9 +352,10 @@ paths:
     get:
       tags: [Sessions]
       operationId: getCurrentPrincipal
-      summary: Get the current authenticated principal.
+      summary: Get the current principal from an Identity bearer token or access cookie.
       security:
         - bearerAuth: []
+        - identityAccessCookie: []
       responses:
         "200":
           description: Current authenticated principal.
@@ -369,24 +370,50 @@ paths:
     delete:
       tags: [Sessions]
       operationId: deleteCurrentSession
-      summary: Sign out the current session.
-      security:
-        - bearerAuth: []
+      summary: Revoke the provider session from its refresh cookie and sign out locally.
       responses:
         "204":
-          description: Session deleted. Also clears the HTTP-only session cookie.
+          description: Session deleted. Clears the HTTP-only access and refresh cookies.
           headers:
             Set-Cookie:
               schema:
                 type: string
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /identity/sessions/current/refresh:
+    post:
+      tags: [Sessions]
+      operationId: refreshCurrentSession
+      summary: Refresh the provider session from its HTTP-only refresh cookie.
+      responses:
+        "200":
+          description: Session refreshed. Replaces the HTTP-only access and refresh cookies.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedPrincipalResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    identityAccessCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-cardo.session
   parameters:
     UserId:
       name: userId
@@ -421,6 +448,10 @@ components:
       $ref: "../../common/openapi/errors.yaml#/components/responses/NotFound"
     Conflict:
       $ref: "../../common/openapi/errors.yaml#/components/responses/Conflict"
+    BadGateway:
+      $ref: "../../common/openapi/errors.yaml#/components/responses/BadGateway"
+    ServiceUnavailable:
+      $ref: "../../common/openapi/errors.yaml#/components/responses/ServiceUnavailable"
   schemas:
     ServiceStatusResponse:
       type: object

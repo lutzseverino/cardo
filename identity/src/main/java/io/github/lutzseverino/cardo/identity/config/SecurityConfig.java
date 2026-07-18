@@ -3,6 +3,7 @@ package io.github.lutzseverino.cardo.identity.config;
 import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrantAuthorityReader;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
 import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvaluator;
+import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,7 +14,12 @@ import org.springframework.security.access.expression.method.MethodSecurityExpre
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -44,10 +50,29 @@ public class SecurityConfig {
   }
 
   @Bean
+  BearerTokenResolver bearerTokenResolver(
+      SessionProperties properties, @Value("${cardo.api.base-path}") String basePath) {
+    return new IdentitySessionBearerTokenResolver(properties.accessCookieName(), basePath);
+  }
+
+  @Bean
+  JwtDecoder jwtDecoder(
+      @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer) {
+    NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
+    decoder.setJwtValidator(
+        new DelegatingOAuth2TokenValidator<>(
+            JwtValidators.createDefaultWithIssuer(issuer),
+            new IdentityAudienceValidator(IdentityPermissions.CLIENT_ID),
+            new RequiredExpirationValidator()));
+    return decoder;
+  }
+
+  @Bean
   SecurityFilterChain security(
       HttpSecurity http,
       @Value("${cardo.api.base-path}") String basePath,
-      KeycloakAuthoritiesConverter authorities) {
+      KeycloakAuthoritiesConverter authorities,
+      BearerTokenResolver bearerTokens) {
     JwtAuthenticationConverter jwt = new JwtAuthenticationConverter();
     jwt.setJwtGrantedAuthoritiesConverter(authorities);
 
@@ -66,10 +91,18 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, basePath + "/identity/sessions")
                     .permitAll()
+                    .requestMatchers(
+                        HttpMethod.POST, basePath + "/identity/sessions/current/refresh")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.DELETE, basePath + "/identity/sessions/current")
+                    .permitAll()
                     .anyRequest()
                     .authenticated())
         .oauth2ResourceServer(
-            oauth2 -> oauth2.jwt(jwtConfigurer -> jwtConfigurer.jwtAuthenticationConverter(jwt)))
+            oauth2 ->
+                oauth2
+                    .bearerTokenResolver(bearerTokens)
+                    .jwt(jwtConfigurer -> jwtConfigurer.jwtAuthenticationConverter(jwt)))
         .build();
   }
 }

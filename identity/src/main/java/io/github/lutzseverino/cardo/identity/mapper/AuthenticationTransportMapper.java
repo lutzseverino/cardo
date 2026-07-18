@@ -10,7 +10,6 @@ import io.github.lutzseverino.cardo.identity.model.AuthenticateInput;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
 import io.github.lutzseverino.cardo.openapi.mapping.OpenApiNullableConversions;
 import io.github.lutzseverino.cardo.openapi.mapping.UriResponseConversions;
-import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -26,7 +25,6 @@ public interface AuthenticationTransportMapper {
 
   AuthenticateInput toInput(AuthenticateRequest request);
 
-  @BeanMapping(ignoreUnmappedSourceProperties = "token")
   @Mapping(target = "sessionId", source = "principal.sessionId")
   @Mapping(target = "user", source = "principal")
   @Mapping(target = "authenticationMethod", source = "principal.authenticationMethod")

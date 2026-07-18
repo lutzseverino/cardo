@@ -11,7 +11,7 @@ import io.github.lutzseverino.cardo.identity.mapper.UserApplicationMapperImpl;
 import io.github.lutzseverino.cardo.identity.model.CreateUserInput;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.reader.AuthenticatedPrincipalReader;
-import io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenGrantReader;
+import io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenReader;
 import io.github.lutzseverino.cardo.identity.repository.UserRepository;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
@@ -92,8 +92,8 @@ class IdentityServiceValidationTest {
     }
 
     @Bean
-    AuthorizationTokenGrantReader tokenGrants() {
-      return mock(AuthorizationTokenGrantReader.class);
+    AuthorizationTokenReader authorizationTokens() {
+      return mock(AuthorizationTokenReader.class);
     }
 
     @Bean
@@ -111,9 +111,9 @@ class IdentityServiceValidationTest {
         IdentityProvider identityProvider,
         AuthenticatedPrincipalReader principals,
         RequestingPartyTokenClient requestingPartyTokens,
-        AuthorizationTokenGrantReader tokenGrants) {
+        AuthorizationTokenReader authorizationTokens) {
       return new AuthenticationService(
-          identityProvider, principals, requestingPartyTokens, tokenGrants);
+          identityProvider, principals, requestingPartyTokens, authorizationTokens);
     }
   }
 }

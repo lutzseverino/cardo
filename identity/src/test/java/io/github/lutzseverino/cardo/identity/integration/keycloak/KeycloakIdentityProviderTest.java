@@ -1,6 +1,7 @@
 package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -18,10 +19,12 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakRealmAdminClient;
+import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import java.net.URI;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -31,6 +34,187 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 class KeycloakIdentityProviderTest {
+
+  @Test
+  void issuesCompletePasswordSessionCredentials() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andExpect(method(POST))
+        .andExpect(content().string(containsString("grant_type=password")))
+        .andExpect(content().string(containsString("username=user%40example.com")))
+        .andRespond(
+            withSuccess(
+                """
+                {"access_token":"provider-access","expires_in":300,
+                 "refresh_token":"provider-refresh","refresh_expires_in":3600}
+                """,
+                MediaType.APPLICATION_JSON));
+    expectIntrospection(server, "provider-access");
+    OffsetDateTime before = OffsetDateTime.now();
+
+    IdentityProvider.IssuedSession session =
+        provider.issuePasswordSession("user@example.com", "password-1");
+
+    assertThat(session.accessToken()).isEqualTo("provider-access");
+    assertThat(session.refreshToken()).isEqualTo("provider-refresh");
+    assertThat(session.subject()).isEqualTo("subject-1");
+    assertThat(session.sessionId()).isEqualTo("session-1");
+    assertThat(session.accessExpiresAt())
+        .isBetween(before.plusSeconds(299), before.plusSeconds(301));
+    assertThat(session.refreshExpiresAt())
+        .isBetween(before.plusSeconds(3599), before.plusSeconds(3601));
+    assertThat(session.toString()).doesNotContain("provider-access", "provider-refresh");
+    server.verify();
+  }
+
+  @Test
+  void refreshesAndReturnsRotatedCredentials() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andExpect(method(POST))
+        .andExpect(content().string(containsString("grant_type=refresh_token")))
+        .andExpect(content().string(containsString("refresh_token=old-refresh")))
+        .andRespond(
+            withSuccess(
+                """
+                {"access_token":"rotated-access","expires_in":300,
+                 "refresh_token":"rotated-refresh","refresh_expires_in":3600}
+                """,
+                MediaType.APPLICATION_JSON));
+    expectIntrospection(server, "rotated-access");
+
+    IdentityProvider.IssuedSession session = provider.refreshSession("old-refresh");
+
+    assertThat(session.accessToken()).isEqualTo("rotated-access");
+    assertThat(session.refreshToken()).isEqualTo("rotated-refresh");
+    server.verify();
+  }
+
+  @Test
+  void revokesNewlyIssuedSessionWhenIntrospectionFails() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(
+            withSuccess(
+                """
+                {"access_token":"rotated-access","expires_in":300,
+                 "refresh_token":"rotated-refresh","refresh_expires_in":3600}
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(
+            requestTo(
+                "https://keycloak.example/realms/cardo/protocol/openid-connect/token/introspect"))
+        .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/revoke"))
+        .andExpect(content().string(containsString("token=rotated-refresh")))
+        .andRespond(withNoContent());
+
+    assertThatThrownBy(() -> provider.refreshSession("old-refresh"))
+        .isInstanceOfSatisfying(
+            ApiException.class, exception -> assertThat(exception.status()).isEqualTo(503));
+
+    server.verify();
+  }
+
+  @Test
+  void rejectsInvalidRefreshCredentialAsAnInvalidSession() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(withStatus(HttpStatus.BAD_REQUEST));
+
+    assertThatThrownBy(() -> provider.refreshSession("invalid-refresh"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(401);
+              assertThat(exception.code()).isEqualTo("invalid_session");
+            });
+  }
+
+  @Test
+  void revokesTheRefreshCredentialAndAcceptsTheProvidersIdempotentResponse() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/revoke"))
+        .andExpect(method(POST))
+        .andExpect(content().string(containsString("token=provider-refresh")))
+        .andExpect(content().string(containsString("token_type_hint=refresh_token")))
+        .andRespond(withNoContent());
+
+    provider.revokeSession("provider-refresh");
+
+    server.verify();
+  }
+
+  @Test
+  void reportsRevocationAuthenticationFailure() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/revoke"))
+        .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+    assertThatThrownBy(() -> provider.revokeSession("provider-refresh"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(401);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+  }
+
+  @Test
+  void reportsTokenEndpointAuthenticationFailureAsAProviderError() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+    assertThatThrownBy(() -> provider.refreshSession("provider-refresh"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(401);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+  }
+
+  @Test
+  void reportsTransientRevocationFailure() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/revoke"))
+        .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+    assertThatThrownBy(() -> provider.revokeSession("provider-refresh"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(503);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+  }
 
   @Test
   void delegatesCredentialSetupToKeycloakWithoutReceivingThePassword() {
@@ -140,5 +324,20 @@ class KeycloakIdentityProviderTest {
         mock(KeycloakRealmAdminClient.class),
         tokens,
         rest);
+  }
+
+  private void expectIntrospection(MockRestServiceServer server, String accessToken) {
+    server
+        .expect(
+            requestTo(
+                "https://keycloak.example/realms/cardo/protocol/openid-connect/token/introspect"))
+        .andExpect(method(POST))
+        .andExpect(content().string(containsString("token=" + accessToken)))
+        .andRespond(
+            withSuccess(
+                """
+                {"active":true,"sub":"subject-1","sid":"session-1"}
+                """,
+                MediaType.APPLICATION_JSON));
   }
 }

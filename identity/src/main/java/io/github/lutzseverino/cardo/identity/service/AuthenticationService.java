@@ -8,11 +8,14 @@ import io.github.lutzseverino.cardo.identity.model.AuthenticateInput;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
+import io.github.lutzseverino.cardo.identity.model.AuthorizationTokenResult;
 import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
+import io.github.lutzseverino.cardo.identity.model.SessionCredential;
+import io.github.lutzseverino.cardo.identity.model.SessionResult;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.reader.AuthenticatedPrincipalReader;
-import io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenGrantReader;
+import io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenReader;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -29,26 +32,19 @@ public class AuthenticationService {
   private final IdentityProvider identityProvider;
   private final AuthenticatedPrincipalReader principals;
   private final RequestingPartyTokenClient requestingPartyTokens;
-  private final AuthorizationTokenGrantReader tokenGrants;
+  private final AuthorizationTokenReader authorizationTokens;
 
-  public AuthenticationResult authenticate(@Valid AuthenticateInput input) {
+  public SessionResult authenticate(@Valid AuthenticateInput input) {
     return authenticate(input.email(), input.password());
   }
 
-  public AuthenticationResult authenticate(
-      @NotBlank @Email String email, @NotBlank String password) {
-    IdentityProvider.IssuedIdentityToken token =
-        identityProvider.issuePasswordToken(email, password);
-    AuthenticatedPrincipal principal = principal(token);
-    assertEnabled(principal, token.token());
-    String authorizationToken =
-        requestingPartyTokens
-            .authorize(
-                RequestingPartyTokenRequest.allPermissions(
-                    token.token(), IdentityPermissions.CLIENT_ID))
-            .token();
-    return new AuthenticationResult(
-        principal, authorizationToken, tokenGrants.read(authorizationToken));
+  public SessionResult authenticate(@NotBlank @Email String email, @NotBlank String password) {
+    return establish(
+        identityProvider.issuePasswordSession(email, password), AuthenticationMethod.PASSWORD);
+  }
+
+  public SessionResult refresh(@NotBlank String refreshToken) {
+    return establish(identityProvider.refreshSession(refreshToken), AuthenticationMethod.OIDC);
   }
 
   public AuthenticationResult getCurrent(CurrentAuthentication current) {
@@ -58,13 +54,40 @@ public class AuthenticationService {
             current.sessionId(),
             AuthenticationMethod.OIDC,
             current.expiresAt());
-    assertEnabled(principal, current.accessToken());
-    return new AuthenticationResult(principal, current.accessToken(), current.grants());
+    assertEnabled(principal);
+    return new AuthenticationResult(principal, current.grants());
   }
 
-  private AuthenticatedPrincipal principal(IdentityProvider.IssuedIdentityToken token) {
-    return principal(
-        token.subject(), token.sessionId(), AuthenticationMethod.PASSWORD, token.expiresAt());
+  public void revoke(@NotBlank String refreshToken) {
+    identityProvider.revokeSession(refreshToken);
+  }
+
+  private SessionResult establish(
+      IdentityProvider.IssuedSession providerSession, AuthenticationMethod authenticationMethod) {
+    try {
+      String authorizationToken =
+          requestingPartyTokens
+              .authorize(
+                  RequestingPartyTokenRequest.allPermissions(
+                      providerSession.accessToken(), IdentityPermissions.CLIENT_ID))
+              .token();
+      AuthorizationTokenResult authorization = authorizationTokens.read(authorizationToken);
+      AuthenticatedPrincipal principal =
+          principal(
+              providerSession.subject(),
+              providerSession.sessionId(),
+              authenticationMethod,
+              authorization.expiresAt());
+      assertEnabled(principal);
+      return new SessionResult(
+          new AuthenticationResult(principal, authorization.grants()),
+          new SessionCredential(authorizationToken, authorization.expiresAt()),
+          new SessionCredential(
+              providerSession.refreshToken(), providerSession.refreshExpiresAt()));
+    } catch (RuntimeException exception) {
+      revokeAfterFailedEstablishment(providerSession.refreshToken(), exception);
+      throw exception;
+    }
   }
 
   private AuthenticatedPrincipal principal(
@@ -80,20 +103,18 @@ public class AuthenticationService {
                     "authenticated_principal_not_found", "Authenticated principal not found."));
   }
 
-  public void revoke(String accessToken) {
-    identityProvider.revokeToken(accessToken);
-  }
-
-  private void assertEnabled(AuthenticatedPrincipal principal, String token) {
+  private void assertEnabled(AuthenticatedPrincipal principal) {
     if (!UserStatus.DISABLED.equals(principal.userStatus())) {
       return;
     }
-    ApiException disabled = ApiException.forbidden("user_disabled", "User is disabled.");
+    throw ApiException.forbidden("user_disabled", "User is disabled.");
+  }
+
+  private void revokeAfterFailedEstablishment(String refreshToken, RuntimeException failure) {
     try {
-      identityProvider.revokeToken(token);
+      identityProvider.revokeSession(refreshToken);
     } catch (RuntimeException exception) {
-      disabled.addSuppressed(exception);
+      failure.addSuppressed(exception);
     }
-    throw disabled;
   }
 }
