@@ -62,9 +62,10 @@ must reject that local-only policy. Cookie lifetime never exceeds the correspond
 the provider session remains the source of truth for idle and absolute lifetime.
 
 Cardo uses a cookie-to-header CSRF token for browser requests. A safe bootstrap request materializes
-the CSRF cookie, and every unsafe request authenticated from a cookie, including login and logout,
-must echo it in the configured header. A valid explicit Authorization header takes precedence over
-cookies and is not subject to CSRF validation because it is not ambient browser authentication.
+the CSRF cookie. Every unsafe Identity session endpoint, including login, refresh, and logout, must
+require the configured header. Unsafe product requests require it whenever cookie authentication is
+selected. A valid explicit Authorization header takes precedence over cookies and is not subject to
+CSRF validation because it is not ambient browser authentication.
 
 Authorization staging remains asynchronous. The embedded authorization boundary returns a durable
 grant receipt, and the application that stages a plan exposes that receipt through its own

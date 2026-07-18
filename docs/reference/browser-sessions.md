@@ -54,9 +54,10 @@ are never written to browser cookies.
 A safe Identity or product bootstrap request materializes the readable CSRF cookie. Browser clients
 echo its value in Cardo's configured CSRF header.
 
-CSRF validation applies to every unsafe request whose authentication comes from a cookie, including
-login, refresh, and logout. Requests authenticated by an explicit valid Authorization header bypass
-CSRF validation. SameSite is defense in depth and does not replace the CSRF token.
+CSRF validation applies to every unsafe Identity session endpoint, including login before a session
+exists, refresh, and logout. It also applies to every unsafe product request when cookie
+authentication is selected. Requests authenticated by an explicit valid Authorization header
+bypass CSRF validation. SameSite is defense in depth and does not replace the CSRF token.
 
 ## Product Token Validation And Exchange
 
