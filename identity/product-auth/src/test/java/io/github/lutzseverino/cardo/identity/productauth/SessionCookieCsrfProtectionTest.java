@@ -14,8 +14,6 @@ class SessionCookieCsrfProtectionTest {
 
   private final SessionCookieBearerTokenResolver bearerTokens =
       new SessionCookieBearerTokenResolver("cardo.session");
-  private final SessionCookieAuthenticationSelector authentication =
-      new SessionCookieAuthenticationSelector("cardo.session");
   private final CsrfFilter filter = filter();
 
   @Test
@@ -72,7 +70,7 @@ class SessionCookieCsrfProtectionTest {
   private CsrfFilter filter() {
     CsrfFilter csrf = new CsrfFilter(new ReadOnlyCsrfTokenRepository("cardo.csrf"));
     csrf.setRequestHandler(new HeaderOnlyCsrfTokenRequestHandler());
-    csrf.setRequireCsrfProtectionMatcher(new SessionCookieCsrfProtectionMatcher(authentication));
+    csrf.setRequireCsrfProtectionMatcher(new SessionCookieCsrfProtectionMatcher(bearerTokens));
     return csrf;
   }
 

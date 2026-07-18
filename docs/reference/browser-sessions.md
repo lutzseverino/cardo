@@ -172,4 +172,6 @@ Cardo owns the shared Spring Security filter chain and these mechanics:
 
 Products contribute method-aware request matchers and authorization decisions through the
 product-auth configuration seam. They own public product routes and product authorization policy,
-but do not replace the shared filter chain or redeclare Cardo-owned security beans.
+but do not replace the shared filter chain or redeclare Cardo-owned security beans. The chain uses
+one coordinated cookie selector, bearer resolver, and read-only CSRF repository; generic product
+`BearerTokenResolver` or `CsrfTokenRepository` beans are not supported customization seams.

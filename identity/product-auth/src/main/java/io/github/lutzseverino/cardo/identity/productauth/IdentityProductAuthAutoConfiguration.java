@@ -5,6 +5,7 @@ import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader
 import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvaluator;
 import io.github.lutzseverino.cardo.identity.productauth.IdentityProductAuthProperties.ActiveTokenValidation;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -21,11 +22,9 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.client.RestClient;
 
 @AutoConfiguration(
@@ -64,22 +63,15 @@ public class IdentityProductAuthAutoConfiguration {
     return handler;
   }
 
-  @Bean
-  @ConditionalOnMissingBean
-  SessionCookieAuthenticationSelector sessionCookieAuthenticationSelector(
+  @Bean("cardoSessionCookieBearerTokenResolver")
+  SessionCookieBearerTokenResolver sessionCookieBearerTokenResolver(
       IdentityProductAuthProperties properties) {
-    return new SessionCookieAuthenticationSelector(properties.sessionCookieName());
+    return new SessionCookieBearerTokenResolver(properties.sessionCookieName());
   }
 
-  @Bean
-  @ConditionalOnMissingBean(BearerTokenResolver.class)
-  BearerTokenResolver bearerTokenResolver(SessionCookieAuthenticationSelector authentication) {
-    return new SessionCookieBearerTokenResolver(authentication);
-  }
-
-  @Bean
-  @ConditionalOnMissingBean
-  CsrfTokenRepository csrfTokenRepository(IdentityProductAuthProperties properties) {
+  @Bean("cardoReadOnlyCsrfTokenRepository")
+  ReadOnlyCsrfTokenRepository readOnlyCsrfTokenRepository(
+      IdentityProductAuthProperties properties) {
     return new ReadOnlyCsrfTokenRepository(properties.csrfCookieName());
   }
 
@@ -137,9 +129,8 @@ public class IdentityProductAuthAutoConfiguration {
   SecurityFilterChain identityProductSecurity(
       HttpSecurity http,
       KeycloakAuthoritiesConverter authorities,
-      BearerTokenResolver bearerTokens,
-      SessionCookieAuthenticationSelector authentication,
-      CsrfTokenRepository csrfTokens,
+      @Qualifier("cardoSessionCookieBearerTokenResolver") SessionCookieBearerTokenResolver bearerTokens,
+      @Qualifier("cardoReadOnlyCsrfTokenRepository") ReadOnlyCsrfTokenRepository csrfTokens,
       IdentityProductAuthProperties properties,
       ObjectProvider<ActiveTokenValidationFilter> activeTokenValidationFilter)
       throws Exception {
@@ -151,7 +142,7 @@ public class IdentityProductAuthAutoConfiguration {
                 csrf.csrfTokenRepository(csrfTokens)
                     .csrfTokenRequestHandler(new HeaderOnlyCsrfTokenRequestHandler())
                     .requireCsrfProtectionMatcher(
-                        new SessionCookieCsrfProtectionMatcher(authentication)))
+                        new SessionCookieCsrfProtectionMatcher(bearerTokens)))
         .authorizeHttpRequests(
             requests -> {
               requests

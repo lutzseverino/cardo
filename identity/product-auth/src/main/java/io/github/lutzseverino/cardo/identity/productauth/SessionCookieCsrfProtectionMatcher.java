@@ -6,15 +6,15 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 
 final class SessionCookieCsrfProtectionMatcher implements RequestMatcher {
 
-  private final SessionCookieAuthenticationSelector authentication;
+  private final SessionCookieBearerTokenResolver bearerTokens;
 
-  SessionCookieCsrfProtectionMatcher(SessionCookieAuthenticationSelector authentication) {
-    this.authentication = authentication;
+  SessionCookieCsrfProtectionMatcher(SessionCookieBearerTokenResolver bearerTokens) {
+    this.bearerTokens = bearerTokens;
   }
 
   @Override
   public boolean matches(HttpServletRequest request) {
     return CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)
-        && authentication.selectsSessionCookie(request);
+        && bearerTokens.selectsSessionCookie(request);
   }
 }

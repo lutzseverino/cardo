@@ -23,6 +23,8 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 
 class IdentityProductAuthAutoConfigurationTest {
@@ -53,6 +55,8 @@ class IdentityProductAuthAutoConfigurationTest {
           assertThat(application).hasSingleBean(MethodSecurityExpressionHandler.class);
           assertThat(application).hasSingleBean(BearerTokenResolver.class);
           assertThat(application).hasSingleBean(CsrfTokenRepository.class);
+          assertThat(application).hasSingleBean(SessionCookieBearerTokenResolver.class);
+          assertThat(application).hasSingleBean(ReadOnlyCsrfTokenRepository.class);
           assertThat(application).doesNotHaveBean(ActiveTokenValidator.class);
           assertThat(application).doesNotHaveBean(ActiveTokenValidationFilter.class);
         });
@@ -116,6 +120,40 @@ class IdentityProductAuthAutoConfigurationTest {
           assertThat(indexOf(filters, CsrfFilter.class))
               .isLessThan(indexOf(filters, BearerTokenAuthenticationFilter.class));
         });
+  }
+
+  @Test
+  void hostSecurityBeansCannotReplaceTheCoordinatedCardoMechanics() {
+    BearerTokenResolver hostBearerTokens = request -> "host-token";
+    CsrfTokenRepository hostCsrfTokens = new HttpSessionCsrfTokenRepository();
+
+    webContext
+        .withBean("hostBearerTokenResolver", BearerTokenResolver.class, () -> hostBearerTokens)
+        .withBean("hostCsrfTokenRepository", CsrfTokenRepository.class, () -> hostCsrfTokens)
+        .run(
+            application -> {
+              SecurityFilterChain chain = application.getBean(SecurityFilterChain.class);
+              BearerTokenAuthenticationFilter bearerFilter =
+                  chain.getFilters().stream()
+                      .filter(BearerTokenAuthenticationFilter.class::isInstance)
+                      .map(BearerTokenAuthenticationFilter.class::cast)
+                      .findFirst()
+                      .orElseThrow();
+              CsrfFilter csrfFilter =
+                  chain.getFilters().stream()
+                      .filter(CsrfFilter.class::isInstance)
+                      .map(CsrfFilter.class::cast)
+                      .findFirst()
+                      .orElseThrow();
+
+              Object authenticationConverter =
+                  ReflectionTestUtils.getField(bearerFilter, "authenticationConverter");
+              assertThat(
+                      ReflectionTestUtils.getField(authenticationConverter, "bearerTokenResolver"))
+                  .isSameAs(application.getBean(SessionCookieBearerTokenResolver.class));
+              assertThat(ReflectionTestUtils.getField(csrfFilter, "tokenRepository"))
+                  .isSameAs(application.getBean(ReadOnlyCsrfTokenRepository.class));
+            });
   }
 
   @Test

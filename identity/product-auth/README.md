@@ -47,6 +47,9 @@ the resource-server filter then accepts or rejects that bearer credential withou
 the cookie. Safe and anonymous requests do not require CSRF. The product integration only reads
 the Identity-issued CSRF cookie and never creates, rotates, or expires it. Production products
 configure `__Host-cardo.session` and `__Host-cardo.csrf` to match Identity's production policy.
+The Cardo filter chain wires its cookie selector, bearer resolver, and read-only CSRF repository as
+one coordinated mechanism. Product-defined `BearerTokenResolver` or `CsrfTokenRepository` beans
+are not customization seams and do not replace those Cardo-owned instances.
 
 The supported cookie topology, CSRF behavior, product exchange, and grant-convergence rules are
 defined in [Browser Sessions And Product Tokens](../../docs/reference/browser-sessions.md).
