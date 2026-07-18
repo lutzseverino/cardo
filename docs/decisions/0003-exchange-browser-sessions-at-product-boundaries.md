@@ -29,16 +29,17 @@ APIs and parent-domain cookies are outside this contract.
 
 Identity owns two browser credentials:
 
-- a short-lived Identity access token in the host-wide session cookie;
+- a short-lived Identity access token whose only audience is the configured Identity resource
+  server, in the host-wide session cookie;
 - a longer-lived provider refresh token in a cookie whose path is limited to Identity session
   routes.
 
 The shared session cookie is an authentication credential, not a product authorization token. A
-product service using `identity-product-auth` validates the Identity token and exchanges it
-server-side for a fresh requesting-party token whose single audience is that product's configured
-resource-server client. Spring Security builds the request authentication from the exchanged
-product token. Explicit `Authorization: Bearer` clients must supply an already product-scoped token
-and do not use the browser exchange.
+product service using `identity-product-auth` validates the Identity token's exact configured
+session audience and exchanges it server-side for a fresh requesting-party token whose single
+audience is that product's configured resource-server client. Spring Security builds the request
+authentication from the exchanged product token. Explicit `Authorization: Bearer` clients must
+supply an already product-scoped token and do not use the browser exchange.
 
 Product exchange is fail-closed and uncached by default. An optimization may cache only positive
 exchange results for a bounded interval when it preserves an explicit invalidation path; caching
@@ -46,8 +47,9 @@ must never become the correctness mechanism for authority convergence or revocat
 
 Identity refreshes the short-lived session credential through the path-scoped refresh credential
 and rotates both cookies when the provider rotates the refresh token. Refresh cannot extend beyond
-the provider session's idle or absolute limits. Logout revokes the provider session and expires
-both cookies with the same name, path, domain, SameSite, and secure attributes used to create them.
+the provider session's idle or absolute limits. Logout uses the refresh credential to revoke the
+provider session and expires both authentication cookies and the CSRF cookie with the same name,
+path, domain, SameSite, and secure attributes used to create them.
 
 The Identity session controller only reads and writes the HTTP cookie contract.
 `AuthenticationService` owns session creation, current-session validation, refresh, and revocation
@@ -56,8 +58,9 @@ through an Identity provider port; the provider adapter owns the refresh and rev
 Production cookies use these invariants:
 
 - session: `__Host-cardo.session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and no `Domain`;
-- refresh: `__Secure-cardo.refresh`, `Secure`, `HttpOnly`, `SameSite=Lax`, the Identity session API
-  path, and no `Domain`;
+- refresh: `__Secure-cardo.refresh`, `Secure`, `HttpOnly`, `SameSite=Lax`, a configured path that
+  exactly scopes the externally visible current-session, refresh, and logout routes, and no
+  `Domain`;
 - CSRF: `__Host-cardo.csrf`, `Secure`, readable by the browser, `SameSite=Lax`, `Path=/`, and no
   `Domain`.
 
@@ -66,17 +69,20 @@ must reject that local-only policy. Cookie lifetime never exceeds the correspond
 the provider session remains the source of truth for idle and absolute lifetime. The CSRF cookie is
 a browser-session cookie with no `Max-Age` or `Expires` attribute.
 
-Cardo uses a cookie-to-header CSRF token for browser requests. A safe bootstrap request materializes
-the CSRF cookie. Every unsafe Identity session endpoint, including login, refresh, and logout, must
-require the configured header. Unsafe product requests require it whenever cookie authentication is
-selected. A valid explicit Authorization header takes precedence over cookies and is not subject to
-CSRF validation because it is not ambient browser authentication.
+Cardo uses a cookie-to-header CSRF token for browser requests. Public
+`GET /identity/sessions/csrf` materializes the CSRF cookie, and clients echo it as
+`X-CSRF-TOKEN`. Every unsafe Identity session endpoint, including login, refresh, and logout, must
+require an exact cookie/header match. Unsafe product requests require it whenever cookie
+authentication is selected. A valid explicit Authorization header takes precedence over cookies
+and is not subject to CSRF validation because it is not ambient browser authentication.
 
-Authorization staging remains asynchronous. The embedded authorization boundary returns a durable
-grant receipt, and the application that stages a plan exposes that receipt through its own
-lifecycle contract. A product must report authorization as pending until the receipt is applied.
-Once applied, the next uncached product exchange includes the new authorities. Identity does not
-infer product lifecycle or silently grant product access.
+Authorization staging remains asynchronous. In the caller's transaction, the embedded
+authorization boundary persists and returns a stable grant-receipt identifier before publishing a
+receipt-bearing plan. Non-empty plans begin pending; empty plans are immediately applied. Provider
+application moves the durable receipt to applied or, after bounded attempts, failed. The
+application that stages a plan stores the identifier with its own lifecycle and exposes the status
+through its API. Once applied, the next uncached product exchange includes the new authorities.
+Identity does not infer product lifecycle or silently grant product access.
 
 `identity-product-auth` owns issuer and audience validation, session-cookie recognition, product
 token exchange, authority conversion, authenticated-user reading, CSRF enforcement, active-token
@@ -90,8 +96,9 @@ requests; products do not replace the chain or recreate Cardo-owned beans.
 - Product requesting-party tokens and resource grants do not enter browser cookies.
 - Newly applied authorities become visible without rotating the browser session cookie.
 - Cookie-authenticated requests incur one fail-closed product-token exchange by default.
-- Identity must retain provider refresh-token handling at the session transport boundary, while
-  product routes never receive that refresh credential.
+- Identity's controller owns refresh-cookie transport, its Authentication service owns the session
+  lifecycle, and its provider adapter owns the refresh protocol; product routes never receive that
+  credential.
 - Products must expose grant convergence before promising newly authorized behavior.
 - Explicit bearer clients remain stateless and product-audience-specific.
 - Implementation proceeds in dependency order:
