@@ -31,6 +31,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 class KeycloakIdentityProviderTest {
@@ -339,5 +340,47 @@ class KeycloakIdentityProviderTest {
                 {"active":true,"sub":"subject-1","sid":"session-1"}
                 """,
                 MediaType.APPLICATION_JSON));
+  }
+
+  @Test
+  void reportsRevocationTransportFailureAsUnavailable() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/revoke"))
+        .andRespond(
+            request -> {
+              throw new ResourceAccessException("connection timed out");
+            });
+
+    assertThatThrownBy(() -> provider.revokeSession("provider-refresh"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(503);
+              assertThat(exception.code()).isEqualTo("identity_provider_unavailable");
+            });
+  }
+
+  @Test
+  void reportsTokenTransportFailureAsUnavailable() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(
+            request -> {
+              throw new ResourceAccessException("connection refused");
+            });
+
+    assertThatThrownBy(() -> provider.refreshSession("provider-refresh"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(503);
+              assertThat(exception.code()).isEqualTo("identity_provider_unavailable");
+            });
   }
 }

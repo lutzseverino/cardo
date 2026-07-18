@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
@@ -217,6 +218,8 @@ public class KeycloakIdentityProvider implements IdentityProvider {
           .toBodilessEntity();
     } catch (RestClientResponseException exception) {
       throw sessionProviderException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
     }
   }
 
@@ -273,6 +276,8 @@ public class KeycloakIdentityProvider implements IdentityProvider {
             "invalid_credentials".equals(invalidCode) ? 400 : 401, invalidCode, invalidMessage);
       }
       throw sessionProviderException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
     }
   }
 
@@ -296,6 +301,8 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       return introspection;
     } catch (RestClientResponseException exception) {
       throw sessionProviderException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
     }
   }
 
@@ -348,6 +355,13 @@ public class KeycloakIdentityProvider implements IdentityProvider {
     int upstreamStatus = exception.getStatusCode().value();
     int status = upstreamStatus == 429 || upstreamStatus >= 500 ? 503 : 502;
     return ApiException.of(status, "identity_provider_error", "Identity provider request failed.");
+  }
+
+  private ApiException sessionUnavailable(RestClientException exception) {
+    ApiException failure =
+        ApiException.of(503, "identity_provider_unavailable", "Identity provider is unavailable.");
+    failure.addSuppressed(exception);
+    return failure;
   }
 
   private void revokeAfterFailedIssue(String refreshToken, RuntimeException failure) {
