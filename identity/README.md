@@ -29,8 +29,43 @@ actions.
 
 The accepted production [browser-session contract](../docs/reference/browser-sessions.md) requires
 one HTTPS origin for the product frontend, product API, and reverse-proxied Identity session routes.
-Its cookie lifecycle, CSRF, refresh credential, server-side product exchange, and grant-convergence
-slices are not yet implemented; current browser-session consumers are not production-ready.
+Identity implements the access/refresh cookie lifecycle, refresh rotation, refresh-token logout,
+and exact `identity` audience validation. CSRF, product-token exchange, and grant convergence remain
+dependent slices, so browser-session consumers are not yet production-ready.
+
+## Browser Session Configuration
+
+Local HTTP development uses the defaults:
+
+```yaml
+cardo:
+  identity:
+    session:
+      mode: local
+      access-cookie-name: cardo.session
+      refresh-cookie-name: cardo.refresh
+      refresh-cookie-path: ${cardo.api.base-path}/identity/sessions/current
+      secure: false
+```
+
+Production requires explicit secure policy:
+
+```yaml
+cardo:
+  identity:
+    session:
+      mode: production
+      access-cookie-name: __Host-cardo.session
+      refresh-cookie-name: __Secure-cardo.refresh
+      refresh-cookie-path: /api/v1/identity/sessions/current
+      secure: true
+```
+
+Set the refresh path to the browser-visible current-session path when a gateway rewrites the public
+prefix. Identity rejects production startup with insecure names or attributes. Cookie `Max-Age`
+comes from the corresponding credential expiry rather than configuration. The Identity RPT audience
+is the fixed resource catalog name `identity`; `cardo-identity` remains the separate confidential
+OAuth client.
 
 Invited-user credential setup and provisional deletion are durable operations.
 Credential setup delegates password/profile entry to Keycloak's action flow;

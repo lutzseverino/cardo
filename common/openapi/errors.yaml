@@ -42,6 +42,18 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiError"
+    BadGateway:
+      description: An upstream service returned an invalid response.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    ServiceUnavailable:
+      description: A required upstream service is temporarily unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
   schemas:
     ApiError:
       type: object

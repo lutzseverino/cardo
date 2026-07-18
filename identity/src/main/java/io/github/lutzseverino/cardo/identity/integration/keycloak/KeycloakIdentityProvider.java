@@ -9,11 +9,9 @@ import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import java.net.URI;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
@@ -32,7 +31,9 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   private static final String FORM_GRANT_TYPE = "grant_type";
   private static final String PASSWORD_CREDENTIAL_TYPE = "password";
   private static final String FORM_PASSWORD = PASSWORD_CREDENTIAL_TYPE;
+  private static final String FORM_REFRESH_TOKEN = "refresh_token";
   private static final String FORM_TOKEN = "token";
+  private static final String REFRESH_TOKEN_GRANT = "refresh_token";
 
   private final KeycloakProperties properties;
   private final KeycloakRealmAdminClient admin;
@@ -196,24 +197,48 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   }
 
   @Override
-  public IssuedIdentityToken issuePasswordToken(String email, String password) {
-    TokenResponse token = token(passwordGrant(email, password));
-    String accessToken = token.accessToken();
-    TokenIntrospection introspection = introspect(accessToken);
-    return new IssuedIdentityToken(
-        accessToken, expiresAt(introspection.exp()), introspection.sub(), introspection.sid());
+  public IssuedSession issuePasswordSession(String email, String password) {
+    return issueSession(
+        passwordGrant(email, password), "invalid_credentials", "Invalid credentials.");
   }
 
   @Override
-  public void revokeToken(String token) {
+  public IssuedSession refreshSession(String refreshToken) {
+    return issueSession(
+        refreshGrant(refreshToken), "invalid_session", "The session is no longer valid.");
+  }
+
+  @Override
+  public void revokeSession(String refreshToken) {
     try {
       rest.post()
           .uri("/realms/{realm}/protocol/openid-connect/revoke", properties.realm())
-          .body(revocationRequest(token))
+          .body(revocationRequest(refreshToken))
           .retrieve()
           .toBodilessEntity();
     } catch (RestClientResponseException exception) {
-      throw providerException(exception);
+      throw sessionProviderException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
+    }
+  }
+
+  private IssuedSession issueSession(
+      MultiValueMap<String, String> form, String invalidCode, String invalidMessage) {
+    OffsetDateTime requestedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    TokenResponse token = token(form, invalidCode, invalidMessage);
+    try {
+      TokenIntrospection introspection = introspect(token.accessToken());
+      return new IssuedSession(
+          token.accessToken(),
+          requestedAt.plusSeconds(token.expiresIn()),
+          token.refreshToken(),
+          requestedAt.plusSeconds(token.refreshExpiresIn()),
+          introspection.sub(),
+          introspection.sid());
+    } catch (RuntimeException exception) {
+      revokeAfterFailedIssue(token.refreshToken(), exception);
+      throw exception;
     }
   }
 
@@ -221,7 +246,8 @@ public class KeycloakIdentityProvider implements IdentityProvider {
     return clientCredentialsTokens.clientCredentialsToken();
   }
 
-  private TokenResponse token(MultiValueMap<String, String> form) {
+  private TokenResponse token(
+      MultiValueMap<String, String> form, String invalidCode, String invalidMessage) {
     try {
       TokenResponse token =
           rest.post()
@@ -229,16 +255,29 @@ public class KeycloakIdentityProvider implements IdentityProvider {
               .body(form)
               .retrieve()
               .body(TokenResponse.class);
-      if (token == null || token.accessToken() == null) {
+      if (token == null
+          || token.accessToken() == null
+          || token.accessToken().isBlank()
+          || token.refreshToken() == null
+          || token.refreshToken().isBlank()
+          || token.expiresIn() == null
+          || token.expiresIn() <= 0
+          || token.refreshExpiresIn() == null
+          || token.refreshExpiresIn() <= 0) {
         throw ApiException.of(
-            502, "identity_provider_token_missing", "Identity provider did not return a token.");
+            502,
+            "identity_provider_session_missing",
+            "Identity provider did not return complete session credentials.");
       }
       return token;
     } catch (RestClientResponseException exception) {
-      if (exception.getStatusCode().value() == 400 || exception.getStatusCode().value() == 401) {
-        throw ApiException.badRequest("invalid_credentials", "Invalid credentials.");
+      if (exception.getStatusCode().value() == 400) {
+        throw ApiException.of(
+            "invalid_credentials".equals(invalidCode) ? 400 : 401, invalidCode, invalidMessage);
       }
-      throw providerException(exception);
+      throw sessionProviderException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
     }
   }
 
@@ -256,9 +295,14 @@ public class KeycloakIdentityProvider implements IdentityProvider {
             "identity_provider_introspection_missing",
             "Identity provider did not return token introspection.");
       }
+      if (!introspection.active() || introspection.sub() == null || introspection.sub().isBlank()) {
+        throw ApiException.of(401, "invalid_session", "The session is no longer valid.");
+      }
       return introspection;
     } catch (RestClientResponseException exception) {
-      throw providerException(exception);
+      throw sessionProviderException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
     }
   }
 
@@ -270,8 +314,17 @@ public class KeycloakIdentityProvider implements IdentityProvider {
     return form;
   }
 
+  private MultiValueMap<String, String> refreshGrant(String refreshToken) {
+    MultiValueMap<String, String> form = clientCredentials();
+    form.add(FORM_GRANT_TYPE, REFRESH_TOKEN_GRANT);
+    form.add(FORM_REFRESH_TOKEN, refreshToken);
+    return form;
+  }
+
   private MultiValueMap<String, String> revocationRequest(String token) {
-    return tokenRequest(token);
+    MultiValueMap<String, String> form = tokenRequest(token);
+    form.add("token_type_hint", REFRESH_TOKEN_GRANT);
+    return form;
   }
 
   private MultiValueMap<String, String> tokenRequest(String token) {
@@ -291,18 +344,32 @@ public class KeycloakIdentityProvider implements IdentityProvider {
     return new KeycloakCredential(PASSWORD_CREDENTIAL_TYPE, password, false);
   }
 
-  private OffsetDateTime expiresAt(Long epochSeconds) {
-    if (epochSeconds == null) {
-      return null;
-    }
-    return OffsetDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC);
-  }
-
   private ApiException providerException(RestClientResponseException exception) {
     return ApiException.of(
         exception.getStatusCode().value(),
         "identity_provider_error",
         "Identity provider request failed.");
+  }
+
+  private ApiException sessionProviderException(RestClientResponseException exception) {
+    int upstreamStatus = exception.getStatusCode().value();
+    int status = upstreamStatus == 429 || upstreamStatus >= 500 ? 503 : 502;
+    return ApiException.of(status, "identity_provider_error", "Identity provider request failed.");
+  }
+
+  private ApiException sessionUnavailable(RestClientException exception) {
+    ApiException failure =
+        ApiException.of(503, "identity_provider_unavailable", "Identity provider is unavailable.");
+    failure.addSuppressed(exception);
+    return failure;
+  }
+
+  private void revokeAfterFailedIssue(String refreshToken, RuntimeException failure) {
+    try {
+      revokeSession(refreshToken);
+    } catch (RuntimeException exception) {
+      failure.addSuppressed(exception);
+    }
   }
 
   private record KeycloakUser(
@@ -320,8 +387,11 @@ public class KeycloakIdentityProvider implements IdentityProvider {
 
   private record KeycloakCredential(String type, String value, boolean temporary) {}
 
-  private record TokenResponse(@JsonProperty("access_token") String accessToken) {}
+  private record TokenResponse(
+      @JsonProperty("access_token") String accessToken,
+      @JsonProperty("expires_in") Long expiresIn,
+      @JsonProperty("refresh_token") String refreshToken,
+      @JsonProperty("refresh_expires_in") Long refreshExpiresIn) {}
 
-  private record TokenIntrospection(
-      boolean active, String sub, String sid, Long exp, Map<String, Object> claims) {}
+  private record TokenIntrospection(boolean active, String sub, String sid) {}
 }

@@ -43,7 +43,6 @@ class CurrentJwtReaderTest {
 
     assertThat(current.authorizationSubject()).isEqualTo("subject-1");
     assertThat(current.sessionId()).isEqualTo("session-1");
-    assertThat(current.accessToken()).isEqualTo("access-token");
     assertThat(current.expiresAt()).isEqualTo(OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
     assertThat(current.grants())
         .singleElement()

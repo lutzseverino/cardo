@@ -31,8 +31,11 @@ cardo:
     base-path: /api/${cardo.api.version}
   identity:
     session:
-      cookie-name: cardo.session
-      ttl: 8h
+      mode: ${IDENTITY_SESSION_MODE:local}
+      access-cookie-name: ${IDENTITY_ACCESS_COOKIE_NAME:cardo.session}
+      refresh-cookie-name: ${IDENTITY_REFRESH_COOKIE_NAME:cardo.refresh}
+      refresh-cookie-path: ${IDENTITY_REFRESH_COOKIE_PATH:${cardo.api.base-path}/identity/sessions/current}
+      secure: ${IDENTITY_SESSION_SECURE:false}
     keycloak:
       base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
       realm: ${KEYCLOAK_REALM:cardo}

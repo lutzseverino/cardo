@@ -22,7 +22,6 @@ public class CurrentJwtReader {
     return new CurrentAuthentication(
         jwt.getName(),
         jwt.getToken().getClaimAsString("sid"),
-        jwt.getToken().getTokenValue(),
         expiresAt(jwt),
         grants.read(jwt.getAuthorities()));
   }

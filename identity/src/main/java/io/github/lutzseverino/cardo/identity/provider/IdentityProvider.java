@@ -24,14 +24,35 @@ public interface IdentityProvider {
 
   void ensureUserIdClaimMapped(List<String> clientIds);
 
-  IssuedIdentityToken issuePasswordToken(String email, String password);
+  IssuedSession issuePasswordSession(String email, String password);
 
-  void revokeToken(String token);
+  IssuedSession refreshSession(String refreshToken);
+
+  void revokeSession(String refreshToken);
 
   record ProvisionedIdentity(String subject) {}
 
   record CompletedIdentityProfile(String name) {}
 
-  record IssuedIdentityToken(
-      String token, OffsetDateTime expiresAt, String subject, String sessionId) {}
+  record IssuedSession(
+      String accessToken,
+      OffsetDateTime accessExpiresAt,
+      String refreshToken,
+      OffsetDateTime refreshExpiresAt,
+      String subject,
+      String sessionId) {
+
+    @Override
+    public String toString() {
+      return "IssuedSession[accessExpiresAt="
+          + accessExpiresAt
+          + ", refreshExpiresAt="
+          + refreshExpiresAt
+          + ", subject="
+          + subject
+          + ", sessionId="
+          + sessionId
+          + "]";
+    }
+  }
 }

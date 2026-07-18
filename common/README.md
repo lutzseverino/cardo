@@ -1,8 +1,7 @@
 # Common
 
 Common owns small shared Java contracts that are not product behavior: API error
-types, data-retention markers, shared value objects, validation helpers, and
-cookie helpers.
+types, data-retention markers, shared value objects, and validation helpers.
 
 ## Product Integration
 

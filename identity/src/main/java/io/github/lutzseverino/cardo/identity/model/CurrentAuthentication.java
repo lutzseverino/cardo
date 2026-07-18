@@ -7,6 +7,5 @@ import java.util.List;
 public record CurrentAuthentication(
     String authorizationSubject,
     String sessionId,
-    String accessToken,
     OffsetDateTime expiresAt,
     List<EffectiveGrant> grants) {}
