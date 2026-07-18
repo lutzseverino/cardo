@@ -75,6 +75,11 @@ reconciles with leases and bounded retry. The operation response exposes its
 status and action expiry. Provisional deletion follows the same model and is
 queryable after the request, including after the local user row is gone.
 
+The Identity integration tests use Testcontainers with PostgreSQL 17.5 to
+exercise Flyway migrations, partial indexes, and row-lock behavior. Running
+`./mvnw --batch-mode --no-transfer-progress verify` therefore requires a
+Docker-compatible container runtime.
+
 Example product configuration:
 
 ```yaml
