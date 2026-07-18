@@ -34,6 +34,7 @@ cardo:
       mode: ${IDENTITY_SESSION_MODE:local}
       access-cookie-name: ${IDENTITY_ACCESS_COOKIE_NAME:cardo.session}
       refresh-cookie-name: ${IDENTITY_REFRESH_COOKIE_NAME:cardo.refresh}
+      csrf-cookie-name: ${IDENTITY_CSRF_COOKIE_NAME:cardo.csrf}
       refresh-cookie-path: ${IDENTITY_REFRESH_COOKIE_PATH:${cardo.api.base-path}/identity/sessions/current}
       secure: ${IDENTITY_SESSION_SECURE:false}
     keycloak:

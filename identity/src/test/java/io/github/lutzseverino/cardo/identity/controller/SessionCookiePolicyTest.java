@@ -42,6 +42,7 @@ class SessionCookiePolicyTest {
   void expiresCookiesWithSymmetricAttributes() {
     var access = cookies.expireAccess();
     var refresh = cookies.expireRefresh();
+    var csrf = cookies.expireCsrf();
 
     assertThat(access.toString())
         .contains("__Host-cardo.session=", "Path=/", "Secure", "HttpOnly", "SameSite=Lax")
@@ -56,6 +57,9 @@ class SessionCookiePolicyTest {
             "SameSite=Lax",
             "Max-Age=0")
         .doesNotContain("Domain=");
+    assertThat(csrf.toString())
+        .contains("__Host-cardo.csrf=", "Path=/", "Secure", "SameSite=Lax", "Max-Age=0")
+        .doesNotContain("HttpOnly", "Domain=");
   }
 
   @Test
@@ -76,6 +80,7 @@ class SessionCookiePolicyTest {
                 Mode.LOCAL,
                 "cardo.session",
                 "cardo.refresh",
+                "cardo.csrf",
                 "/api/v1/identity/sessions/current",
                 false),
             Clock.fixed(NOW, ZoneOffset.UTC));
@@ -101,6 +106,7 @@ class SessionCookiePolicyTest {
         Mode.PRODUCTION,
         "__Host-cardo.session",
         "__Secure-cardo.refresh",
+        "__Host-cardo.csrf",
         "/api/v1/identity/sessions/current",
         true);
   }

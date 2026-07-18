@@ -14,7 +14,12 @@ class SessionPropertiesTest {
   @Test
   void acceptsExplicitLocalHttpPolicy() {
     new SessionProperties(
-        Mode.LOCAL, "cardo.session", "cardo.refresh", "/api/v1/identity/sessions/current", false);
+        Mode.LOCAL,
+        "cardo.session",
+        "cardo.refresh",
+        "cardo.csrf",
+        "/api/v1/identity/sessions/current",
+        false);
   }
 
   @Test
@@ -23,6 +28,7 @@ class SessionPropertiesTest {
         Mode.PRODUCTION,
         "__Host-cardo.session",
         "__Secure-cardo.refresh",
+        "__Host-cardo.csrf",
         "/gateway/api/v1/identity/sessions/current",
         true);
   }
@@ -35,6 +41,7 @@ class SessionPropertiesTest {
                     Mode.PRODUCTION,
                     "__Host-cardo.session",
                     "__Secure-cardo.refresh",
+                    "__Host-cardo.csrf",
                     "/api/v1/identity/sessions/current",
                     false))
         .isInstanceOf(IllegalArgumentException.class)
@@ -46,18 +53,48 @@ class SessionPropertiesTest {
                     Mode.PRODUCTION,
                     "cardo.session",
                     "__Secure-cardo.refresh",
+                    "__Host-cardo.csrf",
                     "/api/v1/identity/sessions/current",
                     true))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("__Host-cardo.session");
+
+    assertThatThrownBy(
+            () ->
+                new SessionProperties(
+                    Mode.PRODUCTION,
+                    "__Host-cardo.session",
+                    "__Secure-cardo.refresh",
+                    "cardo.csrf",
+                    "/api/v1/identity/sessions/current",
+                    true))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("__Host-cardo.csrf");
   }
 
   @Test
   void rejectsRefreshPathThatCanReachProductRoutes() {
     assertThatThrownBy(
-            () -> new SessionProperties(Mode.LOCAL, "cardo.session", "cardo.refresh", "/", false))
+            () ->
+                new SessionProperties(
+                    Mode.LOCAL, "cardo.session", "cardo.refresh", "cardo.csrf", "/", false))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("/identity/sessions/current");
+  }
+
+  @Test
+  void rejectsCookieNamesThatWouldShadowEachOther() {
+    assertThatThrownBy(
+            () ->
+                new SessionProperties(
+                    Mode.LOCAL,
+                    "cardo.session",
+                    "cardo.refresh",
+                    "cardo.session",
+                    "/api/v1/identity/sessions/current",
+                    false))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("distinct");
   }
 
   @Test
@@ -68,6 +105,7 @@ class SessionPropertiesTest {
             "cardo.identity.session.mode=production",
             "cardo.identity.session.access-cookie-name=cardo.session",
             "cardo.identity.session.refresh-cookie-name=cardo.refresh",
+            "cardo.identity.session.csrf-cookie-name=cardo.csrf",
             "cardo.identity.session.refresh-cookie-path=/api/v1/identity/sessions/current",
             "cardo.identity.session.secure=false")
         .run(context -> assertThat(context.getStartupFailure()).isNotNull());

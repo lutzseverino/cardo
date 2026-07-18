@@ -52,6 +52,16 @@ class SessionCookiePolicy {
     return expire(properties.refreshCookieName(), properties.refreshCookiePath());
   }
 
+  ResponseCookie expireCsrf() {
+    return ResponseCookie.from(properties.csrfCookieName(), "")
+        .secure(properties.secure())
+        .httpOnly(false)
+        .sameSite(SAME_SITE)
+        .path(ACCESS_PATH)
+        .maxAge(Duration.ZERO)
+        .build();
+  }
+
   Optional<String> refresh(HttpServletRequest request) {
     Cookie[] cookies = request.getCookies();
     if (cookies == null) {

@@ -19,7 +19,10 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.client.RestClient;
 
 class IdentityProductAuthAutoConfigurationTest {
@@ -49,6 +52,7 @@ class IdentityProductAuthAutoConfigurationTest {
           assertThat(application).hasSingleBean(AuthenticatedUserReader.class);
           assertThat(application).hasSingleBean(MethodSecurityExpressionHandler.class);
           assertThat(application).hasSingleBean(BearerTokenResolver.class);
+          assertThat(application).hasSingleBean(CsrfTokenRepository.class);
           assertThat(application).doesNotHaveBean(ActiveTokenValidator.class);
           assertThat(application).doesNotHaveBean(ActiveTokenValidationFilter.class);
         });
@@ -105,7 +109,28 @@ class IdentityProductAuthAutoConfigurationTest {
         application -> {
           assertThat(application).hasSingleBean(SecurityFilterChain.class);
           assertThat(application).hasSingleBean(BearerTokenResolver.class);
+          var filters = application.getBean(SecurityFilterChain.class).getFilters();
+          assertThat(filters.stream().filter(CsrfFilter.class::isInstance)).hasSize(1);
+          assertThat(application).doesNotHaveBean(CsrfFilter.class);
+          assertThat(indexOf(filters, BearerTokenAuthenticationFilter.class)).isGreaterThan(-1);
+          assertThat(indexOf(filters, CsrfFilter.class))
+              .isLessThan(indexOf(filters, BearerTokenAuthenticationFilter.class));
         });
+  }
+
+  @Test
+  void rejectsAReadableCsrfCookieThatShadowsTheSessionCredential() {
+    context
+        .withPropertyValues(
+            "cardo.identity.product-auth.session-cookie-name=cardo.session",
+            "cardo.identity.product-auth.csrf-cookie-name=cardo.session")
+        .run(
+            application -> {
+              assertThat(application).hasFailed();
+              assertThat(application.getStartupFailure())
+                  .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                  .hasRootCauseMessage("session and CSRF cookie names must be distinct");
+            });
   }
 
   @Test
@@ -131,5 +156,26 @@ class IdentityProductAuthAutoConfigurationTest {
     request.setCookies(new Cookie("cardo.session", "cookie-token"));
 
     assertThat(resolver.resolve(request)).isEqualTo("header-token");
+  }
+
+  @Test
+  void malformedAuthorizationHeaderNeverFallsBackToSessionCookie() {
+    SessionCookieBearerTokenResolver resolver =
+        new SessionCookieBearerTokenResolver("cardo.session");
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("Authorization", "Basic malformed-credential");
+    request.setCookies(new Cookie("cardo.session", "cookie-token"));
+
+    assertThat(resolver.resolve(request)).isNull();
+    assertThat(resolver.selectsSessionCookie(request)).isFalse();
+  }
+
+  private int indexOf(java.util.List<jakarta.servlet.Filter> filters, Class<?> type) {
+    for (int index = 0; index < filters.size(); index++) {
+      if (type.isInstance(filters.get(index))) {
+        return index;
+      }
+    }
+    return -1;
   }
 }

@@ -19,13 +19,13 @@ import org.springframework.security.access.expression.method.DefaultMethodSecuri
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.client.RestClient;
 
 @AutoConfiguration(
@@ -66,8 +66,21 @@ public class IdentityProductAuthAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  BearerTokenResolver bearerTokenResolver(IdentityProductAuthProperties properties) {
-    return new SessionCookieBearerTokenResolver(properties.sessionCookieName());
+  SessionCookieAuthenticationSelector sessionCookieAuthenticationSelector(
+      IdentityProductAuthProperties properties) {
+    return new SessionCookieAuthenticationSelector(properties.sessionCookieName());
+  }
+
+  @Bean
+  @ConditionalOnMissingBean(BearerTokenResolver.class)
+  BearerTokenResolver bearerTokenResolver(SessionCookieAuthenticationSelector authentication) {
+    return new SessionCookieBearerTokenResolver(authentication);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  CsrfTokenRepository csrfTokenRepository(IdentityProductAuthProperties properties) {
+    return new ReadOnlyCsrfTokenRepository(properties.csrfCookieName());
   }
 
   @Bean
@@ -125,13 +138,20 @@ public class IdentityProductAuthAutoConfiguration {
       HttpSecurity http,
       KeycloakAuthoritiesConverter authorities,
       BearerTokenResolver bearerTokens,
+      SessionCookieAuthenticationSelector authentication,
+      CsrfTokenRepository csrfTokens,
       IdentityProductAuthProperties properties,
       ObjectProvider<ActiveTokenValidationFilter> activeTokenValidationFilter)
       throws Exception {
     JwtAuthenticationConverter jwt = new JwtAuthenticationConverter();
     jwt.setJwtGrantedAuthoritiesConverter(authorities);
 
-    http.csrf(AbstractHttpConfigurer::disable)
+    http.csrf(
+            csrf ->
+                csrf.csrfTokenRepository(csrfTokens)
+                    .csrfTokenRequestHandler(new HeaderOnlyCsrfTokenRequestHandler())
+                    .requireCsrfProtectionMatcher(
+                        new SessionCookieCsrfProtectionMatcher(authentication)))
         .authorizeHttpRequests(
             requests -> {
               requests

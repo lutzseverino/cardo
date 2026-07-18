@@ -1,6 +1,5 @@
 package io.github.lutzseverino.cardo.identity.productauth;
 
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
@@ -8,27 +7,25 @@ import org.springframework.security.oauth2.server.resource.web.DefaultBearerToke
 public class SessionCookieBearerTokenResolver implements BearerTokenResolver {
 
   private final DefaultBearerTokenResolver authorizationHeader = new DefaultBearerTokenResolver();
-  private final String cookieName;
+  private final SessionCookieAuthenticationSelector selector;
 
   public SessionCookieBearerTokenResolver(String cookieName) {
-    this.cookieName = cookieName;
+    this(new SessionCookieAuthenticationSelector(cookieName));
+  }
+
+  SessionCookieBearerTokenResolver(SessionCookieAuthenticationSelector selector) {
+    this.selector = selector;
   }
 
   @Override
   public String resolve(HttpServletRequest request) {
-    String token = authorizationHeader.resolve(request);
-    if (token != null) {
-      return token;
+    if (selector.hasAuthorizationHeader(request)) {
+      return authorizationHeader.resolve(request);
     }
-    Cookie[] cookies = request.getCookies();
-    if (cookies == null) {
-      return null;
-    }
-    for (Cookie cookie : cookies) {
-      if (cookieName.equals(cookie.getName()) && !cookie.getValue().isBlank()) {
-        return cookie.getValue();
-      }
-    }
-    return null;
+    return selector.sessionToken(request);
+  }
+
+  boolean selectsSessionCookie(HttpServletRequest request) {
+    return selector.selectsSessionCookie(request);
   }
 }
