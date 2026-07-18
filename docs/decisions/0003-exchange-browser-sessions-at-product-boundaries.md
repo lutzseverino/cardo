@@ -49,6 +49,10 @@ and rotates both cookies when the provider rotates the refresh token. Refresh ca
 the provider session's idle or absolute limits. Logout revokes the provider session and expires
 both cookies with the same name, path, domain, SameSite, and secure attributes used to create them.
 
+The Identity session controller only reads and writes the HTTP cookie contract.
+`AuthenticationService` owns session creation, current-session validation, refresh, and revocation
+through an Identity provider port; the provider adapter owns the refresh and revocation protocol.
+
 Production cookies use these invariants:
 
 - session: `__Host-cardo.session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and no `Domain`;
@@ -59,7 +63,8 @@ Production cookies use these invariants:
 
 Local HTTP development uses explicit non-prefixed names and disables `Secure`. Production startup
 must reject that local-only policy. Cookie lifetime never exceeds the corresponding token expiry;
-the provider session remains the source of truth for idle and absolute lifetime.
+the provider session remains the source of truth for idle and absolute lifetime. The CSRF cookie is
+a browser-session cookie with no `Max-Age` or `Expires` attribute.
 
 Cardo uses a cookie-to-header CSRF token for browser requests. A safe bootstrap request materializes
 the CSRF cookie. Every unsafe Identity session endpoint, including login, refresh, and logout, must

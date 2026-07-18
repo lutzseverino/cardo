@@ -22,7 +22,7 @@ across sibling product origins are not supported.
 | --- | --- | --- | --- | --- | --- |
 | Identity access | `__Host-cardo.session` | `/` | HTTP only | `Lax` | No later than access-token expiry |
 | Provider refresh | `__Secure-cardo.refresh` | Identity session API path | HTTP only | `Lax` | No later than refresh-token expiry |
-| CSRF | `__Host-cardo.csrf` | `/` | Readable | `Lax` | Cardo security configuration |
+| CSRF | `__Host-cardo.csrf` | `/` | Readable | `Lax` | Browser session; no `Max-Age` or `Expires` |
 
 All production cookies are `Secure` and omit `Domain`. Creation, rotation, and expiry use identical
 name, path, domain, SameSite, and secure attributes. Production rejects non-secure or non-prefixed
