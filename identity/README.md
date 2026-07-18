@@ -27,6 +27,11 @@ or login. Products issue product grants from their own flows by staging
 `GrantPlan` instances with product-owned client authorities and resource
 actions.
 
+The accepted production [browser-session contract](../docs/reference/browser-sessions.md) requires
+one HTTPS origin for the product frontend, product API, and reverse-proxied Identity session routes.
+Its cookie lifecycle, CSRF, refresh credential, server-side product exchange, and grant-convergence
+slices are not yet implemented; current browser-session consumers are not production-ready.
+
 Invited-user credential setup and provisional deletion are durable operations.
 Credential setup delegates password/profile entry to Keycloak's action flow;
 Cardo never receives the password. Identity persists the operation before the

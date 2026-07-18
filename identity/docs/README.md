@@ -5,6 +5,7 @@ Documentation for the Identity service starts with its [project overview](../REA
 ## Project Contracts
 
 - [Identity OpenAPI contract](../openapi/identity.yaml)
+- [Browser sessions and product tokens](../../docs/reference/browser-sessions.md)
 
 ## Related Repository Documentation
 

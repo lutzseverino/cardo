@@ -68,3 +68,15 @@ and configure:
 
 The shared `db/authorization/publications` Flyway location creates the publication
 schema and Spring Modulith JDBC tables.
+
+## Browser Convergence Target
+
+The accepted production [browser-session contract](browser-sessions.md) adds a dependent
+implementation requirement without changing plan ownership: grant staging will provide a durable
+receipt whose pending, applied, and failed states can be associated with the owning application's
+lifecycle. The application maps that state into its own API; Authorization does not acquire a
+generic HTTP owner or product lifecycle.
+
+Until that receipt contract is implemented, an application must not represent a staged grant as
+converged browser access. Identity token renewal alone cannot prove that asynchronous provider work
+has completed.

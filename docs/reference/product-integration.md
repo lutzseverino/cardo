@@ -39,11 +39,17 @@ the same wiring and the packaged shape can stay product-neutral.
 Use `identity-product-auth` when a product accepts logged-in Cardo users. The
 module auto-configures the shared Spring Security pieces: JWT authority
 conversion, permission evaluation, authenticated-user reading, method security,
-resource-server setup, session-cookie bearer token resolution, and optional
-active-token validation through the identity provider introspection endpoint.
+resource-server setup, session-cookie bearer token resolution, and optional active-token validation
+through the identity provider introspection endpoint.
 
-Products still configure their issuer, public product paths, and active-token
-validation credentials:
+The current cookie-authenticated shape is not production-ready. The accepted
+[browser-session contract](browser-sessions.md) requires cookie-aware CSRF, Identity-session
+validation, server-side exchange for a product-audience requesting-party token, strict audience
+validation, and a method-aware product request-policy seam. Do not adopt browser cookie
+authentication in a production product until those dependent slices are implemented.
+
+Products currently configure their issuer, public product paths, and active-token validation
+credentials:
 
 ```yaml
 spring:
@@ -69,11 +75,16 @@ cardo:
         read-timeout: 2s
 ```
 
-When enabled, active-token validation fails closed and caches only positive
-introspection responses for the configured TTL. Keep the TTL short so global
+When enabled, active-token validation fails closed and caches only positive introspection responses
+for the configured TTL. Keep the TTL short so global
 Identity disablement is enforced quickly for already-issued JWTs. Keep
 introspection timeouts low because product requests wait on the fail-closed
 validation path.
+
+The production contract requires products that stage grants to expose the durable receipt through
+their own lifecycle contract. They do not promise usable access while authorization is pending.
+Once provider application succeeds, the next uncached product exchange observes the new grants;
+Identity does not grant product access or decide which permissions a product flow requires.
 
 Use `invite-client` for compile-time product code and `invite-client-http` as a
 runtime dependency. Configure `cardo.invite.client.base-url` with the Invite
