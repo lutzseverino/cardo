@@ -368,6 +368,11 @@ paths:
         "204":
           description: CSRF cookie is available. The token is not returned in the body.
           headers:
+            Cache-Control:
+              description: Prevents browsers and intermediaries from caching token bootstrap.
+              schema:
+                type: string
+                example: no-store
             Set-Cookie:
               schema:
                 type: string

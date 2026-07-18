@@ -106,6 +106,7 @@ class SessionControllerTest {
     var response = controller.getCsrfToken();
 
     assertThat(response.getStatusCode().value()).isEqualTo(204);
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
     verify(csrfToken).getToken();
   }
 

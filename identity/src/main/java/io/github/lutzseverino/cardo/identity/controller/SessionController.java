@@ -13,6 +13,7 @@ import io.github.lutzseverino.cardo.identity.service.AuthenticationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,7 +50,7 @@ public class SessionController implements SessionsApi {
   public ResponseEntity<Void> getCsrfToken() {
     CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
     csrfToken.getToken();
-    return ResponseEntity.noContent().build();
+    return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
   }
 
   @Override

@@ -71,9 +71,10 @@ the same exact Identity-session audience as the cookie token.
 
 ## CSRF
 
-Before login, a browser calls public `GET /identity/sessions/csrf`. Identity returns `204` and sets a
-cryptographically random CSRF token when the cookie is absent. The browser sends the cookie value
-unchanged in `X-CSRF-TOKEN`; the header name is fixed by this contract.
+Before login, a browser calls public `GET /identity/sessions/csrf`. Identity returns `204` with
+`Cache-Control: no-store` and sets a cryptographically random CSRF token when the cookie is absent.
+The browser sends the cookie value unchanged in `X-CSRF-TOKEN`; the header name is fixed by this
+contract.
 
 CSRF validation applies to every unsafe Identity session endpoint, including login before a session
 exists, refresh, and logout. Authorization headers do not bypass those controller-credential
