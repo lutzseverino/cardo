@@ -40,7 +40,17 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
   public CreatedAuthorizationResource ensureResource(AuthorizationResource authorizationResource) {
     Optional<ResourceSetResponse> existing = findResourceByName(authorizationResource.name());
     if (existing.isEmpty()) {
-      return createResource(authorizationResource);
+      try {
+        return createResource(authorizationResource);
+      } catch (RestClientResponseException exception) {
+        if (!isConflict(exception)) {
+          throw exception;
+        }
+        existing = findResourceByName(authorizationResource.name());
+        if (existing.isEmpty()) {
+          throw exception;
+        }
+      }
     }
     ResourceSetResponse resource = resource(existing.orElseThrow().id());
     LinkedHashSet<String> actions =
@@ -248,7 +258,13 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
           .body(RoleRepresentation.class);
     } catch (RestClientResponseException exception) {
       if (exception.getStatusCode().value() == 404) {
-        createRole(clientUuid, roleName);
+        try {
+          createRole(clientUuid, roleName);
+        } catch (RestClientResponseException creationFailure) {
+          if (!isConflict(creationFailure)) {
+            throw creationFailure;
+          }
+        }
         return role(clientUuid, roleName);
       }
       throw exception;
@@ -262,6 +278,10 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
         .body(new RoleCreateRequest(roleName))
         .retrieve()
         .toBodilessEntity();
+  }
+
+  private boolean isConflict(RestClientResponseException exception) {
+    return exception.getStatusCode().value() == 409;
   }
 
   private GrantedResourceAction toGrantedResourceAction(PermissionTicketRepresentation ticket) {

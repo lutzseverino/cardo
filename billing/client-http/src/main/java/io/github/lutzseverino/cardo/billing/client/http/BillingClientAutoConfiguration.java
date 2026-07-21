@@ -11,6 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
@@ -26,6 +27,7 @@ public class BillingClientAutoConfiguration {
     ApiClient apiClient =
         new ApiClient(
                 ApiClient.buildRestClientBuilder(json)
+                    .requestFactory(requestFactory(properties))
                     .defaultStatusHandler(
                         HttpStatusCode::isError,
                         (request, response) -> {
@@ -38,6 +40,13 @@ public class BillingClientAutoConfiguration {
             .setBasePath(properties.baseUrl());
     apiClient.setBearerToken(() -> serviceToken(clientCredentialsTokens));
     return new HttpBillingEntitlementsClient(new EntitlementsApi(apiClient));
+  }
+
+  private SimpleClientHttpRequestFactory requestFactory(BillingClientProperties properties) {
+    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+    factory.setConnectTimeout(properties.connectTimeout());
+    factory.setReadTimeout(properties.readTimeout());
+    return factory;
   }
 
   private String serviceToken(KeycloakClientCredentialsTokenProvider clientCredentialsTokens) {

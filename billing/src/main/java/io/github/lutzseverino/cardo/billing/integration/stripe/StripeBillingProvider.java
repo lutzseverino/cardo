@@ -3,6 +3,7 @@ package io.github.lutzseverino.cardo.billing.integration.stripe;
 import com.stripe.StripeClient;
 import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
+import com.stripe.net.RequestOptions;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.stripe.param.checkout.SessionCreateParams.LineItem;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 public class StripeBillingProvider implements BillingProvider {
 
   static final String PROVIDER = "stripe";
+  private static final String CUSTOMER_CREATION_KEY_PREFIX = "cardo-billing-customer-v1:";
 
   private final StripeCheckoutCatalog prices;
   private final StripeClient stripe;
@@ -41,12 +43,19 @@ public class StripeBillingProvider implements BillingProvider {
               .create(
                   CustomerCreateParams.builder()
                       .putMetadata("subject_id", subjectId.toString())
+                      .build(),
+                  RequestOptions.builder()
+                      .setIdempotencyKey(customerCreationIdempotencyKey(subjectId))
                       .build());
       return customer.getId();
     } catch (StripeException exception) {
       throw ApiException.of(
           502, "billing_customer_create_failed", "Customer could not be created.");
     }
+  }
+
+  private String customerCreationIdempotencyKey(UUID subjectId) {
+    return CUSTOMER_CREATION_KEY_PREFIX + subjectId;
   }
 
   @Override

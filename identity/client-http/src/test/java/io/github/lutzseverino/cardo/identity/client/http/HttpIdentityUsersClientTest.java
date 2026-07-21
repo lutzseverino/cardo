@@ -19,6 +19,7 @@ import io.github.lutzseverino.cardo.identity.client.http.generated.UserResponse;
 import io.github.lutzseverino.cardo.identity.client.http.generated.UserStatus;
 import io.github.lutzseverino.cardo.identity.client.http.generated.api.UsersApi;
 import java.net.URI;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
@@ -44,7 +45,34 @@ class HttpIdentityUsersClientTest {
 
   @Test
   void autoConfiguresTheStableClientContract() {
-    context.run(application -> assertThat(application).hasSingleBean(IdentityUsersClient.class));
+    context.run(
+        application -> {
+          assertThat(application).hasSingleBean(IdentityUsersClient.class);
+          IdentityClientProperties properties = application.getBean(IdentityClientProperties.class);
+          assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
+          assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(2));
+        });
+  }
+
+  @Test
+  void bindsClientTimeoutOverrides() {
+    context
+        .withPropertyValues(
+            "cardo.identity.client.connect-timeout=500ms", "cardo.identity.client.read-timeout=3s")
+        .run(
+            application -> {
+              IdentityClientProperties properties =
+                  application.getBean(IdentityClientProperties.class);
+              assertThat(properties.connectTimeout()).isEqualTo(Duration.ofMillis(500));
+              assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(3));
+            });
+  }
+
+  @Test
+  void rejectsAnUnboundedClientTimeout() {
+    context
+        .withPropertyValues("cardo.identity.client.read-timeout=0s")
+        .run(application -> assertThat(application).hasFailed());
   }
 
   @Test

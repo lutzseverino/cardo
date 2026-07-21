@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 class IdentityApplicationBoundaryTest {
 
   @Test
-  void serviceContractsExcludeTransportPersistenceEntitiesAndProviderSdks() {
+  void serviceContractsExcludeTransportPersistenceEntitiesAndProviderTypes() {
     assertApplicationBoundary(
         AuthenticationService.class,
         IdentityOperationService.class,
@@ -132,6 +132,7 @@ class IdentityApplicationBoundaryTest {
       return value.getPackageName().contains(".api.model")
           || value.getSimpleName().endsWith("Projection")
           || value.isAnnotationPresent(Entity.class)
+          || value.getPackageName().startsWith("io.github.lutzseverino.cardo.identity.provider")
           || value.getPackageName().startsWith("com.stripe")
           || value.getPackageName().startsWith("org.keycloak");
     }

@@ -39,6 +39,12 @@ revocations from application flows.
 - `Grants.find(receiptId)` returns the durable receipt when known. Empty plans
   are immediately `APPLIED`; non-empty plans begin `PENDING`; terminal provider
   exhaustion is `FAILED` with `provider_application_failed`.
+- Grant receipt failure is bounded by `cardo.authorization.plans.max-attempts`.
+  Once provider application reaches that limit, the receipt becomes `FAILED`
+  and its publication completes; it is not retried automatically again.
+- Revocations have no receipt or terminal failed state. A failed revocation
+  publication remains incomplete and is retried after
+  `cardo.authorization.plans.retry-delay` until its idempotent work succeeds.
 
 ## Ownership
 

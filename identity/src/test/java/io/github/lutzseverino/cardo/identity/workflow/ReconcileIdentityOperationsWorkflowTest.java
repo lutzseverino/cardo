@@ -56,7 +56,7 @@ class ReconcileIdentityOperationsWorkflowTest {
 
     new ReconcileIdentityOperationsWorkflow(operations, provider).reconcile(OPERATION_ID);
 
-    verify(operations).completeCredentialSetup(OPERATION_ID, profile);
+    verify(operations).completeCredentialSetup(OPERATION_ID, "Employee");
   }
 
   @Test

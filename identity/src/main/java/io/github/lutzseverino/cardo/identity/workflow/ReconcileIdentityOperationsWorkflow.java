@@ -52,7 +52,7 @@ public class ReconcileIdentityOperationsWorkflow {
       provider
           .completedIdentityProfile(work.providerSubject())
           .ifPresentOrElse(
-              profile -> operations.completeCredentialSetup(work.id(), profile),
+              profile -> operations.completeCredentialSetup(work.id(), profile.name()),
               () -> operations.reschedulePoll(work.id()));
     } catch (RuntimeException failure) {
       if (permanent(failure)) {

@@ -1,9 +1,11 @@
 package io.github.lutzseverino.cardo.billing.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,8 +17,6 @@ import io.github.lutzseverino.cardo.billing.repository.CustomerRepository;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class CustomerServiceTest {
 
@@ -38,7 +38,7 @@ class CustomerServiceTest {
   }
 
   @Test
-  void deletesProviderCustomerWhenTheOwningTransactionRollsBackAfterCreation() {
+  void reusesTheProviderCustomerWhenPersistenceIsRetried() {
     CustomerRepository customers = mock(CustomerRepository.class);
     BillingProvider provider = mock(BillingProvider.class);
     UUID subjectId = UUID.randomUUID();
@@ -46,22 +46,19 @@ class CustomerServiceTest {
     when(provider.createCustomer(subjectId)).thenReturn("cus_1");
     when(customers.findProjectedBySubjectIdAndProvider(subjectId, "stripe"))
         .thenReturn(Optional.empty());
-    when(customers.save(any(Customer.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(customers.save(any(Customer.class)))
+        .thenThrow(new IllegalStateException("persistence failed"))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
-    TransactionSynchronizationManager.initSynchronization();
-    try {
-      new CustomerService(customers, provider).getOrCreate(subjectId);
-      verify(provider, never()).deleteCustomer("cus_1");
+    CustomerService service = new CustomerService(customers, provider);
+    assertThatThrownBy(() -> service.getOrCreate(subjectId))
+        .isInstanceOf(IllegalStateException.class);
 
-      TransactionSynchronizationManager.getSynchronizations()
-          .forEach(
-              synchronization ->
-                  synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+    CustomerResult result = service.getOrCreate(subjectId);
 
-      verify(provider).deleteCustomer("cus_1");
-    } finally {
-      TransactionSynchronizationManager.clearSynchronization();
-    }
+    assertThat(result.providerCustomerId()).isEqualTo("cus_1");
+    verify(provider, times(2)).createCustomer(subjectId);
+    verify(provider, never()).deleteCustomer("cus_1");
   }
 
   private CustomerProjection projection(UUID customerId, UUID subjectId) {

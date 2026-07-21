@@ -10,6 +10,7 @@ import io.github.lutzseverino.cardo.billing.client.BillingEntitlementStatus;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;
 import io.github.lutzseverino.cardo.billing.client.http.generated.EntitlementResponse;
 import io.github.lutzseverino.cardo.billing.client.http.generated.api.EntitlementsApi;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,33 @@ class HttpBillingEntitlementsClientTest {
   @Test
   void autoConfiguresTheStableClientContract() {
     context.run(
-        application -> assertThat(application).hasSingleBean(BillingEntitlementsClient.class));
+        application -> {
+          assertThat(application).hasSingleBean(BillingEntitlementsClient.class);
+          BillingClientProperties properties = application.getBean(BillingClientProperties.class);
+          assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
+          assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(2));
+        });
+  }
+
+  @Test
+  void bindsClientTimeoutOverrides() {
+    context
+        .withPropertyValues(
+            "cardo.billing.client.connect-timeout=500ms", "cardo.billing.client.read-timeout=3s")
+        .run(
+            application -> {
+              BillingClientProperties properties =
+                  application.getBean(BillingClientProperties.class);
+              assertThat(properties.connectTimeout()).isEqualTo(Duration.ofMillis(500));
+              assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(3));
+            });
+  }
+
+  @Test
+  void rejectsAnUnboundedClientTimeout() {
+    context
+        .withPropertyValues("cardo.billing.client.read-timeout=0s")
+        .run(application -> assertThat(application).hasFailed());
   }
 
   @Test
