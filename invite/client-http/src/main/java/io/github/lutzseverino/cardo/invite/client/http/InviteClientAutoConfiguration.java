@@ -1,6 +1,5 @@
 package io.github.lutzseverino.cardo.invite.client.http;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.common.api.ApiClientErrors;
 import io.github.lutzseverino.cardo.common.api.ApiException;
@@ -13,6 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatusCode;
+import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
 @EnableConfigurationProperties(InviteClientProperties.class)
@@ -23,7 +23,7 @@ public class InviteClientAutoConfiguration {
   InvitationsClient invitationsClient(
       InviteClientProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
-      ObjectMapper json) {
+      JsonMapper json) {
     ApiClient apiClient =
         new ApiClient(
                 ApiClient.buildRestClientBuilder(json)
