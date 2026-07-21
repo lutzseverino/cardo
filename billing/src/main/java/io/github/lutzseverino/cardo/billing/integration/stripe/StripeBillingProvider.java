@@ -5,6 +5,8 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.CustomerCreateParams;
+import com.stripe.param.CustomerSearchParams;
+import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.stripe.param.checkout.SessionCreateParams.LineItem;
 import com.stripe.param.checkout.SessionCreateParams.Mode;
@@ -14,6 +16,7 @@ import io.github.lutzseverino.cardo.billing.model.BillingSessionResult;
 import io.github.lutzseverino.cardo.billing.provider.BillingProvider;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -23,7 +26,10 @@ import org.springframework.stereotype.Component;
 public class StripeBillingProvider implements BillingProvider {
 
   static final String PROVIDER = "stripe";
+  static final String PROVISIONING_METADATA_KEY = "cardo_provisioning_id";
+  private static final String SUBJECT_METADATA_KEY = "subject_id";
   private static final String CUSTOMER_CREATION_KEY_PREFIX = "cardo-billing-customer-v1:";
+  private static final String PROVISIONING_MARKER_KEY_PREFIX = "cardo-billing-customer-marker-v2:";
 
   private final StripeCheckoutCatalog prices;
   private final StripeClient stripe;
@@ -34,7 +40,7 @@ public class StripeBillingProvider implements BillingProvider {
   }
 
   @Override
-  public String createCustomer(UUID subjectId) {
+  public String createCustomer(UUID subjectId, UUID provisioningId) {
     try {
       com.stripe.model.Customer customer =
           stripe
@@ -42,12 +48,53 @@ public class StripeBillingProvider implements BillingProvider {
               .customers()
               .create(
                   CustomerCreateParams.builder()
-                      .putMetadata("subject_id", subjectId.toString())
+                      .putMetadata(SUBJECT_METADATA_KEY, subjectId.toString())
                       .build(),
                   RequestOptions.builder()
                       .setIdempotencyKey(customerCreationIdempotencyKey(subjectId))
                       .build());
+      stripe
+          .v1()
+          .customers()
+          .update(
+              customer.getId(),
+              CustomerUpdateParams.builder()
+                  .putMetadata(PROVISIONING_METADATA_KEY, provisioningId.toString())
+                  .build(),
+              RequestOptions.builder()
+                  .setIdempotencyKey(provisioningMarkerIdempotencyKey(provisioningId))
+                  .build());
       return customer.getId();
+    } catch (StripeException exception) {
+      throw ApiException.of(
+          502, "billing_customer_create_failed", "Customer could not be created.");
+    }
+  }
+
+  @Override
+  public List<String> findCustomersByProvisioningId(UUID provisioningId) {
+    return findCustomersByMetadata(PROVISIONING_METADATA_KEY, provisioningId);
+  }
+
+  @Override
+  public List<String> findCustomersBySubjectId(UUID subjectId) {
+    return findCustomersByMetadata(SUBJECT_METADATA_KEY, subjectId);
+  }
+
+  private List<String> findCustomersByMetadata(String key, UUID value) {
+    try {
+      return stripe
+          .v1()
+          .customers()
+          .search(
+              CustomerSearchParams.builder()
+                  .setQuery("metadata['" + key + "']:'" + value + "'")
+                  .setLimit(2L)
+                  .build())
+          .getData()
+          .stream()
+          .map(com.stripe.model.Customer::getId)
+          .toList();
     } catch (StripeException exception) {
       throw ApiException.of(
           502, "billing_customer_create_failed", "Customer could not be created.");
@@ -56,6 +103,10 @@ public class StripeBillingProvider implements BillingProvider {
 
   private String customerCreationIdempotencyKey(UUID subjectId) {
     return CUSTOMER_CREATION_KEY_PREFIX + subjectId;
+  }
+
+  private String provisioningMarkerIdempotencyKey(UUID provisioningId) {
+    return PROVISIONING_MARKER_KEY_PREFIX + provisioningId;
   }
 
   @Override

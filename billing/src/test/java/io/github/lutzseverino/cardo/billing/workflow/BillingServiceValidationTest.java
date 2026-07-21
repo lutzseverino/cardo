@@ -1,4 +1,4 @@
-package io.github.lutzseverino.cardo.billing.service;
+package io.github.lutzseverino.cardo.billing.workflow;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -8,7 +8,7 @@ import io.github.lutzseverino.cardo.billing.mapper.EntitlementApplicationMapper;
 import io.github.lutzseverino.cardo.billing.model.CreateCheckoutSessionInput;
 import io.github.lutzseverino.cardo.billing.provider.BillingProvider;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementRepository;
-import io.github.lutzseverino.cardo.billing.workflow.CreateCheckoutSessionWorkflow;
+import io.github.lutzseverino.cardo.billing.service.EntitlementService;
 import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.UUID;
@@ -75,7 +75,7 @@ class BillingServiceValidationTest {
 
     @Bean
     CreateCheckoutSessionWorkflow checkoutSessions(BillingProvider provider) {
-      return new CreateCheckoutSessionWorkflow(provider, mock(CustomerService.class));
+      return new CreateCheckoutSessionWorkflow(provider, mock(CustomerProvisioner.class));
     }
 
     @Bean

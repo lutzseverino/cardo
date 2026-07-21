@@ -2,13 +2,18 @@ package io.github.lutzseverino.cardo.billing.provider;
 
 import io.github.lutzseverino.cardo.billing.model.BillingSessionResult;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 public interface BillingProvider {
 
   String name();
 
-  String createCustomer(UUID subjectId);
+  String createCustomer(UUID subjectId, UUID provisioningId);
+
+  List<String> findCustomersByProvisioningId(UUID provisioningId);
+
+  List<String> findCustomersBySubjectId(UUID subjectId);
 
   void deleteCustomer(String providerCustomerId);
 

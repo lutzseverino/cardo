@@ -9,6 +9,7 @@ Documentation for the Billing service starts with its [project overview](../READ
 ## Related Repository Documentation
 
 - [Set up Stripe Billing](../../docs/how-to/set-up-stripe-billing.md)
+- [Repair customer provisioning](../../docs/how-to/repair-billing-customer-provisioning.md)
 - [Product integration](../../docs/reference/product-integration.md)
 - [Cardo documentation](../../docs/README.md)
 
