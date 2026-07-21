@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.identity.client.IdentityOperation;
 import io.github.lutzseverino.cardo.identity.client.IdentityOperationStatus;
@@ -30,13 +29,14 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.annotation.ImportCandidates;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import tools.jackson.databind.json.JsonMapper;
 
 class HttpIdentityUsersClientTest {
 
   private final ApplicationContextRunner context =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(IdentityClientAutoConfiguration.class))
-          .withBean(ObjectMapper.class)
+          .withBean(JsonMapper.class, () -> JsonMapper.builder().build())
           .withBean(
               KeycloakClientCredentialsTokenProvider.class,
               () -> mock(KeycloakClientCredentialsTokenProvider.class))

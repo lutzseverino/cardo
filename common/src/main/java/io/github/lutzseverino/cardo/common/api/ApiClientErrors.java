@@ -1,10 +1,10 @@
 package io.github.lutzseverino.cardo.common.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestClientResponseException;
+import tools.jackson.databind.ObjectMapper;
 
 public final class ApiClientErrors {
 

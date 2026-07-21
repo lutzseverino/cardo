@@ -1,6 +1,5 @@
 package io.github.lutzseverino.cardo.billing.client.http;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;
 import io.github.lutzseverino.cardo.billing.client.http.generated.ApiClient;
@@ -12,6 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatusCode;
+import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
 @EnableConfigurationProperties(BillingClientProperties.class)
@@ -22,7 +22,7 @@ public class BillingClientAutoConfiguration {
   BillingEntitlementsClient billingEntitlementsClient(
       BillingClientProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
-      ObjectMapper json) {
+      JsonMapper json) {
     ApiClient apiClient =
         new ApiClient(
                 ApiClient.buildRestClientBuilder(json)
