@@ -82,6 +82,31 @@ reconciles with leases and bounded retry. The operation response exposes its
 status and action expiry. Provisional deletion follows the same model and is
 queryable after the request, including after the local user row is gone.
 
+Ordinary password-user provisioning and global enabled-state changes use a
+separate internal `identity_provider_mutations` lifecycle. Cardo persists only
+normalized profile intent and a random Keycloak correlation marker before
+provisioning; passwords remain request-local and are never stored. An ambiguous
+create is recovered by that marker. If recovery cannot prove that Keycloak
+created the identity, the mutation terminates with
+`CREDENTIAL_RESUBMISSION_REQUIRED` after bounded attempts and a caller must
+resubmit credentials through the unchanged create-user API. A definite password
+rejection permits the same resubmission immediately. A create conflict is kept
+recoverable while the worker waits for a potentially concurrent same-marker
+identity to become visible.
+Terminal rows retain `terminal_reason` and a bounded `last_error` until a safe
+credential resubmission reclaims a `CREDENTIAL_RESUBMISSION_REQUIRED` row and
+starts a new attempt on the same correlation marker. Other terminal reasons
+require operator repair. Worker logs carry the mutation id, exact type, target
+version, and retry/terminal outcome for operator correlation.
+
+Migration V3 backfills idempotent user-id binding and desired enabled-state
+mutations for every local user. This replaces startup-wide rebinding; mapper
+installation still runs at startup, while the mutation worker drains and
+repairs the backfill. Provider identities orphaned before V3 have no trustworthy
+correlation marker and are deliberately not auto-deleted. Operators must audit
+Keycloak users without `identity_user_id` against local `users.keycloak_subject`
+and resolve those historical records manually.
+
 The Identity integration tests use Testcontainers with PostgreSQL 17.5 to
 exercise Flyway migrations, partial indexes, and row-lock behavior. Running
 `./mvnw --batch-mode --no-transfer-progress verify` therefore requires a

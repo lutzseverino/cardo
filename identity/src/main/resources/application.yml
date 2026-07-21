@@ -56,6 +56,12 @@ cardo:
       claim-lease: ${IDENTITY_OPERATION_CLAIM_LEASE:1m}
       max-attempts: ${IDENTITY_OPERATION_MAX_ATTEMPTS:12}
       batch-size: ${IDENTITY_OPERATION_BATCH_SIZE:50}
+    provider-mutations:
+      dispatch-delay: ${IDENTITY_PROVIDER_MUTATION_DISPATCH_DELAY:5s}
+      retry-base-delay: ${IDENTITY_PROVIDER_MUTATION_RETRY_BASE_DELAY:5s}
+      claim-lease: ${IDENTITY_PROVIDER_MUTATION_CLAIM_LEASE:1m}
+      max-attempts: ${IDENTITY_PROVIDER_MUTATION_MAX_ATTEMPTS:12}
+      batch-size: ${IDENTITY_PROVIDER_MUTATION_BATCH_SIZE:50}
 
 server:
   port: ${IDENTITY_PORT:8081}

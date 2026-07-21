@@ -8,7 +8,10 @@ import java.util.UUID;
 
 public interface IdentityProvider {
 
-  ProvisionedIdentity provisionPasswordIdentity(String email, String password, String name);
+  ProvisionedIdentity provisionPasswordIdentity(
+      String email, String password, String name, String correlationMarker);
+
+  Optional<ProvisionedIdentity> findPasswordIdentityByCorrelationMarker(String correlationMarker);
 
   ProvisionedIdentity provisionProvisionalIdentity(String email);
 
