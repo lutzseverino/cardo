@@ -8,6 +8,14 @@ reading, method security, OAuth2 resource-server setup, Identity-session validat
 product-token exchange, exact audience validation, cookie-selected CSRF enforcement, a
 method-aware request-policy seam, and optional active-token validation.
 
+Explicit bearer credentials stay on Spring Security's normal Resource Server path. Browser
+session credentials use a separate authentication filter after CSRF and before Resource Server
+bearer authentication. The bearer resolvers only extract credentials: the browser authentication
+manager validates the Identity credential, obtains the product credential, and delegates that
+credential to the same product JWT authentication manager used for explicit bearers. This ordering
+is security-sensitive because Spring Resource Server automatically excludes credentials recognized
+by its own bearer resolver from CSRF; the Resource Server resolver must remain header-only.
+
 ## Configuration
 
 ```yaml
@@ -54,21 +62,35 @@ global Identity user takes effect quickly without making every product request c
 Keep the introspection timeouts low because request handling fails closed while waiting for
 Keycloak.
 
+A cookie request performs UMA authorization and then, when active-token validation is enabled,
+introspection of the fresh product RPT. Positive introspection caching is most effective for reused
+explicit bearer tokens; it may provide few hits for cookie requests when Keycloak returns a new RPT
+for each authorization request. Keep the check enabled when the required revocation and disablement
+window justifies this latency and availability coupling.
+
 Unsafe requests require an exact `cardo.csrf` cookie and `X-CSRF-TOKEN` header match whenever the
-session cookie is selected. Any supplied Authorization header takes precedence and bypasses CSRF;
-the resource-server filter then accepts or rejects that bearer credential without falling back to
-the cookie. Safe and anonymous requests do not require CSRF. The product integration only reads
-the Identity-issued CSRF cookie and never creates, rotates, or expires it. Production products
+session cookie is selected. Any supplied Authorization header takes precedence and bypasses
+cookie-selected CSRF without falling back to the cookie. The Resource Server accepts or rejects a
+Bearer credential; another authentication scheme leaves the request unauthenticated. Safe and
+anonymous requests do not require CSRF. The product integration only reads the Identity-issued CSRF
+cookie and never creates, rotates, or expires it. Production products
 configure `__Host-cardo.session` and `__Host-cardo.csrf` to match Identity's production policy.
-The Cardo filter chain wires its cookie selector, bearer resolver, and read-only CSRF repository as
-one coordinated mechanism. Product-defined `BearerTokenResolver` or `CsrfTokenRepository` beans
-are not customization seams and do not replace those Cardo-owned instances.
+The Cardo filter chain wires its cookie selector, dedicated cookie authentication filter,
+header-only bearer resolver, and read-only CSRF repository as one coordinated mechanism.
+Product-defined `BearerTokenResolver` or `CsrfTokenRepository` beans are not customization seams and
+do not replace those Cardo-owned instances.
 
 The session cookie is validated for issuer, signature, expiration, an exact single `identity`
 audience, and a valid `cardo_user_id` before exchange. The exchanged credential and explicit bearer
 credentials are validated against the exact single configured product audience and the same user
 claim before authorities are built. The exchanged token must identify the same Cardo user as the
-session token. Exchange is uncached, uses bounded network timeouts, and fails closed.
+session token. The product credential is decoded once by the shared product JWT authentication
+manager. Acquisition is uncached, uses bounded network timeouts, and fails closed.
+
+Product-token acquisition uses Keycloak Authorization Services' UMA ticket grant
+(`urn:ietf:params:oauth:grant-type:uma-ticket`) with an audience and no permission parameters. This
+is Keycloak/UMA-specific behavior, not RFC 8693 OAuth Token Exchange; the `token-exchange`
+configuration name describes Cardo's operation, not a portable grant type.
 
 The supported cookie topology, CSRF behavior, product exchange, and grant-convergence rules are
 defined in [Browser Sessions And Product Tokens](../../docs/reference/browser-sessions.md).

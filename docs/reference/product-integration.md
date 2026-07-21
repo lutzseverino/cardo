@@ -39,7 +39,7 @@ the same wiring and the packaged shape can stay product-neutral.
 Use `identity-product-auth` when a product accepts logged-in Cardo users. The
 module auto-configures the shared Spring Security pieces: JWT authority
 conversion, permission evaluation, authenticated-user reading, method security,
-resource-server setup, session-cookie bearer token resolution, and optional active-token validation
+resource-server setup, session-cookie authentication orchestration, and optional active-token validation
 through the identity provider introspection endpoint. It validates the Identity session credential,
 exchanges it server-side for an uncached product-audience requesting-party token, validates exact
 single audiences and the Cardo user claim, and builds authorities only from the product token. It
@@ -78,8 +78,10 @@ cardo:
         read-timeout: 2s
 ```
 
-Token exchange is uncached, requires the returned credential to name the same Cardo user as the
-session credential, and defaults to two-second connect and read timeouts. Provide one
+Product-token acquisition is uncached, requires the returned credential to name the same Cardo user
+as the session credential, and defaults to two-second connect and read timeouts. It uses Keycloak
+Authorization Services' UMA ticket grant and returns a Keycloak RPT; it is not RFC 8693 OAuth Token
+Exchange despite the `token-exchange` configuration group. Provide one
 `ProductRequestPolicy` bean with method-aware `permitAll`, `authenticated`, or
 `hasAuthority` rules. Cardo keeps health and API documentation public, applies the product rules in
 declaration order, and denies every unmatched route. Unsafe routes selected by the session cookie
@@ -88,7 +90,9 @@ fallback; a non-Bearer header therefore leaves a public route anonymous. Product
 the filter chain.
 
 When enabled, active-token validation fails closed and caches only positive introspection responses
-for the configured TTL. Keep the TTL short so global
+for the configured TTL. Cookie requests perform UMA authorization and then introspection of the
+fresh product RPT; cache reuse on that path depends on Keycloak returning the same RPT, while reused
+explicit bearer tokens benefit directly. Keep the TTL short so global
 Identity disablement is enforced quickly for already-issued JWTs. Keep
 introspection timeouts low because product requests wait on the fail-closed
 validation path.

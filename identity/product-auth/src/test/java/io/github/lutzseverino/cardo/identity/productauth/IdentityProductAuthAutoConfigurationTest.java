@@ -1,6 +1,8 @@
 package io.github.lutzseverino.cardo.identity.productauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,7 +72,6 @@ class IdentityProductAuthAutoConfigurationTest {
           assertThat(application).hasSingleBean(BearerTokenResolver.class);
           assertThat(application).hasSingleBean(CsrfTokenRepository.class);
           assertThat(application).hasSingleBean(SessionCookieAuthenticationSelector.class);
-          assertThat(application).hasSingleBean(ProductTokenBearerTokenResolver.class);
           assertThat(application).hasSingleBean(CardoProductTokenDecoder.class);
           assertThat(application).hasSingleBean(RequestingPartyTokenClient.class);
           assertThat(application).hasSingleBean(ReadOnlyCsrfTokenRepository.class);
@@ -95,6 +96,25 @@ class IdentityProductAuthAutoConfigurationTest {
                   .getBean(FilterRegistrationBean.class)
                   .extracting(FilterRegistrationBean::isEnabled)
                   .isEqualTo(false);
+            });
+  }
+
+  @Test
+  void ordersCsrfAndActiveValidationAroundBothAuthenticationFilters() {
+    webContext
+        .withBean(ActiveTokenValidator.class, () -> token -> true)
+        .withPropertyValues("cardo.identity.product-auth.active-token-validation.enabled=true")
+        .run(
+            application -> {
+              var filters = application.getBean(SecurityFilterChain.class).getFilters();
+              int csrf = indexOf(filters, CsrfFilter.class);
+              int browserSession = indexOf(filters, SessionCookieAuthenticationFilter.class);
+              int explicitBearer = indexOfExact(filters, BearerTokenAuthenticationFilter.class);
+              int activeValidation = indexOf(filters, ActiveTokenValidationFilter.class);
+
+              assertThat(csrf).isLessThan(browserSession);
+              assertThat(browserSession).isLessThan(explicitBearer);
+              assertThat(explicitBearer).isLessThan(activeValidation);
             });
   }
 
@@ -142,6 +162,8 @@ class IdentityProductAuthAutoConfigurationTest {
           assertThat(application).hasSingleBean(BearerTokenResolver.class);
           var filters = application.getBean(SecurityFilterChain.class).getFilters();
           assertThat(filters.stream().filter(CsrfFilter.class::isInstance)).hasSize(1);
+          assertThat(filters.stream().filter(BearerTokenAuthenticationFilter.class::isInstance))
+              .hasSize(2);
           assertThat(application).doesNotHaveBean(CsrfFilter.class);
           assertThat(indexOf(filters, BearerTokenAuthenticationFilter.class)).isGreaterThan(-1);
           assertThat(indexOf(filters, CsrfFilter.class))
@@ -162,10 +184,13 @@ class IdentityProductAuthAutoConfigurationTest {
               SecurityFilterChain chain = application.getBean(SecurityFilterChain.class);
               BearerTokenAuthenticationFilter bearerFilter =
                   chain.getFilters().stream()
-                      .filter(BearerTokenAuthenticationFilter.class::isInstance)
+                      .filter(
+                          filter -> BearerTokenAuthenticationFilter.class.equals(filter.getClass()))
                       .map(BearerTokenAuthenticationFilter.class::cast)
                       .findFirst()
                       .orElseThrow();
+              assertThat(chain.getFilters())
+                  .anyMatch(SessionCookieAuthenticationFilter.class::isInstance);
               CsrfFilter csrfFilter =
                   chain.getFilters().stream()
                       .filter(CsrfFilter.class::isInstance)
@@ -234,7 +259,9 @@ class IdentityProductAuthAutoConfigurationTest {
 
   @Test
   void appliesMethodAwareProductRulesAndDeniesUnmatchedRoutes() {
+    RequestingPartyTokenClient exchange = mock(RequestingPartyTokenClient.class);
     webContext
+        .withBean(RequestingPartyTokenClient.class, () -> exchange)
         .withUserConfiguration(TestProductRoutes.class)
         .run(
             application -> {
@@ -251,6 +278,7 @@ class IdentityProductAuthAutoConfigurationTest {
                           .cookie(
                               new jakarta.servlet.http.Cookie("cardo.session", "session-token")))
                   .andExpect(status().isForbidden());
+              verifyNoInteractions(exchange);
             });
   }
 
@@ -266,6 +294,15 @@ class IdentityProductAuthAutoConfigurationTest {
   private int indexOf(java.util.List<jakarta.servlet.Filter> filters, Class<?> type) {
     for (int index = 0; index < filters.size(); index++) {
       if (type.isInstance(filters.get(index))) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  private int indexOfExact(java.util.List<jakarta.servlet.Filter> filters, Class<?> type) {
+    for (int index = 0; index < filters.size(); index++) {
+      if (type.equals(filters.get(index).getClass())) {
         return index;
       }
     }

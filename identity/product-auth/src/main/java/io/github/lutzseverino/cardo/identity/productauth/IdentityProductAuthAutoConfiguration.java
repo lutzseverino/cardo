@@ -26,6 +26,8 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -33,8 +35,10 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
@@ -125,13 +129,8 @@ public class IdentityProductAuthAutoConfiguration {
   }
 
   @Bean("cardoProductBearerTokenResolver")
-  BearerTokenResolver productBearerTokenResolver(
-      SessionCookieAuthenticationSelector selector,
-      CardoProductTokenDecoder tokens,
-      RequestingPartyTokenClient exchange,
-      IdentityProductAuthProperties properties) {
-    return new ProductTokenBearerTokenResolver(
-        selector, tokens, exchange, properties.productAudience());
+  BearerTokenResolver productBearerTokenResolver() {
+    return new DefaultBearerTokenResolver();
   }
 
   @Bean
@@ -190,13 +189,24 @@ public class IdentityProductAuthAutoConfiguration {
       KeycloakAuthoritiesConverter authorities,
       SessionCookieAuthenticationSelector selector,
       @Qualifier("cardoProductBearerTokenResolver") BearerTokenResolver bearerTokens,
-      @Qualifier("cardoReadOnlyCsrfTokenRepository") ReadOnlyCsrfTokenRepository csrfTokens,
       @Qualifier("cardoProductJwtDecoder") JwtDecoder productJwtDecoder,
+      CardoProductTokenDecoder tokens,
+      RequestingPartyTokenClient exchange,
+      IdentityProductAuthProperties properties,
+      @Qualifier("cardoReadOnlyCsrfTokenRepository") ReadOnlyCsrfTokenRepository csrfTokens,
       ObjectProvider<ProductRequestPolicy> productRequestPolicy,
       ObjectProvider<ActiveTokenValidationFilter> activeTokenValidationFilter)
       throws Exception {
-    JwtAuthenticationConverter jwt = new JwtAuthenticationConverter();
-    jwt.setJwtGrantedAuthoritiesConverter(authorities);
+    AuthenticationManager productTokens =
+        productAuthenticationManager(productJwtDecoder, authorities);
+    AuthenticationManager browserSessions =
+        new SessionCookieAuthenticationManager(
+            tokens, exchange, properties.productAudience(), productTokens);
+    SessionCookieAuthenticationFilter browserSessionAuthentication =
+        new SessionCookieAuthenticationFilter(
+            browserSessions,
+            new SessionCookieBearerTokenResolver(selector),
+            bearerTokenAuthenticationEntryPoint());
 
     http.csrf(
             csrf ->
@@ -220,14 +230,20 @@ public class IdentityProductAuthAutoConfiguration {
             oauth2 ->
                 oauth2
                     .bearerTokenResolver(bearerTokens)
-                    .jwt(
-                        jwtConfigurer ->
-                            jwtConfigurer
-                                .decoder(productJwtDecoder)
-                                .jwtAuthenticationConverter(jwt)));
+                    .authenticationManagerResolver(request -> productTokens));
+    http.addFilterBefore(browserSessionAuthentication, BearerTokenAuthenticationFilter.class);
     activeTokenValidationFilter.ifAvailable(
         filter -> http.addFilterAfter(filter, BearerTokenAuthenticationFilter.class));
     return http.build();
+  }
+
+  private AuthenticationManager productAuthenticationManager(
+      JwtDecoder productJwtDecoder, KeycloakAuthoritiesConverter authorities) {
+    JwtAuthenticationConverter jwt = new JwtAuthenticationConverter();
+    jwt.setJwtGrantedAuthoritiesConverter(authorities);
+    JwtAuthenticationProvider provider = new JwtAuthenticationProvider(productJwtDecoder);
+    provider.setJwtAuthenticationConverter(jwt);
+    return new ProviderManager(provider);
   }
 
   private URI tokenEndpoint(String issuer) {
