@@ -26,8 +26,6 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-  static final String RESOURCE_AUDIENCE = "cardo-invite";
-
   @Bean
   KeycloakAuthoritiesConverter keycloakAuthoritiesConverter() {
     return new KeycloakAuthoritiesConverter();
@@ -48,16 +46,17 @@ public class SecurityConfig {
 
   @Bean
   JwtDecoder jwtDecoder(
-      @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer) {
-    return new SupplierJwtDecoder(() -> strictJwtDecoder(issuer));
+      @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer,
+      KeycloakProperties keycloak) {
+    return new SupplierJwtDecoder(() -> strictJwtDecoder(issuer, keycloak.clientId()));
   }
 
-  private NimbusJwtDecoder strictJwtDecoder(String issuer) {
+  private NimbusJwtDecoder strictJwtDecoder(String issuer, String audience) {
     NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
     decoder.setJwtValidator(
         new DelegatingOAuth2TokenValidator<>(
             JwtValidators.createDefaultWithIssuer(issuer),
-            new ExactAudienceValidator(RESOURCE_AUDIENCE),
+            new ExactAudienceValidator(audience),
             new RequiredExpirationValidator()));
     return decoder;
   }

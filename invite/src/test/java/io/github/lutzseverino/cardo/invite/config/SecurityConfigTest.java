@@ -62,28 +62,38 @@ class SecurityConfigTest {
   }
 
   @Test
-  void decoderRequiresIssuerExpirationAndExactInviteAudience() throws Exception {
-    var decoder = new SecurityConfig().jwtDecoder(issuer);
+  void decoderRequiresIssuerExpirationAndTheConfiguredExactAudience() throws Exception {
+    var decoder =
+        new SecurityConfig()
+            .jwtDecoder(
+                issuer,
+                new KeycloakProperties(
+                    "https://identity.example.com", "cardo", "custom-invite", "secret"));
 
-    assertThat(decoder.decode(token(issuer, List.of("cardo-invite"), true)).getAudience())
-        .containsExactly("cardo-invite");
+    assertThat(decoder.decode(token(issuer, List.of("custom-invite"), true)).getAudience())
+        .containsExactly("custom-invite");
     assertThatThrownBy(() -> decoder.decode(token(issuer, List.of("billing"), true)))
         .isInstanceOf(JwtValidationException.class);
     assertThatThrownBy(
-            () -> decoder.decode(token(issuer, List.of("cardo-invite", "billing"), true)))
+            () -> decoder.decode(token(issuer, List.of("custom-invite", "billing"), true)))
         .isInstanceOf(JwtValidationException.class);
-    assertThatThrownBy(() -> decoder.decode(token(issuer, List.of("cardo-invite"), false)))
+    assertThatThrownBy(() -> decoder.decode(token(issuer, List.of("custom-invite"), false)))
         .isInstanceOf(JwtValidationException.class);
     assertThatThrownBy(
             () ->
                 decoder.decode(
-                    token("https://wrong-issuer.example", List.of("cardo-invite"), true)))
+                    token("https://wrong-issuer.example", List.of("custom-invite"), true)))
         .isInstanceOf(JwtValidationException.class);
   }
 
   @Test
   void issuerDiscoveryFailureFailsClosedOnFirstDecodeWithoutPreventingStartup() throws Exception {
-    var decoder = new SecurityConfig().jwtDecoder(issuer);
+    var decoder =
+        new SecurityConfig()
+            .jwtDecoder(
+                issuer,
+                new KeycloakProperties(
+                    "https://identity.example.com", "cardo", "cardo-invite", "secret"));
 
     assertThat(decoder).isNotNull();
     server.stop(0);
