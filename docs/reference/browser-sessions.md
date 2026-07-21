@@ -1,15 +1,17 @@
 # Browser Sessions And Product Tokens
 
 This reference is authoritative for the required production contract for Cardo browser cookies,
-product-token acquisition, CSRF, and post-grant authorization convergence. The contract is an
-implementation target; browser-session consumers are not production-ready until the dependent
-Identity, product-auth, authorization, product, frontend, and deployment slices are complete.
+product-token acquisition, CSRF, and post-grant authorization convergence. Cardo implements its
+Identity, product-auth, and authorization portions; a browser-session consumer is production-ready
+only after its product, frontend, provider, and deployment portions are also complete.
 
-Identity currently implements access/refresh cookie creation, rotation, expiry, refresh-token
-logout, cookie authentication for current-session routes, exact `identity` audience validation,
-CSRF bootstrap, Identity session-mutation enforcement, and cookie-selected product CSRF
-enforcement. Product exchange, grant receipt, product adoption, browser, and deployment requirements
-in this reference remain pending.
+Identity and `identity-product-auth` implement access/refresh cookie creation, rotation, expiry,
+refresh-token logout, cookie authentication for current-session routes, CSRF bootstrap and
+enforcement, Identity-session validation, uncached product-token exchange, exact audience
+validation, active-token validation, and the method-aware product request-policy seam.
+Authorization implements durable grant receipts and bounded provider-application outcomes. Product
+adoption, browser behavior, provider provisioning, and deployment requirements remain consumer
+work.
 
 ## Supported Topology
 
@@ -99,9 +101,16 @@ untrusted token claims. `identity-product-auth`:
 - validates issuer, expiry, signature, the Cardo identity-user claim, and the exact configured
   Identity-session audience on the session token;
 - requests a product RPT from the provider with the Identity token and expected audience;
-- validates the returned token's exact product audience;
+- validates the returned token's exact product audience and the same Cardo user identity as the
+  session token;
 - converts only the returned product token into request authorities;
 - fails closed when validation, exchange, introspection, or required claims fail.
+
+Product acquisition specifically uses Keycloak Authorization Services' UMA ticket grant, not the
+RFC 8693 token-exchange grant. Cardo sends
+`grant_type=urn:ietf:params:oauth:grant-type:uma-ticket`, the configured Keycloak resource-server
+client as `audience`, and no `permission` parameters so Keycloak evaluates the user's available
+permissions for that resource server.
 
 For both token types, exact audience means the JWT `aud` claim contains one value and that value
 equals the corresponding configured audience. Explicit bearer tokens must satisfy the product
@@ -116,24 +125,35 @@ cardo:
     product-auth:
       identity-session-audience: identity
       product-audience: polity
+      token-exchange:
+        connect-timeout: 2s
+        read-timeout: 2s
 ```
 
-`product-audience` is required and non-blank whenever product authentication is enabled;
-`identity-session-audience` is additionally required when session-cookie exchange is enabled. The
-values name Keycloak resource-server clients; they are not browser origins, API paths, or OAuth
-clients used for password and service-account grants. Cardo's current Identity resource audience is
-`identity`; the separate confidential OAuth client defaults to `cardo-identity`.
+Both `product-audience` and `identity-session-audience` are required and non-blank when this module
+is present. The values name Keycloak resource-server clients; they are not browser origins, API
+paths, or OAuth clients used for password and service-account grants. Cardo's current Identity
+resource audience is `identity`; the separate confidential OAuth client defaults to
+`cardo-identity`.
 
-Product exchange is uncached by default. A positive cache is permitted only with a bounded TTL and
-an explicit invalidation path that preserves grant-convergence and revocation behavior.
+Product exchange is uncached by default and uses bounded connect and read timeouts. A positive cache
+is permitted only with a bounded TTL and an explicit invalidation path that preserves
+grant-convergence and revocation behavior.
 
 Production deployments enable active-token validation with short timeouts. The Keycloak realm must
 map `cardo_user_id` into the Identity and product tokens, issue each token with only its configured
 audience, and allow the configured product resource server as an exchange audience.
 
+Active-token validation applies to both explicit product bearers and freshly acquired browser RPTs.
+The browser path therefore has two sequential provider calls: UMA authorization followed by RPT
+introspection. The positive introspection cache is keyed by the product token and is effective only
+when a token is reused; it may have little effect when Keycloak returns a fresh RPT on every browser
+request. This is intentional fail-closed revocation and disablement coupling, not a performance
+cache for browser acquisition.
+
 ## Grant Convergence
 
-`GrantReceipt Grants.stage(plan)` remains an in-transaction staging operation. `GrantReceipt`
+`GrantReceipt Grants.stage(plan)` is an in-transaction staging operation. `GrantReceipt`
 contains a stable UUID `id`, a `PENDING`, `APPLIED`, or `FAILED` status, and a stable failure code
 only when failed. `Optional<GrantReceipt> Grants.find(receiptId)` provides the embedded status
 lookup; an empty result means that the identifier is unknown.
@@ -145,9 +165,11 @@ receipt `APPLIED` only after all idempotent provider work completes. After bound
 attempts, it marks the receipt `FAILED` with a stable code. Terminal states do not return to
 `PENDING`; an explicit retry contract, if added, must be a separate operation.
 
-The application that owns the product mutation stores the receipt ID with its own lifecycle in the
-same transaction and exposes convergence through its API. A product must not claim that new access
-is usable while the receipt is pending. It must expose durable failure rather than polling forever.
+`cardo.authorization.plans.max-attempts` bounds provider attempts and defaults to `12`; terminal
+failure uses the stable `provider_application_failed` code. The application that owns the product
+mutation stores the receipt ID with its own lifecycle in the same transaction and exposes
+convergence through its API. A product must not claim that new access is usable while the receipt
+is pending. It must expose durable failure rather than polling forever.
 
 After the receipt is applied, the next uncached product exchange observes the new provider grants.
 Account provisioning and invitation acceptance use the same sequence:
@@ -171,8 +193,14 @@ Cardo owns the shared Spring Security filter chain and these mechanics:
 - JWT authority conversion, permission evaluation, and authenticated-user reading;
 - shared filter ordering and deny-by-default fallback.
 
+The Resource Server bearer resolver recognizes only explicit Authorization-header credentials.
+Cookie extraction and acquisition run in a separate authentication filter after CSRF and before the
+Resource Server filter. Do not combine cookie resolution with the Resource Server resolver: Spring
+automatically excludes credentials recognized by that resolver from CSRF processing.
+
 Products contribute method-aware request matchers and authorization decisions through the
 product-auth configuration seam. They own public product routes and product authorization policy,
 but do not replace the shared filter chain or redeclare Cardo-owned security beans. The chain uses
-one coordinated cookie selector, bearer resolver, and read-only CSRF repository; generic product
-`BearerTokenResolver` or `CsrfTokenRepository` beans are not supported customization seams.
+one coordinated cookie selector, cookie authentication filter, header-only bearer resolver, and
+read-only CSRF repository; generic product `BearerTokenResolver` or `CsrfTokenRepository` beans are
+not supported customization seams.

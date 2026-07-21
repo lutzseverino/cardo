@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.lutzseverino.cardo.authorization.resource.AuthorizationResource;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,5 +31,10 @@ class GrantPlanSerializationTest {
     GrantPlan restored = mapper.readValue(mapper.writeValueAsString(plan), GrantPlan.class);
 
     assertThat(restored).isEqualTo(plan);
+
+    StagedGrantPlan staged = new StagedGrantPlan(UUID.randomUUID(), plan);
+    StagedGrantPlan restoredEvent =
+        mapper.readValue(mapper.writeValueAsString(staged), StagedGrantPlan.class);
+    assertThat(restoredEvent).isEqualTo(staged);
   }
 }

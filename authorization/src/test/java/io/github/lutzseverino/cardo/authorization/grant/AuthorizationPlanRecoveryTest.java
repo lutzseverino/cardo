@@ -26,9 +26,10 @@ class AuthorizationPlanRecoveryTest {
     assertThat(filter.getValue())
         .accepts(
             publication(mock(GrantPlan.class), Instant.EPOCH),
+            publication(mock(StagedGrantPlan.class), Instant.EPOCH),
             publication(mock(RevocationPlan.class), Instant.EPOCH))
         .rejects(
-            publication(mock(GrantPlan.class), Instant.now()),
+            publication(mock(StagedGrantPlan.class), Instant.now()),
             publication(new Object(), Instant.EPOCH));
   }
 

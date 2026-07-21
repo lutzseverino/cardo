@@ -5,8 +5,9 @@ revocations from application flows.
 
 ## Contract
 
-- A flow that assigns authorization must create one `GrantPlan` and call
-  `Grants.stage(plan)` inside its application transaction.
+- A flow that assigns authorization must create one `GrantPlan`, call
+  `Grants.stage(plan)` inside its application transaction, and store the returned
+  `GrantReceipt.id()` with its owned lifecycle when convergence is user-visible.
 - A flow that revokes authorization must create one `RevocationPlan` and call
   `Revocations.stage(plan)` inside its application transaction.
 - Flows construct plans through `GrantPlan.builder()`. The builder merges repeated
@@ -18,7 +19,11 @@ revocations from application flows.
 - A plan describes provider-neutral intent: resources to provision, resource
   actions and client authorities to assign or revoke.
 - The authorization module applies plans asynchronously through
-  `AuthorizationAdminClient` and retries failed publications.
+  `AuthorizationAdminClient`, retries partial or failed application idempotently,
+  and moves the receipt from `PENDING` to `APPLIED` or `FAILED`.
+- Cross-instance application of one receipt is serialized with a transaction-scoped
+  PostgreSQL advisory lock. A concurrent duplicate remains incomplete and is retried;
+  a process or connection failure releases the lock automatically.
 - Product flows grant product client authorities through
   `GrantPlan.builder().grantAuthorities(...)`. The resource-server client id and
   authority names in that call belong to the flow owner, not to Identity.
@@ -31,6 +36,9 @@ revocations from application flows.
   retry only applies remaining work.
 - Each application stores event publications in its configured PostgreSQL
   schema.
+- `Grants.find(receiptId)` returns the durable receipt when known. Empty plans
+  are immediately `APPLIED`; non-empty plans begin `PENDING`; terminal provider
+  exhaustion is `FAILED` with `provider_application_failed`.
 
 ## Ownership
 
@@ -65,18 +73,16 @@ and configure:
 - Flyway placeholder `authorizationSchema`: the same schema name
 - `cardo.authorization.plans.retry-delay`: failed-publication retry delay;
   defaults to `PT1M`
+- `cardo.authorization.plans.max-attempts`: attempts before a grant receipt is
+  durably failed; defaults to `12`
 
 The shared `db/authorization/publications` Flyway location creates the publication
 schema and Spring Modulith JDBC tables.
 
-## Browser Convergence Target
+## Browser Convergence
 
-The accepted production [browser-session contract](browser-sessions.md) adds a dependent
-implementation requirement without changing plan ownership: grant staging will provide a durable
-receipt whose pending, applied, and failed states can be associated with the owning application's
-lifecycle. The application maps that state into its own API; Authorization does not acquire a
-generic HTTP owner or product lifecycle.
-
-Until that receipt contract is implemented, an application must not represent a staged grant as
-converged browser access. Identity token renewal alone cannot prove that asynchronous provider work
-has completed.
+The [browser-session contract](browser-sessions.md) does not change plan ownership. The application
+maps the durable receipt into its own API; Authorization does not acquire a generic HTTP owner or
+product lifecycle. An application must not represent a `PENDING` or `FAILED` grant as converged
+browser access. Identity token renewal alone does not prove that asynchronous provider work has
+completed.

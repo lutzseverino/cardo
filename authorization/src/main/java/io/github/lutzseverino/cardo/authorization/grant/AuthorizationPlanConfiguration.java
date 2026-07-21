@@ -6,16 +6,29 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.modulith.events.IncompleteEventPublications;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @EnableScheduling
 @Configuration(proxyBeanMethods = false)
 public class AuthorizationPlanConfiguration {
 
   @Bean
-  Grants grants(ApplicationEventPublisher events) {
-    return new Grants(events);
+  GrantReceiptStore grantReceiptStore(
+      JdbcOperations jdbc, @Value("${spring.modulith.events.jdbc.schema}") String eventSchema) {
+    return new GrantReceiptStore(jdbc, eventSchema);
+  }
+
+  @Bean
+  GrantReceiptProcessingLock grantReceiptProcessingLock(JdbcOperations jdbc) {
+    return new GrantReceiptProcessingLock(jdbc);
+  }
+
+  @Bean
+  Grants grants(ApplicationEventPublisher events, GrantReceiptStore receipts) {
+    return new Grants(events, receipts);
   }
 
   @Bean
@@ -29,8 +42,22 @@ public class AuthorizationPlanConfiguration {
   }
 
   @Bean
-  GrantPlanListener grantPlanListener(GrantProcessor processor) {
-    return new GrantPlanListener(processor);
+  GrantReceiptFailureRecorder grantReceiptFailureRecorder(
+      GrantReceiptStore receipts, PlatformTransactionManager transactions) {
+    return new GrantReceiptFailureRecorder(receipts, transactions);
+  }
+
+  @Bean
+  GrantPlanListener grantPlanListener(
+      GrantProcessor processor,
+      GrantReceiptStore receipts,
+      GrantReceiptProcessingLock processingLock,
+      GrantReceiptFailureRecorder failures,
+      @Value("${cardo.authorization.plans.max-attempts:12}") int maxAttempts) {
+    if (maxAttempts < 1) {
+      throw new IllegalArgumentException("authorization plan max attempts must be positive");
+    }
+    return new GrantPlanListener(processor, receipts, processingLock, failures, maxAttempts);
   }
 
   @Bean

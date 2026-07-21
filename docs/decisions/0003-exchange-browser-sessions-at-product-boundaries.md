@@ -41,6 +41,11 @@ audience is that product's configured resource-server client. Spring Security bu
 authentication from the exchanged product token. Explicit `Authorization: Bearer` clients must
 supply an already product-scoped token and do not use the browser exchange.
 
+The provider operation is Keycloak Authorization Services' UMA ticket grant, not RFC 8693 OAuth
+Token Exchange. Cookie extraction and exchange run in a dedicated authentication filter after CSRF;
+Spring Resource Server's bearer resolver remains header-only so its automatic bearer-request CSRF
+exclusion cannot classify the ambient cookie as an explicit bearer credential.
+
 Product exchange is fail-closed and uncached by default. An optimization may cache only positive
 exchange results for a bounded interval when it preserves an explicit invalidation path; caching
 must never become the correctness mechanism for authority convergence or revocation.

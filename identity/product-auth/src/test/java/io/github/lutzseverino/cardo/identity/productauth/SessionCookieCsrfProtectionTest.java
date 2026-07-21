@@ -12,8 +12,8 @@ import org.springframework.security.web.csrf.CsrfFilter;
 
 class SessionCookieCsrfProtectionTest {
 
-  private final SessionCookieBearerTokenResolver bearerTokens =
-      new SessionCookieBearerTokenResolver("cardo.session");
+  private final SessionCookieAuthenticationSelector selector =
+      new SessionCookieAuthenticationSelector("cardo.session");
   private final CsrfFilter filter = filter();
 
   @Test
@@ -54,7 +54,7 @@ class SessionCookieCsrfProtectionTest {
     MockHttpServletRequest malformedBearer = cookieMutation();
     malformedBearer.addHeader(HttpHeaders.AUTHORIZATION, "Basic malformed-credential");
     assertAllowed(malformedBearer);
-    assertThat(bearerTokens.resolve(malformedBearer)).isNull();
+    assertThat(selector.selectsSessionCookie(malformedBearer)).isFalse();
   }
 
   @Test
@@ -70,7 +70,7 @@ class SessionCookieCsrfProtectionTest {
   private CsrfFilter filter() {
     CsrfFilter csrf = new CsrfFilter(new ReadOnlyCsrfTokenRepository("cardo.csrf"));
     csrf.setRequestHandler(new HeaderOnlyCsrfTokenRequestHandler());
-    csrf.setRequireCsrfProtectionMatcher(new SessionCookieCsrfProtectionMatcher(bearerTokens));
+    csrf.setRequireCsrfProtectionMatcher(new SessionCookieCsrfProtectionMatcher(selector));
     return csrf;
   }
 
