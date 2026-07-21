@@ -22,6 +22,7 @@ import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationToken
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationTokensApi;
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationsApi;
 import java.net.URI;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -46,7 +47,33 @@ class HttpInvitationsClientTest {
 
   @Test
   void autoConfiguresTheStableClientContract() {
-    context.run(application -> assertThat(application).hasSingleBean(InvitationsClient.class));
+    context.run(
+        application -> {
+          assertThat(application).hasSingleBean(InvitationsClient.class);
+          InviteClientProperties properties = application.getBean(InviteClientProperties.class);
+          assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
+          assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(2));
+        });
+  }
+
+  @Test
+  void bindsClientTimeoutOverrides() {
+    context
+        .withPropertyValues(
+            "cardo.invite.client.connect-timeout=500ms", "cardo.invite.client.read-timeout=3s")
+        .run(
+            application -> {
+              InviteClientProperties properties = application.getBean(InviteClientProperties.class);
+              assertThat(properties.connectTimeout()).isEqualTo(Duration.ofMillis(500));
+              assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(3));
+            });
+  }
+
+  @Test
+  void rejectsAnUnboundedClientTimeout() {
+    context
+        .withPropertyValues("cardo.invite.client.read-timeout=0s")
+        .run(application -> assertThat(application).hasFailed());
   }
 
   @Test

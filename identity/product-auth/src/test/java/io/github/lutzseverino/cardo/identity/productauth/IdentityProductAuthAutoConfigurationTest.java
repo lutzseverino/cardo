@@ -209,15 +209,24 @@ class IdentityProductAuthAutoConfigurationTest {
   }
 
   @Test
-  void hostFilterChainCannotSuppressTheCardoProductChain() {
+  void narrowerHostFilterChainPrecedesCardoWithoutCapturingProductRoutes() {
     webContext
-        .withUserConfiguration(HostSecurityChain.class)
+        .withUserConfiguration(HostSecurityChain.class, TestProductRoutes.class)
         .run(
             application -> {
               assertThat(application).hasBean("identityProductSecurity");
               assertThat(application.getBeansOfType(SecurityFilterChain.class)).hasSize(2);
               assertThat(application.getBean("identityProductSecurity"))
                   .isNotSameAs(application.getBean("hostSecurityFilterChain"));
+
+              var mvc =
+                  MockMvcBuilders.webAppContextSetup((WebApplicationContext) application)
+                      .addFilters(application.getBean(FilterChainProxy.class))
+                      .build();
+
+              mvc.perform(get("/management/status")).andExpect(status().isOk());
+              mvc.perform(get("/product/public")).andExpect(status().isOk());
+              mvc.perform(get("/product/unmatched")).andExpect(status().isUnauthorized());
             });
   }
 
@@ -336,6 +345,11 @@ class IdentityProductAuthAutoConfigurationTest {
       return new DefaultSecurityFilterChain(
           request -> request.getRequestURI().startsWith("/management/"));
     }
+
+    @Bean
+    TestManagementController testManagementController() {
+      return new TestManagementController();
+    }
   }
 
   @RestController
@@ -348,6 +362,15 @@ class IdentityProductAuthAutoConfigurationTest {
 
     @PostMapping("/product/mutation")
     String mutate() {
+      return "ok";
+    }
+  }
+
+  @RestController
+  static class TestManagementController {
+
+    @GetMapping("/management/status")
+    String getStatus() {
       return "ok";
     }
   }

@@ -7,20 +7,13 @@ import io.github.lutzseverino.cardo.billing.repository.CustomerProjection;
 import io.github.lutzseverino.cardo.billing.repository.CustomerRepository;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
 public class CustomerService {
-
-  private static final Logger logger = LoggerFactory.getLogger(CustomerService.class);
 
   private final CustomerRepository customers;
   private final BillingProvider provider;
@@ -53,14 +46,8 @@ public class CustomerService {
 
   private CustomerResult create(UUID subjectId) {
     String providerCustomerId = provider.createCustomer(subjectId);
-    AtomicBoolean compensated = deleteCustomerOnRollback(providerCustomerId);
-    try {
-      return toResult(
-          customers.save(Customer.create(subjectId, provider.name(), providerCustomerId)));
-    } catch (RuntimeException exception) {
-      deleteCustomer(providerCustomerId, compensated, exception);
-      throw exception;
-    }
+    return toResult(
+        customers.save(Customer.create(subjectId, provider.name(), providerCustomerId)));
   }
 
   private CustomerResult toResult(CustomerProjection customer) {
@@ -69,41 +56,5 @@ public class CustomerService {
         customer.getSubjectId(),
         customer.getProvider(),
         customer.getProviderCustomerId());
-  }
-
-  private AtomicBoolean deleteCustomerOnRollback(String providerCustomerId) {
-    AtomicBoolean compensated = new AtomicBoolean();
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      return compensated;
-    }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCompletion(int status) {
-            if (status != STATUS_COMMITTED && compensated.compareAndSet(false, true)) {
-              try {
-                provider.deleteCustomer(providerCustomerId);
-              } catch (RuntimeException exception) {
-                logger.error(
-                    "Failed to delete provider customer {} after rollback",
-                    providerCustomerId,
-                    exception);
-              }
-            }
-          }
-        });
-    return compensated;
-  }
-
-  private void deleteCustomer(
-      String providerCustomerId, AtomicBoolean compensated, RuntimeException original) {
-    if (!compensated.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      provider.deleteCustomer(providerCustomerId);
-    } catch (RuntimeException compensationFailure) {
-      original.addSuppressed(compensationFailure);
-    }
   }
 }

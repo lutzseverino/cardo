@@ -1,21 +1,24 @@
 # Data Protection Contracts
 
-Entities that store personal, medical, financial, or otherwise retained data should expose that responsibility through shared contracts instead of inventing local deletion fields.
+Cardo exposes small shared persistence contracts for audit timestamps and personal-data
+classification. Retention periods and deletion behavior remain owned by the module that owns the
+data until Cardo implements a real shared retention lifecycle.
 
 ## Contracts
 
 - `AuditedEntity` owns creation and update timestamps.
-- `PersonalDataEntity` marks an entity as containing personal data.
-- `RetainedDataEntity` owns archive, restriction, retention, and purge state.
-- `MedicalRecordEntity` marks retained data as medical record data.
-- `DataRetentionPolicy` calculates retention deadlines and reasons.
-- `MedicalRetentionPolicy` provides medical record retention behavior.
+- `PersonalDataEntity` is a method-free marker for entities containing personal data. It enables
+  discovery and review but does not enforce persistence, access, retention, or deletion behavior.
+
+Cardo does not currently publish generic retained-data entities, medical-data markers, or retention
+policy implementations. Do not describe or depend on those concepts as shared runtime contracts
+until their owner, lifecycle, and enforcement exist in code.
 
 ## Rules
 
-- Retained personal, medical, or financial data must not be physically deleted by normal product flows.
-- Retained data must not sit behind database cascades that can erase it through parent deletion.
-- Use archive when active use stops but retention is still required.
-- Use restriction when the record remains present but normal processes should not use it.
-- Use purge or anonymization only from a dedicated retention process after retention eligibility is established.
-- Use neutral contract names for shared mechanics. Product names belong where the product owns the behavior.
+- Apply `PersonalDataEntity` only as classification; do not infer a retention period or deletion
+  policy from the marker.
+- The owning module documents and enforces its required deletion, anonymization, restriction, and
+  retention behavior, including database cascade decisions.
+- Add a shared retention abstraction only when implemented behavior with a stable cross-module owner
+  exists. Use neutral contract names for shared mechanics; product names remain with their owner.

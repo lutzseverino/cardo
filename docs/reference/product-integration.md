@@ -110,6 +110,24 @@ runtime dependency. Configure `cardo.invite.client.base-url` with the Invite
 client-credentials provider; Invite derives product ownership from that token's
 OAuth client identifier.
 
+The Identity, Invite, and Billing HTTP clients default to two-second connection
+and response timeouts. Override the relevant
+`cardo.<service>.client.connect-timeout` and `read-timeout` properties only with
+positive, bounded durations. All three clients reuse the supplied
+`KeycloakClientCredentialsTokenProvider`; the provider caches a token only when
+Keycloak returns a positive `expires_in` value and refreshes it shortly before
+that expiry. Its default acquisition timeouts are two seconds and its default
+refresh skew is thirty seconds. Consumers that need different bounds construct
+the provider with `KeycloakClientCredentialsTokenSettings`.
+
+This cache removes a Keycloak request from the ordinary service-call path, but
+it also means revoking a service credential does not remove an already-issued
+token. Keep service-token lifetimes short enough for the deployment's
+revocation requirement. Downstream services still validate every presented
+token through their resource-server chain; caching does not bypass that
+processing. The provider fails closed when acquisition fails or Keycloak omits
+a positive expiry.
+
 Invite's service also requires a positive product-caller boundary. Add the
 product OAuth client identifier to
 `cardo.invite.product-callers.allowed-client-ids`, create the `product-service`

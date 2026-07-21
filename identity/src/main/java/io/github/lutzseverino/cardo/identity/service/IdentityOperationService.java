@@ -10,7 +10,6 @@ import io.github.lutzseverino.cardo.identity.model.IdentityOperationType;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationWork;
 import io.github.lutzseverino.cardo.identity.model.User;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
-import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.repository.IdentityOperationRepository;
 import io.github.lutzseverino.cardo.identity.repository.UserRepository;
 import java.time.Clock;
@@ -197,8 +196,7 @@ public class IdentityOperationService {
   }
 
   @Transactional
-  public void completeCredentialSetup(
-      UUID operationId, IdentityProvider.CompletedIdentityProfile profile) {
+  public void completeCredentialSetup(UUID operationId, String name) {
     IdentityOperation operation = requireLockedOperation(operationId);
     requireType(operation, IdentityOperationType.CREDENTIAL_SETUP);
     OffsetDateTime now = now();
@@ -208,7 +206,7 @@ public class IdentityOperationService {
     }
     User user = requireUser(operation.getUserId());
     if (UserStatus.INVITED.equals(user.getStatus())) {
-      user.complete(profile.name());
+      user.complete(name);
     } else if (!UserStatus.ACTIVE.equals(user.getStatus())) {
       throw ApiException.conflict(
           "user_status_conflict", "Identity user cannot complete credential setup.");

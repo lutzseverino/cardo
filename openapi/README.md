@@ -21,7 +21,7 @@ to application-owned inputs.
 Use `PatchFields.update(JsonNullable<T>)` to convert generator-owned presence information
 into the application-owned `FieldUpdate<T>` representation.
 
-Every product follows the same boundary mechanics:
+Every product that exposes this PATCH shape follows the same boundary mechanics:
 
 1. PATCH request schemas use OpenAPI nullable fields where absence and explicit `null` differ.
 2. A product-local `*PatchAdapter` converts the generated request into an application input.

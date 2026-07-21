@@ -16,6 +16,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityOperation;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationStatus;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationType;
 import io.github.lutzseverino.cardo.identity.model.User;
+import io.github.lutzseverino.cardo.identity.model.UserStatus;
 import io.github.lutzseverino.cardo.identity.repository.IdentityOperationRepository;
 import io.github.lutzseverino.cardo.identity.repository.UserRepository;
 import java.time.Duration;
@@ -112,6 +113,24 @@ class IdentityOperationServiceTest {
         .isEqualTo(IdentityOperationStatus.COMPLETED);
 
     verify(users, never()).findEntityByIdForUpdate(USER_ID);
+  }
+
+  @Test
+  void completesCredentialSetupFromAnApplicationOwnedName() {
+    IdentityOperationRepository operations = mock(IdentityOperationRepository.class);
+    UserRepository users = mock(UserRepository.class);
+    IdentityOperation operation =
+        IdentityOperation.credentialSetup(OPERATION_ID, USER_ID, "subject-1", NOT_AFTER, NOW);
+    operation.awaitUser(NOW, NOT_AFTER);
+    User invited = User.invited("subject-1", "employee@example.com");
+    when(operations.findEntityByIdForUpdate(OPERATION_ID)).thenReturn(Optional.of(operation));
+    when(users.findById(USER_ID)).thenReturn(Optional.of(invited));
+
+    service(operations, users).completeCredentialSetup(OPERATION_ID, "Employee");
+
+    assertThat(invited.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    assertThat(invited.getName()).isEqualTo("Employee");
+    assertThat(operation.getStatus()).isEqualTo(IdentityOperationStatus.COMPLETED);
   }
 
   @Test
