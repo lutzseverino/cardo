@@ -9,8 +9,9 @@ while keeping those mechanics out of product code.
 Products combine `invite-client` with `invite-client-http`, configure
 `cardo.invite.client.base-url` with Invite's `/api/v1` base URL, and set the
 required `cardo.invite.client.service-token-scope=cardo-invite` property. The
-scope is the optional Keycloak client scope that emits a token whose only
-audience is `cardo-invite`; missing or blank values fail auto-configuration.
+value is the default optional Keycloak client scope. It must emit a token whose
+only audience equals Invite's deployed `cardo.invite.keycloak.client-id` (which
+defaults to `cardo-invite`); missing or blank values fail auto-configuration.
 
 The auto-configuration requires a `KeycloakClientCredentialsTokenProvider`
 bean and requests only the configured scope. The provider reuses the

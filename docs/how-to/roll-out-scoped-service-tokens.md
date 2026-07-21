@@ -29,7 +29,10 @@ following order.
 1. In Keycloak, create or verify optional client scopes named `identity`,
    `billing`, and `cardo-invite`. Give each scope one audience mapper that emits
    only its identically named resource audience. Do not attach these scopes as
-   defaults and do not add all three audiences to one token.
+   defaults and do not add all three audiences to one token. These are the
+   repository defaults. If Invite's deployed `cardo.invite.keycloak.client-id`
+   is customized, its scope mapper must instead emit that configured client ID
+   as the sole audience; use the same client ID for Invite's role namespace.
 2. Attach the target scopes as optional scopes to each existing confidential
    caller that needs them. In particular, attach the required scopes to the
    existing Polity client instead of creating a replacement client merely for
@@ -84,7 +87,8 @@ following order.
    traffic independently; a successful service-token smoke does not validate
    user-token traffic.
 3. Canary the Cardo release with strict Billing validation (`aud` exactly
-   `billing`) and strict Invite validation (`aud` exactly `cardo-invite`). Both
+   `billing`) and strict Invite validation (`aud` exactly the deployed Invite
+   client ID, `cardo-invite` by default). Both
    also require issuer and expiration. Keep health, API documentation, Billing
    status/webhook, and Invite status/token-inspection routes public, and verify
    Billing's user/service authorization split plus Invite's service role and

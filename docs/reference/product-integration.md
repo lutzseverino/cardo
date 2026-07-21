@@ -106,7 +106,8 @@ requires.
 
 Use `invite-client` for compile-time product code and `invite-client-http` as a
 runtime dependency. Configure `cardo.invite.client.base-url` with the Invite
-`/api/v1` base URL and `cardo.invite.client.service-token-scope=cardo-invite`.
+`/api/v1` base URL and, for the default deployment,
+`cardo.invite.client.service-token-scope=cardo-invite`.
 The HTTP client obtains a service token from the shared client-credentials
 provider; Invite derives product ownership from that token's OAuth client
 identifier.
@@ -127,7 +128,7 @@ Each adapter requires a non-blank target scope and requests only that scope:
 | --- | --- | --- |
 | Identity | `cardo.identity.client.service-token-scope` | `identity` |
 | Billing | `cardo.billing.client.service-token-scope` | `billing` |
-| Invite | `cardo.invite.client.service-token-scope` | `cardo-invite` |
+| Invite | `cardo.invite.client.service-token-scope` | `cardo-invite` by default; its sole audience must equal the deployed Invite client ID |
 
 The provider normalizes scope lists and isolates their caches. Scoped tokens
 never share the unscoped cache used for Cardo's Keycloak administration calls.
@@ -152,11 +153,11 @@ a positive expiry.
 Invite's service also requires a positive product-caller boundary. Add the
 product OAuth client identifier to
 `cardo.invite.product-callers.allowed-client-ids`, create the `product-service`
-client role on the `cardo-invite` Keycloak client, and grant that role only to
-the product client's service account. Invite requires the resulting
-`cardo-invite:product-service` authority, the `cardo-invite` audience, and the
-allowlist entry; merely lacking a Cardo end-user claim never makes a token a
-service token.
+client role on the configured Invite Keycloak client, and grant that role only to
+the product client's service account. With the default client ID, Invite requires the resulting
+`cardo-invite:product-service` authority and exact `cardo-invite` audience. A customized client ID
+changes both values together. Invite also requires the allowlist entry; merely lacking a Cardo
+end-user claim never makes a token a service token.
 
 Invite create, accept, and revoke calls are integration effects. A product must
 not place them inside a local transaction and assume atomicity. Dispatch them
