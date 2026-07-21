@@ -21,7 +21,7 @@ class AuthorizationPlanRecovery {
     publications.resubmitIncompletePublications(
         publication ->
             publication.getPublicationDate().isBefore(cutoff)
-                && (publication.getEvent() instanceof StagedGrantPlan
+                && (publication.getEvent() instanceof GrantPlanPublication
                     || publication.getEvent() instanceof RevocationPlan));
   }
 }

@@ -24,7 +24,15 @@ class GrantPlanListener {
   }
 
   @ApplicationModuleListener(id = "authorization.grant-plan")
-  void apply(StagedGrantPlan staged) {
+  void apply(GrantPlanPublication publication) {
+    if (publication instanceof GrantPlan legacyPlan) {
+      processor.apply(legacyPlan);
+      return;
+    }
+    applyStaged((StagedGrantPlan) publication);
+  }
+
+  private void applyStaged(StagedGrantPlan staged) {
     if (!processingLock.tryAcquire(staged.receiptId())) {
       throw new IllegalStateException(
           "Grant receipt is already being processed: " + staged.receiptId());

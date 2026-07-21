@@ -10,7 +10,8 @@ import java.util.Set;
 public record GrantPlan(
     List<AuthorizationResource> resources,
     List<ResourceGrant> resourceGrants,
-    List<AuthorityGrant> authorityGrants) {
+    List<AuthorityGrant> authorityGrants)
+    implements GrantPlanPublication {
 
   public GrantPlan {
     resources = List.copyOf(Objects.requireNonNull(resources, "resources"));

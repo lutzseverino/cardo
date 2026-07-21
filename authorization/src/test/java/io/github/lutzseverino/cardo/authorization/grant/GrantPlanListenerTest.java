@@ -35,6 +35,20 @@ class GrantPlanListenerTest {
   }
 
   @Test
+  void appliesLegacyGrantPlanWithoutReceiptLifecycle() {
+    GrantPlan legacyPlan =
+        new GrantPlan(
+            List.of(),
+            List.of(),
+            List.of(new GrantPlan.AuthorityGrant("polity", "subject-1", List.of("member"))));
+
+    listener.apply(legacyPlan);
+
+    verify(processor).apply(legacyPlan);
+    verifyNoInteractions(receipts, processingLock, failures);
+  }
+
+  @Test
   void marksReceiptAppliedOnlyAfterProviderWorkCompletes() {
     StagedGrantPlan staged = staged();
 

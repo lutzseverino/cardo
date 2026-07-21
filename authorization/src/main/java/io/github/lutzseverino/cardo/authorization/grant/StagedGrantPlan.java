@@ -3,7 +3,7 @@ package io.github.lutzseverino.cardo.authorization.grant;
 import java.util.Objects;
 import java.util.UUID;
 
-record StagedGrantPlan(UUID receiptId, GrantPlan plan) {
+record StagedGrantPlan(UUID receiptId, GrantPlan plan) implements GrantPlanPublication {
 
   StagedGrantPlan {
     Objects.requireNonNull(receiptId, "receiptId");
