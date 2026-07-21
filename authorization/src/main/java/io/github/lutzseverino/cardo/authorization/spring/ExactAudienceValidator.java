@@ -1,4 +1,4 @@
-package io.github.lutzseverino.cardo.identity.productauth;
+package io.github.lutzseverino.cardo.authorization.spring;
 
 import java.util.List;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -6,15 +6,18 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-final class ExactAudienceValidator implements OAuth2TokenValidator<Jwt> {
+/** Requires a JWT to publish exactly one audience matching the configured resource. */
+public final class ExactAudienceValidator implements OAuth2TokenValidator<Jwt> {
 
   private static final OAuth2Error INVALID_AUDIENCE =
-      new OAuth2Error(
-          "invalid_token", "The token audience is not valid for this credential.", null);
+      new OAuth2Error("invalid_token", "The token audience is not valid for this resource.", null);
 
   private final String audience;
 
-  ExactAudienceValidator(String audience) {
+  public ExactAudienceValidator(String audience) {
+    if (audience == null || audience.isBlank()) {
+      throw new IllegalArgumentException("audience must not be blank.");
+    }
     this.audience = audience;
   }
 

@@ -27,12 +27,13 @@ Invite authorizes product callers positively. Configure
 `cardo.invite.product-callers.allowed-client-ids` (or
 `INVITE_PRODUCT_CLIENT_IDS`) with the OAuth client identifiers that may call
 Invite. Each client's Keycloak service account must also hold the dedicated
-`cardo-invite` client role `product-service`, which appears as the
-`cardo-invite:product-service` authority. Configure the Keycloak audience
-mapper so those tokens also include `cardo-invite` in `aud`. Do not grant that
-role to end users. Invite rejects callers that lack the audience, role, or
-allowlist entry; the absence of an end-user claim is not treated as
-service-token proof.
+Invite resource-server client role `product-service`. With the default
+`cardo.invite.keycloak.client-id=cardo-invite`, it appears as the
+`cardo-invite:product-service` authority. Configure the Keycloak audience mapper so the token's
+only audience is that same configured client ID. If the client ID is customized, both the role
+namespace and exact audience change with it. Do not grant that role to end users. Invite rejects
+callers that lack the audience, role, or allowlist entry; the absence of an end-user claim is not
+treated as service-token proof.
 
 Products still own why an invitation exists and every domain consequence of
 acceptance. For a product-owned invitation record, use its UUID as Invite's

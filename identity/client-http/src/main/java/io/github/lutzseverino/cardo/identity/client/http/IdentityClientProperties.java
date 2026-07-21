@@ -4,7 +4,8 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "cardo.identity.client")
-record IdentityClientProperties(String baseUrl, Duration connectTimeout, Duration readTimeout) {
+record IdentityClientProperties(
+    String baseUrl, String serviceTokenScope, Duration connectTimeout, Duration readTimeout) {
 
   private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(2);
 
@@ -12,6 +13,10 @@ record IdentityClientProperties(String baseUrl, Duration connectTimeout, Duratio
     if (baseUrl == null || baseUrl.isBlank()) {
       throw new IllegalArgumentException("cardo.identity.client.base-url is required.");
     }
+    if (serviceTokenScope == null || serviceTokenScope.isBlank()) {
+      throw new IllegalArgumentException("cardo.identity.client.service-token-scope is required.");
+    }
+    serviceTokenScope = serviceTokenScope.strip();
     connectTimeout = timeoutOrDefault(connectTimeout, "connect-timeout");
     readTimeout = timeoutOrDefault(readTimeout, "read-timeout");
   }

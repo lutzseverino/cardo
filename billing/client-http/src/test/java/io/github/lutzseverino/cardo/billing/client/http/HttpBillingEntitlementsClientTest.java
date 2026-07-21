@@ -1,7 +1,9 @@
 package io.github.lutzseverino.cardo.billing.client.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
@@ -22,14 +24,17 @@ import tools.jackson.databind.json.JsonMapper;
 
 class HttpBillingEntitlementsClientTest {
 
-  private final ApplicationContextRunner context =
+  private final ApplicationContextRunner baseContext =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(BillingClientAutoConfiguration.class))
           .withBean(JsonMapper.class, () -> JsonMapper.builder().build())
           .withBean(
               KeycloakClientCredentialsTokenProvider.class,
-              () -> mock(KeycloakClientCredentialsTokenProvider.class))
-          .withPropertyValues("cardo.billing.client.base-url=http://billing.test/api/v1");
+              () -> mock(KeycloakClientCredentialsTokenProvider.class));
+  private final ApplicationContextRunner context =
+      baseContext.withPropertyValues(
+          "cardo.billing.client.base-url=http://billing.test/api/v1",
+          "cardo.billing.client.service-token-scope=billing");
 
   @Test
   void autoConfiguresTheStableClientContract() {
@@ -39,6 +44,7 @@ class HttpBillingEntitlementsClientTest {
           BillingClientProperties properties = application.getBean(BillingClientProperties.class);
           assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
           assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(2));
+          assertThat(properties.serviceTokenScope()).isEqualTo("billing");
         });
   }
 
@@ -61,6 +67,37 @@ class HttpBillingEntitlementsClientTest {
     context
         .withPropertyValues("cardo.billing.client.read-timeout=0s")
         .run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
+  void rejectsMissingAndBlankServiceTokenScopesAtStartup() {
+    baseContext
+        .withPropertyValues("cardo.billing.client.base-url=http://billing.test/api/v1")
+        .run(application -> assertThat(application).hasFailed());
+    context
+        .withPropertyValues("cardo.billing.client.service-token-scope=  ")
+        .run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
+  void requestsOnlyTheConfiguredBillingServiceTokenScope() {
+    context
+        .withPropertyValues("cardo.billing.client.base-url=http://localhost:1/api/v1")
+        .run(
+            application -> {
+              KeycloakClientCredentialsTokenProvider tokens =
+                  application.getBean(KeycloakClientCredentialsTokenProvider.class);
+              when(tokens.clientCredentialsToken("billing")).thenReturn("billing-token");
+
+              assertThatThrownBy(
+                      () ->
+                          application
+                              .getBean(BillingEntitlementsClient.class)
+                              .require(UUID.randomUUID(), "clinic"))
+                  .isInstanceOf(RuntimeException.class);
+              verify(tokens).clientCredentialsToken("billing");
+              verify(tokens, org.mockito.Mockito.never()).clientCredentialsToken();
+            });
   }
 
   @Test
