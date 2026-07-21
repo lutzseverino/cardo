@@ -23,6 +23,12 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   billing:
+    customer-provisioning:
+      dispatch-delay: ${BILLING_CUSTOMER_PROVISIONING_DISPATCH_DELAY:5s}
+      retry-base-delay: ${BILLING_CUSTOMER_PROVISIONING_RETRY_BASE_DELAY:10s}
+      claim-lease: ${BILLING_CUSTOMER_PROVISIONING_CLAIM_LEASE:1m}
+      max-attempts: ${BILLING_CUSTOMER_PROVISIONING_MAX_ATTEMPTS:6}
+      batch-size: ${BILLING_CUSTOMER_PROVISIONING_BATCH_SIZE:50}
     keycloak:
       base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
       realm: ${KEYCLOAK_REALM:cardo}

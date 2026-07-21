@@ -2,6 +2,7 @@ package io.github.lutzseverino.cardo.billing.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.lutzseverino.cardo.billing.BillingApplication;
 import io.github.lutzseverino.cardo.billing.BillingPermissions;
 import io.github.lutzseverino.cardo.billing.workflow.CreateCheckoutSessionWorkflow;
 import io.github.lutzseverino.cardo.billing.workflow.CreatePortalSessionWorkflow;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.core.type.filter.RegexPatternTypeFilter;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ class BillingApplicationBoundaryTest {
 
   private static final Class<?>[] APPLICATION_BOUNDARIES = {
     CustomerService.class,
+    CustomerProvisioningService.class,
     EntitlementService.class,
     CreateCheckoutSessionWorkflow.class,
     CreatePortalSessionWorkflow.class,
@@ -59,6 +62,24 @@ class BillingApplicationBoundaryTest {
                 .map(field -> field.getType().getSimpleName())
                 .noneMatch(name -> name.endsWith("Workflow")))
         .isTrue();
+  }
+
+  @Test
+  void customerProvisioningKeepsProviderCallsOutsideTransactions() {
+    Class<?> provisioner =
+        load("io.github.lutzseverino.cardo.billing.workflow.CustomerProvisioner");
+    assertThat(provisioner.isAnnotationPresent(Transactional.class)).isFalse();
+    assertThat(Arrays.stream(provisioner.getDeclaredMethods()))
+        .noneMatch(method -> method.isAnnotationPresent(Transactional.class));
+    assertThat(
+            Arrays.stream(CustomerProvisioningService.class.getDeclaredFields())
+                .map(field -> field.getType().getSimpleName()))
+        .doesNotContain("BillingProvider");
+  }
+
+  @Test
+  void billingEnablesTheProvisioningRecoverySchedule() {
+    assertThat(BillingApplication.class.isAnnotationPresent(EnableScheduling.class)).isTrue();
   }
 
   @Test
@@ -124,7 +145,7 @@ class BillingApplicationBoundaryTest {
   @Test
   void ownerMutationsRemainTransactional() throws Exception {
     assertThat(
-            method(CustomerService.class, "getOrCreate", UUID.class)
+            method(CustomerProvisioningService.class, "request", UUID.class, String.class)
                 .isAnnotationPresent(Transactional.class))
         .isTrue();
     assertThat(

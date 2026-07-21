@@ -5,6 +5,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.CustomerCreateParams;
+import com.stripe.param.CustomerSearchParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.stripe.param.checkout.SessionCreateParams.LineItem;
 import com.stripe.param.checkout.SessionCreateParams.Mode;
@@ -14,6 +15,7 @@ import io.github.lutzseverino.cardo.billing.model.BillingSessionResult;
 import io.github.lutzseverino.cardo.billing.provider.BillingProvider;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -23,7 +25,8 @@ import org.springframework.stereotype.Component;
 public class StripeBillingProvider implements BillingProvider {
 
   static final String PROVIDER = "stripe";
-  private static final String CUSTOMER_CREATION_KEY_PREFIX = "cardo-billing-customer-v1:";
+  static final String PROVISIONING_METADATA_KEY = "cardo_provisioning_id";
+  private static final String CUSTOMER_CREATION_KEY_PREFIX = "cardo-billing-customer-v2:";
 
   private final StripeCheckoutCatalog prices;
   private final StripeClient stripe;
@@ -34,7 +37,7 @@ public class StripeBillingProvider implements BillingProvider {
   }
 
   @Override
-  public String createCustomer(UUID subjectId) {
+  public String createCustomer(UUID subjectId, UUID provisioningId) {
     try {
       com.stripe.model.Customer customer =
           stripe
@@ -43,9 +46,10 @@ public class StripeBillingProvider implements BillingProvider {
               .create(
                   CustomerCreateParams.builder()
                       .putMetadata("subject_id", subjectId.toString())
+                      .putMetadata(PROVISIONING_METADATA_KEY, provisioningId.toString())
                       .build(),
                   RequestOptions.builder()
-                      .setIdempotencyKey(customerCreationIdempotencyKey(subjectId))
+                      .setIdempotencyKey(customerCreationIdempotencyKey(provisioningId))
                       .build());
       return customer.getId();
     } catch (StripeException exception) {
@@ -54,8 +58,30 @@ public class StripeBillingProvider implements BillingProvider {
     }
   }
 
-  private String customerCreationIdempotencyKey(UUID subjectId) {
-    return CUSTOMER_CREATION_KEY_PREFIX + subjectId;
+  @Override
+  public List<String> findCustomersByProvisioningId(UUID provisioningId) {
+    try {
+      return stripe
+          .v1()
+          .customers()
+          .search(
+              CustomerSearchParams.builder()
+                  .setQuery(
+                      "metadata['" + PROVISIONING_METADATA_KEY + "']:'" + provisioningId + "'")
+                  .setLimit(2L)
+                  .build())
+          .getData()
+          .stream()
+          .map(com.stripe.model.Customer::getId)
+          .toList();
+    } catch (StripeException exception) {
+      throw ApiException.of(
+          502, "billing_customer_create_failed", "Customer could not be created.");
+    }
+  }
+
+  private String customerCreationIdempotencyKey(UUID provisioningId) {
+    return CUSTOMER_CREATION_KEY_PREFIX + provisioningId;
   }
 
   @Override

@@ -4,7 +4,6 @@ import io.github.lutzseverino.cardo.billing.model.BillingSessionResult;
 import io.github.lutzseverino.cardo.billing.model.CreateCheckoutSessionInput;
 import io.github.lutzseverino.cardo.billing.model.CustomerResult;
 import io.github.lutzseverino.cardo.billing.provider.BillingProvider;
-import io.github.lutzseverino.cardo.billing.service.CustomerService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +16,7 @@ import org.springframework.validation.annotation.Validated;
 public class CreateCheckoutSessionWorkflow {
 
   private final BillingProvider provider;
-  private final CustomerService customers;
+  private final CustomerProvisioner customers;
 
   public BillingSessionResult create(UUID subjectId, @Valid CreateCheckoutSessionInput input) {
     CustomerResult customer = customers.getOrCreate(subjectId);
