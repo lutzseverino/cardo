@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -103,6 +104,35 @@ class UserServiceTest {
 
     verify(identityProvider).findPasswordIdentityByCorrelationMarker("correlation-1");
     verify(providerMutations).completePasswordProvision(intent, "kc-user-1", userId);
+  }
+
+  @Test
+  void terminalsAndDeletesAnUnboundPasswordIdentityAfterALateEmailConflict() {
+    UserService service = service();
+    PasswordProvisioningIntent intent = intent();
+    UserProjection conflicting = projection(UserStatus.ACTIVE);
+    when(users.findProjectedByEmail("owner@example.com"))
+        .thenReturn(Optional.empty(), Optional.of(conflicting));
+    when(providerMutations.requestPasswordProvision("owner@example.com", "Owner"))
+        .thenReturn(intent);
+    when(identityProvider.provisionPasswordIdentity(
+            "owner@example.com", "password-1", "Owner", "correlation-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("kc-new-user"));
+    when(providerMutations.recordPasswordCompletionConflict(any(), any())).thenReturn(true);
+    when(users.findProjectedByKeycloakSubject("kc-new-user")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.create(new CreateUserInput("owner@example.com", "password-1", "Owner")))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            conflict -> {
+              assertThat(conflict.status()).isEqualTo(409);
+              assertThat(conflict.code()).isEqualTo("user_exists");
+            });
+
+    verify(providerMutations).recordPasswordCompletionConflict(eq(intent), any(ApiException.class));
+    verify(identityProvider).deleteIdentity("kc-new-user");
+    verify(providerMutations, never()).completePasswordProvision(any(), any(), any());
   }
 
   @Test

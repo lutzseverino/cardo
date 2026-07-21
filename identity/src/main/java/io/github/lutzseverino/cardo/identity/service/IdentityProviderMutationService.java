@@ -166,6 +166,17 @@ public class IdentityProviderMutationService {
         .terminal(intent.leaseToken(), safeMessage(failure), reason, now());
   }
 
+  @Transactional
+  public boolean recordPasswordCompletionConflict(
+      PasswordProvisioningIntent intent, RuntimeException failure) {
+    return requireLocked(intent.mutationId())
+        .terminal(
+            intent.leaseToken(),
+            safeMessage(failure),
+            IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT,
+            now());
+  }
+
   private IdentityProviderMutation reusablePasswordProvision(
       IdentityProviderMutation mutation, String name, OffsetDateTime now) {
     if (!Objects.equals(mutation.getName(), name)) {

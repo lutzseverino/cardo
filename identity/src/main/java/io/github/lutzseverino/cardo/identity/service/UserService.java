@@ -102,7 +102,16 @@ public class UserService {
         providerMutations.requestPasswordProvision(email.value(), input.name());
     IdentityProvider.ProvisionedIdentity identity =
         provisionPasswordIdentity(intent, input.password());
-    return transactions.execute(status -> completePasswordProvision(intent, identity.subject()));
+    try {
+      return transactions.execute(status -> completePasswordProvision(intent, identity.subject()));
+    } catch (DataIntegrityViolationException conflict) {
+      return resolvePasswordProvisionConflict(intent, identity.subject(), conflict);
+    } catch (ApiException conflict) {
+      if (conflict.status() != 409 || !"user_exists".equals(conflict.code())) {
+        throw conflict;
+      }
+      return resolvePasswordProvisionConflict(intent, identity.subject(), conflict);
+    }
   }
 
   @Transactional
@@ -318,13 +327,56 @@ public class UserService {
 
   private UserResult completePasswordProvision(
       PasswordProvisioningIntent intent, String providerSubject) {
-    if (users.findProjectedByEmail(intent.email()).isPresent()) {
-      throw ApiException.conflict("user_exists", "A user with this email already exists.");
+    Optional<UserProjection> existing = users.findProjectedByEmail(intent.email());
+    if (existing.isPresent()) {
+      UserProjection projection = existing.orElseThrow();
+      if (providerSubject.equals(projection.getKeycloakSubject())) {
+        return completeExistingPasswordProvision(intent, providerSubject, projection.getId());
+      }
+      throw passwordProvisionConflict();
     }
     User user = users.saveAndFlush(new User(providerSubject, intent.email(), intent.name()));
     providerMutations.completePasswordProvision(intent, providerSubject, user.getId());
     grants.stage(identityGrantPlanner.creation(user));
     return getResult(user.getId());
+  }
+
+  private UserResult resolvePasswordProvisionConflict(
+      PasswordProvisioningIntent intent, String providerSubject, RuntimeException failure) {
+    Optional<UserProjection> existing = users.findProjectedByEmail(intent.email());
+    if (existing.isPresent()
+        && providerSubject.equals(existing.orElseThrow().getKeycloakSubject())) {
+      UUID userId = existing.orElseThrow().getId();
+      return transactions.execute(
+          status -> completeExistingPasswordProvision(intent, providerSubject, userId));
+    }
+
+    ApiException conflict = passwordProvisionConflict();
+    conflict.addSuppressed(failure);
+    boolean terminal = providerMutations.recordPasswordCompletionConflict(intent, conflict);
+    if (terminal && users.findProjectedByKeycloakSubject(providerSubject).isEmpty()) {
+      try {
+        identityProvider.deleteIdentity(providerSubject);
+      } catch (RuntimeException compensationFailure) {
+        conflict.addSuppressed(compensationFailure);
+      }
+    }
+    throw conflict;
+  }
+
+  private UserResult completeExistingPasswordProvision(
+      PasswordProvisioningIntent intent, String providerSubject, UUID userId) {
+    User user =
+        users
+            .findById(userId)
+            .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
+    providerMutations.completePasswordProvision(intent, providerSubject, userId);
+    grants.stage(identityGrantPlanner.creation(user));
+    return getResult(userId);
+  }
+
+  private ApiException passwordProvisionConflict() {
+    return ApiException.conflict("user_exists", "A user with this email already exists.");
   }
 
   private PasswordProvisioningFailure passwordProvisioningFailure(RuntimeException failure) {

@@ -130,6 +130,28 @@ class IdentityProviderMutationServiceTest {
   }
 
   @Test
+  void completionConflictTerminalsTheOwnedPasswordProvisioningLease() {
+    IdentityProviderMutationRepository mutations = mock(IdentityProviderMutationRepository.class);
+    OffsetDateTime now = OffsetDateTime.now();
+    IdentityProviderMutation mutation = passwordProvision(now);
+    UUID lease = mutation.claim(now.plusMinutes(1));
+    PasswordProvisioningIntent intent =
+        new PasswordProvisioningIntent(
+            mutation.getId(), lease, mutation.getEmail(), mutation.getName(), "marker-1");
+    when(mutations.findEntityByIdForUpdate(mutation.getId())).thenReturn(Optional.of(mutation));
+
+    assertThat(
+            service(mutations)
+                .recordPasswordCompletionConflict(
+                    intent, ApiException.conflict("user_exists", "User already exists.")))
+        .isTrue();
+
+    assertThat(mutation.getStatus()).isEqualTo(IdentityProviderMutationStatus.FAILED);
+    assertThat(mutation.getTerminalReason())
+        .isEqualTo(IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT);
+  }
+
+  @Test
   void expiredLeaseConflictRemainsRecoverableUntilTheOriginalMarkerBecomesVisible() {
     IdentityProviderMutationRepository repository = mock(IdentityProviderMutationRepository.class);
     OffsetDateTime now = OffsetDateTime.now();
