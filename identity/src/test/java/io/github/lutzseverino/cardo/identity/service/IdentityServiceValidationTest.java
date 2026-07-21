@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
 
 @SpringJUnitConfig(IdentityServiceValidationTest.Config.class)
@@ -100,10 +101,28 @@ class IdentityServiceValidationTest {
     UserService userService(
         UserRepository users,
         IdentityProvider identityProvider,
+        IdentityProviderMutationService providerMutations,
         Grants grants,
-        IdentityGrantPlanner identityGrantPlanner) {
+        IdentityGrantPlanner identityGrantPlanner,
+        PlatformTransactionManager transactionManager) {
       return new UserService(
-          users, new UserApplicationMapperImpl(), identityProvider, grants, identityGrantPlanner);
+          users,
+          new UserApplicationMapperImpl(),
+          identityProvider,
+          providerMutations,
+          grants,
+          identityGrantPlanner,
+          transactionManager);
+    }
+
+    @Bean
+    IdentityProviderMutationService providerMutations() {
+      return mock(IdentityProviderMutationService.class);
+    }
+
+    @Bean
+    PlatformTransactionManager transactionManager() {
+      return mock(PlatformTransactionManager.class);
     }
 
     @Bean

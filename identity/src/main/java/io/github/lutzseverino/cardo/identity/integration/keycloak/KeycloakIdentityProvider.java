@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +35,7 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   private static final String FORM_REFRESH_TOKEN = "refresh_token";
   private static final String FORM_TOKEN = "token";
   private static final String REFRESH_TOKEN_GRANT = "refresh_token";
+  private static final String PROVISIONING_CORRELATION_ATTRIBUTE = "cardo_provisioning_correlation";
 
   private final KeycloakProperties properties;
   private final KeycloakRealmAdminClient admin;
@@ -52,14 +54,67 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   }
 
   @Override
-  public ProvisionedIdentity provisionPasswordIdentity(String email, String password, String name) {
+  public ProvisionedIdentity provisionPasswordIdentity(
+      String email, String password, String name, String correlationMarker) {
     return createUser(
-        new KeycloakUser(email, email, name, true, List.of(passwordCredential(password))));
+        new KeycloakUser(
+            email,
+            email,
+            name,
+            true,
+            List.of(passwordCredential(password)),
+            Map.of(PROVISIONING_CORRELATION_ATTRIBUTE, List.of(correlationMarker))));
+  }
+
+  @Override
+  public Optional<ProvisionedIdentity> findPasswordIdentityByCorrelationMarker(
+      String correlationMarker) {
+    try {
+      List<KeycloakUserDetails> matches =
+          rest.get()
+              .uri(
+                  builder ->
+                      builder
+                          .path("/admin/realms/{realm}/users")
+                          .queryParam(
+                              "q", PROVISIONING_CORRELATION_ATTRIBUTE + ":" + correlationMarker)
+                          .queryParam("exact", true)
+                          .queryParam("briefRepresentation", false)
+                          .build(properties.realm()))
+              .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
+              .retrieve()
+              .body(new org.springframework.core.ParameterizedTypeReference<>() {});
+      if (matches == null || matches.isEmpty()) {
+        return Optional.empty();
+      }
+      List<KeycloakUserDetails> exactMatches =
+          matches.stream()
+              .filter(
+                  user ->
+                      Optional.ofNullable(user.attributes())
+                          .map(attributes -> attributes.get(PROVISIONING_CORRELATION_ATTRIBUTE))
+                          .orElseGet(List::of)
+                          .contains(correlationMarker))
+              .toList();
+      if (exactMatches.size() != 1
+          || exactMatches.getFirst().id() == null
+          || exactMatches.getFirst().id().isBlank()) {
+        throw ApiException.of(
+            502,
+            "identity_provider_correlation_invalid",
+            "Identity provider returned an invalid provisioning correlation result.");
+      }
+      return Optional.of(new ProvisionedIdentity(exactMatches.getFirst().id()));
+    } catch (RestClientResponseException exception) {
+      throw providerException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
+    }
   }
 
   @Override
   public ProvisionedIdentity provisionProvisionalIdentity(String email) {
-    return createUser(new KeycloakUser(email, email, null, true, List.of()));
+    return createUser(new KeycloakUser(email, email, null, true, List.of(), Map.of()));
   }
 
   @Override
@@ -150,6 +205,8 @@ public class KeycloakIdentityProvider implements IdentityProvider {
         throw ApiException.conflict("user_exists", "A user with this email already exists.");
       }
       throw providerException(exception);
+    } catch (RestClientException exception) {
+      throw sessionUnavailable(exception);
     }
   }
 
@@ -377,11 +434,13 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       String email,
       String firstName,
       boolean enabled,
-      List<KeycloakCredential> credentials) {}
+      List<KeycloakCredential> credentials,
+      Map<String, List<String>> attributes) {}
 
   private record KeycloakUserStatus(boolean enabled) {}
 
-  private record KeycloakUserDetails(String firstName) {}
+  private record KeycloakUserDetails(
+      String id, String firstName, Map<String, List<String>> attributes) {}
 
   private record KeycloakCredentialSummary(String type) {}
 

@@ -8,6 +8,9 @@ import io.github.lutzseverino.cardo.identity.authorization.IdentityGrantPlanner;
 import io.github.lutzseverino.cardo.identity.mapper.UserApplicationMapper;
 import io.github.lutzseverino.cardo.identity.model.CreateProvisionalUserInput;
 import io.github.lutzseverino.cardo.identity.model.CreateUserInput;
+import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationTerminalReason;
+import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationWork;
+import io.github.lutzseverino.cardo.identity.model.PasswordProvisioningIntent;
 import io.github.lutzseverino.cardo.identity.model.UpdateCurrentUserInput;
 import io.github.lutzseverino.cardo.identity.model.UpdateUserInput;
 import io.github.lutzseverino.cardo.identity.model.User;
@@ -23,24 +26,26 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
 @Service
-@RequiredArgsConstructor
 public class UserService {
 
   private static final Logger logger = LoggerFactory.getLogger(UserService.class);
@@ -48,23 +53,90 @@ public class UserService {
   private final UserRepository users;
   private final UserApplicationMapper mapper;
   private final IdentityProvider identityProvider;
+  private final IdentityProviderMutationService providerMutations;
   private final Grants grants;
   private final IdentityGrantPlanner identityGrantPlanner;
+  private final TransactionOperations transactions;
 
-  @Transactional
+  public UserService(
+      UserRepository users,
+      UserApplicationMapper mapper,
+      IdentityProvider identityProvider,
+      IdentityProviderMutationService providerMutations,
+      Grants grants,
+      IdentityGrantPlanner identityGrantPlanner,
+      PlatformTransactionManager transactionManager) {
+    this(
+        users,
+        mapper,
+        identityProvider,
+        providerMutations,
+        grants,
+        identityGrantPlanner,
+        new TransactionTemplate(transactionManager));
+  }
+
+  UserService(
+      UserRepository users,
+      UserApplicationMapper mapper,
+      IdentityProvider identityProvider,
+      IdentityProviderMutationService providerMutations,
+      Grants grants,
+      IdentityGrantPlanner identityGrantPlanner,
+      TransactionOperations transactions) {
+    this.users = users;
+    this.mapper = mapper;
+    this.identityProvider = identityProvider;
+    this.providerMutations = providerMutations;
+    this.grants = grants;
+    this.identityGrantPlanner = identityGrantPlanner;
+    this.transactions = transactions;
+  }
+
   public UserResult create(@Valid CreateUserInput input) {
     EmailAddress email = EmailAddress.of(input.email());
     if (users.findProjectedByEmail(email.value()).isPresent()) {
       throw ApiException.conflict("user_exists", "A user with this email already exists.");
     }
-    return createIdentityUser(
-        () ->
-            identityProvider.provisionPasswordIdentity(
-                email.value(), input.password(), input.name()),
-        identity -> new User(identity.subject(), email.value(), input.name()),
-        () -> {
-          throw ApiException.conflict("user_exists", "A user with this email already exists.");
-        });
+    PasswordProvisioningIntent intent =
+        providerMutations.requestPasswordProvision(email.value(), input.name());
+    IdentityProvider.ProvisionedIdentity identity =
+        provisionPasswordIdentity(intent, input.password());
+    try {
+      return transactions.execute(status -> completePasswordProvision(intent, identity.subject()));
+    } catch (DataIntegrityViolationException conflict) {
+      return resolvePasswordProvisionConflict(intent, identity.subject(), conflict);
+    } catch (ApiException conflict) {
+      if (conflict.status() != 409 || !"user_exists".equals(conflict.code())) {
+        throw conflict;
+      }
+      return resolvePasswordProvisionConflict(intent, identity.subject(), conflict);
+    }
+  }
+
+  @Transactional
+  public UserResult recoverPasswordProvision(
+      IdentityProviderMutationWork work, String providerSubject) {
+    User user =
+        users
+            .findProjectedByEmail(work.email())
+            .map(
+                existing -> {
+                  if (!providerSubject.equals(existing.getKeycloakSubject())) {
+                    throw ApiException.conflict(
+                        "user_provisioning_conflict",
+                        "Provisioned identity conflicts with an existing local user.");
+                  }
+                  return users
+                      .findById(existing.getId())
+                      .orElseThrow(
+                          () -> ApiException.notFound("user_not_found", "User not found."));
+                })
+            .orElseGet(
+                () -> users.saveAndFlush(new User(providerSubject, work.email(), work.name())));
+    providerMutations.completeRecoveredPasswordProvision(work, providerSubject, user.getId());
+    grants.stage(identityGrantPlanner.creation(user));
+    return getResult(user.getId());
   }
 
   @Transactional
@@ -141,7 +213,7 @@ public class UserService {
   public UserResult update(UUID id, @Valid UpdateUserInput input) {
     User user =
         users
-            .findById(id)
+            .findEntityByIdForUpdate(id)
             .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
     user.setName(input.name() == null ? user.getName() : input.name());
     if (input.avatarUrl().present()) {
@@ -155,11 +227,11 @@ public class UserService {
       user.changeOperationalStatus(input.status());
     }
     users.saveAndFlush(user);
-    UserResult result = getResult(id);
     if (input.status() != null) {
-      syncIdentityEnabled(user.getKeycloakSubject(), UserStatus.ACTIVE.equals(input.status()));
+      providerMutations.requestEnabledState(
+          id, user.getKeycloakSubject(), UserStatus.ACTIVE.equals(input.status()));
     }
-    return result;
+    return getResult(id);
   }
 
   @Transactional
@@ -195,20 +267,6 @@ public class UserService {
         .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
   }
 
-  private void syncIdentityEnabled(String subject, boolean enabled) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      identityProvider.setIdentityEnabled(subject, enabled);
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            identityProvider.setIdentityEnabled(subject, enabled);
-          }
-        });
-  }
-
   private List<String> normalizedAuthorizationSubjects(Collection<String> authorizationSubjects) {
     return authorizationSubjects == null
         ? List.of()
@@ -234,6 +292,114 @@ public class UserService {
       deleteIdentity(identity.subject(), compensated, exception);
       throw exception;
     }
+  }
+
+  private IdentityProvider.ProvisionedIdentity provisionPasswordIdentity(
+      PasswordProvisioningIntent intent, String password) {
+    try {
+      return identityProvider.provisionPasswordIdentity(
+          intent.email(), password, intent.name(), intent.correlationMarker());
+    } catch (RuntimeException dispatchFailure) {
+      try {
+        Optional<IdentityProvider.ProvisionedIdentity> recovered =
+            identityProvider.findPasswordIdentityByCorrelationMarker(intent.correlationMarker());
+        if (recovered.isPresent()) {
+          return recovered.orElseThrow();
+        }
+      } catch (RuntimeException recoveryFailure) {
+        dispatchFailure.addSuppressed(recoveryFailure);
+      }
+      switch (passwordProvisioningFailure(dispatchFailure)) {
+        case RECOVERABLE ->
+            providerMutations.recordPasswordDispatchFailure(intent, dispatchFailure);
+        case CREDENTIAL_REJECTED ->
+            providerMutations.recordPasswordDispatchRejection(
+                intent,
+                dispatchFailure,
+                IdentityProviderMutationTerminalReason.CREDENTIAL_RESUBMISSION_REQUIRED);
+        case PROVIDER_REJECTED ->
+            providerMutations.recordPasswordDispatchRejection(
+                intent, dispatchFailure, IdentityProviderMutationTerminalReason.PROVIDER_REJECTED);
+      }
+      throw dispatchFailure;
+    }
+  }
+
+  private UserResult completePasswordProvision(
+      PasswordProvisioningIntent intent, String providerSubject) {
+    Optional<UserProjection> existing = users.findProjectedByEmail(intent.email());
+    if (existing.isPresent()) {
+      UserProjection projection = existing.orElseThrow();
+      if (providerSubject.equals(projection.getKeycloakSubject())) {
+        return completeExistingPasswordProvision(intent, providerSubject, projection.getId());
+      }
+      throw passwordProvisionConflict();
+    }
+    User user = users.saveAndFlush(new User(providerSubject, intent.email(), intent.name()));
+    providerMutations.completePasswordProvision(intent, providerSubject, user.getId());
+    grants.stage(identityGrantPlanner.creation(user));
+    return getResult(user.getId());
+  }
+
+  private UserResult resolvePasswordProvisionConflict(
+      PasswordProvisioningIntent intent, String providerSubject, RuntimeException failure) {
+    Optional<UserProjection> existing = users.findProjectedByEmail(intent.email());
+    if (existing.isPresent()
+        && providerSubject.equals(existing.orElseThrow().getKeycloakSubject())) {
+      UUID userId = existing.orElseThrow().getId();
+      return transactions.execute(
+          status -> completeExistingPasswordProvision(intent, providerSubject, userId));
+    }
+
+    ApiException conflict = passwordProvisionConflict();
+    conflict.addSuppressed(failure);
+    boolean terminal = providerMutations.recordPasswordCompletionConflict(intent, conflict);
+    if (terminal && users.findProjectedByKeycloakSubject(providerSubject).isEmpty()) {
+      try {
+        identityProvider.deleteIdentity(providerSubject);
+      } catch (RuntimeException compensationFailure) {
+        conflict.addSuppressed(compensationFailure);
+      }
+    }
+    throw conflict;
+  }
+
+  private UserResult completeExistingPasswordProvision(
+      PasswordProvisioningIntent intent, String providerSubject, UUID userId) {
+    User user =
+        users
+            .findById(userId)
+            .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
+    providerMutations.completePasswordProvision(intent, providerSubject, userId);
+    grants.stage(identityGrantPlanner.creation(user));
+    return getResult(userId);
+  }
+
+  private ApiException passwordProvisionConflict() {
+    return ApiException.conflict("user_exists", "A user with this email already exists.");
+  }
+
+  private PasswordProvisioningFailure passwordProvisioningFailure(RuntimeException failure) {
+    if (!(failure instanceof ApiException api)) {
+      return PasswordProvisioningFailure.RECOVERABLE;
+    }
+    int status = api.status();
+    if (status == 409) {
+      return PasswordProvisioningFailure.RECOVERABLE;
+    }
+    if (status == 400 || status == 422) {
+      return PasswordProvisioningFailure.CREDENTIAL_REJECTED;
+    }
+    if (status >= 400 && status < 500 && status != 408 && status != 425 && status != 429) {
+      return PasswordProvisioningFailure.PROVIDER_REJECTED;
+    }
+    return PasswordProvisioningFailure.RECOVERABLE;
+  }
+
+  private enum PasswordProvisioningFailure {
+    RECOVERABLE,
+    CREDENTIAL_REJECTED,
+    PROVIDER_REJECTED
   }
 
   private AtomicBoolean deleteIdentityOnRollback(String subject) {

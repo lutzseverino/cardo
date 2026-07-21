@@ -13,6 +13,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withCreatedEntity;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -35,6 +36,60 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 class KeycloakIdentityProviderTest {
+
+  @Test
+  void provisionsPasswordIdentityWithANonSecretCorrelationMarker() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/admin/realms/cardo/users"))
+        .andExpect(method(POST))
+        .andExpect(
+            content()
+                .json(
+                    """
+                    {"username":"user@example.com","email":"user@example.com",
+                     "firstName":"User","enabled":true,
+                     "attributes":{"cardo_provisioning_correlation":["marker-1"]}}
+                    """,
+                    JsonCompareMode.LENIENT))
+        .andRespond(
+            withCreatedEntity(
+                URI.create("https://keycloak.example/admin/realms/cardo/users/subject-1")));
+
+    assertThat(
+            provider.provisionPasswordIdentity(
+                "user@example.com", "password-1", "User", "marker-1"))
+        .isEqualTo(new IdentityProvider.ProvisionedIdentity("subject-1"));
+
+    server.verify();
+  }
+
+  @Test
+  void findsAnAmbiguouslyProvisionedIdentityByExactCorrelationMarker() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo(containsString("/admin/realms/cardo/users?")))
+        .andExpect(method(GET))
+        .andExpect(queryParam("q", "cardo_provisioning_correlation:marker-1"))
+        .andExpect(queryParam("exact", "true"))
+        .andExpect(queryParam("briefRepresentation", "false"))
+        .andRespond(
+            withSuccess(
+                """
+                [{"id":"subject-1","attributes":{
+                  "cardo_provisioning_correlation":["marker-1"]}}]
+                """,
+                MediaType.APPLICATION_JSON));
+
+    assertThat(provider.findPasswordIdentityByCorrelationMarker("marker-1"))
+        .contains(new IdentityProvider.ProvisionedIdentity("subject-1"));
+
+    server.verify();
+  }
 
   @Test
   void issuesCompletePasswordSessionCredentials() {

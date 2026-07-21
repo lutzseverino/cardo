@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,9 +19,12 @@ import io.github.lutzseverino.cardo.identity.authorization.IdentityGrantPlanner;
 import io.github.lutzseverino.cardo.identity.mapper.UserApplicationMapperImpl;
 import io.github.lutzseverino.cardo.identity.model.CreateProvisionalUserInput;
 import io.github.lutzseverino.cardo.identity.model.CreateUserInput;
+import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationTerminalReason;
+import io.github.lutzseverino.cardo.identity.model.PasswordProvisioningIntent;
 import io.github.lutzseverino.cardo.identity.model.UpdateCurrentUserInput;
 import io.github.lutzseverino.cardo.identity.model.UpdateUserInput;
 import io.github.lutzseverino.cardo.identity.model.User;
+import io.github.lutzseverino.cardo.identity.model.UserResult;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.repository.UserProjection;
@@ -36,82 +40,153 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
   @Mock private UserRepository users;
   @Mock private IdentityProvider identityProvider;
+  @Mock private IdentityProviderMutationService providerMutations;
   @Mock private Grants grants;
+  @Mock private TransactionOperations transactions;
 
   @Test
-  void deletesProvisionedIdentityWhenLocalCreateFails() {
-    UserService service = service();
-    when(users.findProjectedByEmail("owner@example.com")).thenReturn(Optional.empty());
-    when(identityProvider.provisionPasswordIdentity("owner@example.com", "password-1", "Owner"))
-        .thenReturn(new IdentityProvider.ProvisionedIdentity("kc-user-1"));
-    when(users.saveAndFlush(any(User.class)))
-        .thenThrow(new DataIntegrityViolationException("duplicate"));
-
-    assertThatThrownBy(
-            () -> service.create(new CreateUserInput("owner@example.com", "password-1", "Owner")))
-        .isInstanceOf(ApiException.class)
-        .hasMessage("A user with this email already exists.");
-
-    verify(identityProvider).deleteIdentity("kc-user-1");
-  }
-
-  @Test
-  void deletesProvisionedIdentityWhenBindingFails() {
-    UserService service = service();
-    when(users.findProjectedByEmail("owner@example.com")).thenReturn(Optional.empty());
-    when(identityProvider.provisionPasswordIdentity("owner@example.com", "password-1", "Owner"))
-        .thenReturn(new IdentityProvider.ProvisionedIdentity("kc-user-1"));
-    UUID userId = UUID.randomUUID();
-    when(users.saveAndFlush(any(User.class)))
-        .thenAnswer(invocation -> persisted(invocation, userId));
-    RuntimeException failure = new RuntimeException("bind failed");
-
-    doThrow(failure).when(identityProvider).bindUserId("kc-user-1", userId);
-
-    assertThatThrownBy(
-            () -> service.create(new CreateUserInput("owner@example.com", "password-1", "Owner")))
-        .isSameAs(failure);
-
-    verify(identityProvider).deleteIdentity("kc-user-1");
-  }
-
-  @Test
-  void deletesProvisionedIdentityWhenTheOwningTransactionRollsBackAfterCreation() {
+  void persistsProvisioningIntentBeforeUsingTheRequestPasswordOnce() {
     UserService service = service();
     UUID userId = UUID.randomUUID();
+    PasswordProvisioningIntent intent = intent();
     when(users.findProjectedByEmail("owner@example.com")).thenReturn(Optional.empty());
-    when(identityProvider.provisionPasswordIdentity("owner@example.com", "password-1", "Owner"))
+    when(providerMutations.requestPasswordProvision("owner@example.com", "Owner"))
+        .thenReturn(intent);
+    when(identityProvider.provisionPasswordIdentity(
+            "owner@example.com", "password-1", "Owner", "correlation-1"))
         .thenReturn(new IdentityProvider.ProvisionedIdentity("kc-user-1"));
     when(users.saveAndFlush(any(User.class)))
         .thenAnswer(invocation -> persisted(invocation, userId));
     when(users.findProjectedById(userId)).thenReturn(Optional.of(projection(UserStatus.ACTIVE)));
 
-    TransactionSynchronizationManager.initSynchronization();
-    try {
-      service.create(new CreateUserInput("owner@example.com", "password-1", "Owner"));
-      verify(identityProvider, never()).deleteIdentity("kc-user-1");
+    assertThat(service.create(new CreateUserInput("owner@example.com", "password-1", "Owner")))
+        .extracting(UserResult::status)
+        .isEqualTo(UserStatus.ACTIVE);
 
-      TransactionSynchronizationManager.getSynchronizations()
-          .forEach(
-              synchronization ->
-                  synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+    InOrder order = inOrder(providerMutations, identityProvider, users);
+    order.verify(providerMutations).requestPasswordProvision("owner@example.com", "Owner");
+    order
+        .verify(identityProvider)
+        .provisionPasswordIdentity("owner@example.com", "password-1", "Owner", "correlation-1");
+    order.verify(users).saveAndFlush(any(User.class));
+    order.verify(providerMutations).completePasswordProvision(intent, "kc-user-1", userId);
+  }
 
-      verify(identityProvider).deleteIdentity("kc-user-1");
-    } finally {
-      TransactionSynchronizationManager.clearSynchronization();
-    }
+  @Test
+  void recoversAnAmbiguousProvisioningResponseByCorrelationMarker() {
+    UserService service = service();
+    UUID userId = UUID.randomUUID();
+    PasswordProvisioningIntent intent = intent();
+    when(users.findProjectedByEmail("owner@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestPasswordProvision("owner@example.com", "Owner"))
+        .thenReturn(intent);
+    when(identityProvider.provisionPasswordIdentity(
+            "owner@example.com", "password-1", "Owner", "correlation-1"))
+        .thenThrow(new RuntimeException("response lost"));
+    when(identityProvider.findPasswordIdentityByCorrelationMarker("correlation-1"))
+        .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("kc-user-1")));
+    when(users.saveAndFlush(any(User.class)))
+        .thenAnswer(invocation -> persisted(invocation, userId));
+    when(users.findProjectedById(userId)).thenReturn(Optional.of(projection(UserStatus.ACTIVE)));
+
+    service.create(new CreateUserInput("owner@example.com", "password-1", "Owner"));
+
+    verify(identityProvider).findPasswordIdentityByCorrelationMarker("correlation-1");
+    verify(providerMutations).completePasswordProvision(intent, "kc-user-1", userId);
+  }
+
+  @Test
+  void terminalsAndDeletesAnUnboundPasswordIdentityAfterALateEmailConflict() {
+    UserService service = service();
+    PasswordProvisioningIntent intent = intent();
+    UserProjection conflicting = projection(UserStatus.ACTIVE);
+    when(users.findProjectedByEmail("owner@example.com"))
+        .thenReturn(Optional.empty(), Optional.of(conflicting));
+    when(providerMutations.requestPasswordProvision("owner@example.com", "Owner"))
+        .thenReturn(intent);
+    when(identityProvider.provisionPasswordIdentity(
+            "owner@example.com", "password-1", "Owner", "correlation-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("kc-new-user"));
+    when(providerMutations.recordPasswordCompletionConflict(any(), any())).thenReturn(true);
+    when(users.findProjectedByKeycloakSubject("kc-new-user")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.create(new CreateUserInput("owner@example.com", "password-1", "Owner")))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            conflict -> {
+              assertThat(conflict.status()).isEqualTo(409);
+              assertThat(conflict.code()).isEqualTo("user_exists");
+            });
+
+    verify(providerMutations).recordPasswordCompletionConflict(eq(intent), any(ApiException.class));
+    verify(identityProvider).deleteIdentity("kc-new-user");
+    verify(providerMutations, never()).completePasswordProvision(any(), any(), any());
+  }
+
+  @Test
+  void allowsCredentialResubmissionAfterTheProviderDefinitelyRejectsThePassword() {
+    UserService service = service();
+    PasswordProvisioningIntent intent = intent();
+    ApiException rejected =
+        ApiException.of(400, "identity_provider_error", "Identity provider request failed.");
+    when(users.findProjectedByEmail("owner@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestPasswordProvision("owner@example.com", "Owner"))
+        .thenReturn(intent);
+    when(identityProvider.provisionPasswordIdentity(
+            "owner@example.com", "invalid-password", "Owner", "correlation-1"))
+        .thenThrow(rejected);
+    when(identityProvider.findPasswordIdentityByCorrelationMarker("correlation-1"))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    new CreateUserInput("owner@example.com", "invalid-password", "Owner")))
+        .isSameAs(rejected);
+
+    verify(providerMutations)
+        .recordPasswordDispatchRejection(
+            intent,
+            rejected,
+            IdentityProviderMutationTerminalReason.CREDENTIAL_RESUBMISSION_REQUIRED);
+  }
+
+  @Test
+  void treatsAConflictWithNoVisibleMarkerAsRecoverable() {
+    UserService service = service();
+    PasswordProvisioningIntent intent = intent();
+    ApiException conflict = ApiException.conflict("user_exists", "User already exists.");
+    when(users.findProjectedByEmail("owner@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestPasswordProvision("owner@example.com", "Owner"))
+        .thenReturn(intent);
+    when(identityProvider.provisionPasswordIdentity(
+            "owner@example.com", "password-2", "Owner", "correlation-1"))
+        .thenThrow(conflict);
+    when(identityProvider.findPasswordIdentityByCorrelationMarker("correlation-1"))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.create(new CreateUserInput("owner@example.com", "password-2", "Owner")))
+        .isSameAs(conflict);
+
+    verify(providerMutations).recordPasswordDispatchFailure(intent, conflict);
+    verify(providerMutations, never())
+        .recordPasswordDispatchRejection(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -131,7 +206,8 @@ class UserServiceTest {
   void rejectsInvitedAsOperationalUpdateStatus() {
     UUID userId = UUID.randomUUID();
     UserService service = service();
-    when(users.findById(userId)).thenReturn(Optional.of(new User("kc-user-1", "a@b.com", "A")));
+    when(users.findEntityByIdForUpdate(userId))
+        .thenReturn(Optional.of(new User("kc-user-1", "a@b.com", "A")));
 
     assertThatThrownBy(
             () ->
@@ -141,16 +217,16 @@ class UserServiceTest {
         .hasMessage("Invited is not an operational user status.");
 
     verify(users, never()).saveAndFlush(any(User.class));
-    verify(identityProvider, never()).setIdentityEnabled(any(), anyBoolean());
+    verify(providerMutations, never()).requestEnabledState(any(), any(), anyBoolean());
   }
 
   @Test
-  void disablesProviderIdentityWhenUserIsDisabled() {
+  void durablyRequestsProviderDisableWithTheLocalStatusChange() {
     UUID userId = UUID.randomUUID();
     User user = new User("kc-user-1", "a@b.com", "A");
     UserProjection updated = projection(UserStatus.DISABLED);
     UserService service = service();
-    when(users.findById(userId)).thenReturn(Optional.of(user));
+    when(users.findEntityByIdForUpdate(userId)).thenReturn(Optional.of(user));
     when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
 
     assertThat(
@@ -159,19 +235,19 @@ class UserServiceTest {
         .extracting(result -> result.id(), result -> result.status())
         .containsExactly(updated.getId(), UserStatus.DISABLED);
 
-    InOrder order = inOrder(users, identityProvider);
+    InOrder order = inOrder(users, providerMutations);
     order.verify(users).saveAndFlush(user);
-    order.verify(identityProvider).setIdentityEnabled("kc-user-1", false);
+    order.verify(providerMutations).requestEnabledState(userId, "kc-user-1", false);
   }
 
   @Test
-  void enablesProviderIdentityWhenUserIsActivated() {
+  void durablyRequestsProviderEnableWithTheLocalStatusChange() {
     UUID userId = UUID.randomUUID();
     User user = new User("kc-user-1", "a@b.com", "A");
     user.changeOperationalStatus(UserStatus.DISABLED);
     UserProjection updated = projection(UserStatus.ACTIVE);
     UserService service = service();
-    when(users.findById(userId)).thenReturn(Optional.of(user));
+    when(users.findEntityByIdForUpdate(userId)).thenReturn(Optional.of(user));
     when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
 
     assertThat(
@@ -180,33 +256,9 @@ class UserServiceTest {
         .extracting(result -> result.id(), result -> result.status())
         .containsExactly(updated.getId(), UserStatus.ACTIVE);
 
-    InOrder order = inOrder(users, identityProvider);
+    InOrder order = inOrder(users, providerMutations);
     order.verify(users).saveAndFlush(user);
-    order.verify(identityProvider).setIdentityEnabled("kc-user-1", true);
-  }
-
-  @Test
-  void defersProviderStatusSyncUntilAfterCommitWhenTransactionSynchronizationIsActive() {
-    UUID userId = UUID.randomUUID();
-    User user = new User("kc-user-1", "a@b.com", "A");
-    UserProjection updated = projection(UserStatus.DISABLED);
-    UserService service = service();
-    when(users.findById(userId)).thenReturn(Optional.of(user));
-    when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
-
-    TransactionSynchronizationManager.initSynchronization();
-    try {
-      service.update(userId, new UpdateUserInput(null, FieldUpdate.absent(), UserStatus.DISABLED));
-
-      verify(identityProvider, never()).setIdentityEnabled(any(), anyBoolean());
-
-      TransactionSynchronizationManager.getSynchronizations()
-          .forEach(synchronization -> synchronization.afterCommit());
-
-      verify(identityProvider).setIdentityEnabled("kc-user-1", false);
-    } finally {
-      TransactionSynchronizationManager.clearSynchronization();
-    }
+    order.verify(providerMutations).requestEnabledState(userId, "kc-user-1", true);
   }
 
   @Test
@@ -216,7 +268,7 @@ class UserServiceTest {
     user.setAvatarUrl("https://example.com/avatar.png");
     UserProjection updated = projection(UserStatus.ACTIVE);
     UserService service = service();
-    when(users.findById(userId)).thenReturn(Optional.of(user));
+    when(users.findEntityByIdForUpdate(userId)).thenReturn(Optional.of(user));
     when(users.findProjectedById(userId)).thenReturn(Optional.of(updated));
 
     assertThat(service.update(userId, new UpdateUserInput(null, FieldUpdate.present(null), null)))
@@ -259,12 +311,23 @@ class UserServiceTest {
   }
 
   private UserService service() {
+    lenient()
+        .when(transactions.execute(any(TransactionCallback.class)))
+        .thenAnswer(
+            invocation -> invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(null));
     return new UserService(
         users,
         new UserApplicationMapperImpl(),
         identityProvider,
+        providerMutations,
         grants,
-        new IdentityGrantPlanner());
+        new IdentityGrantPlanner(),
+        transactions);
+  }
+
+  private PasswordProvisioningIntent intent() {
+    return new PasswordProvisioningIntent(
+        UUID.randomUUID(), UUID.randomUUID(), "owner@example.com", "Owner", "correlation-1");
   }
 
   private User persisted(InvocationOnMock invocation, UUID id) {
