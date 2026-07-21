@@ -9,11 +9,14 @@ auto-configuration while keeping those mechanics out of product code.
 Products combine `identity-client` with `identity-client-http`, configure
 `cardo.identity.client.base-url` with Identity's `/api/v1` base URL (for example,
 `https://identity.internal/api/v1`), and inject the stable `IdentityUsersClient`
-interface. The auto-configuration also requires a
+interface. They must also set
+`cardo.identity.client.service-token-scope=identity`. The value is the optional
+Keycloak client scope that emits a token whose only audience is `identity`;
+missing or blank values fail auto-configuration. The auto-configuration also requires a
 `KeycloakClientCredentialsTokenProvider` bean configured with the Keycloak base
 URL, realm, service-account client ID, and client secret. It obtains a bearer
-token for Identity requests; the shared provider reuses that token until shortly
-before Keycloak's reported expiry. The service account must carry the Identity
+token for Identity requests using only that scope; the shared provider reuses
+that scope-specific token until shortly before Keycloak's reported expiry. The service account must carry the Identity
 audience and authority required by the invoked operation. Product-specific
 Identity policy remains in the consuming product.
 

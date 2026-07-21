@@ -1,10 +1,10 @@
 # Documentation
 
-Documentation for the Identity HTTP Client project starts with its
+Documentation for the Invite HTTP Client project starts with its
 [project overview](../README.md).
 
 Every host application must configure the required
-`cardo.identity.client.service-token-scope=identity` property. See the
+`cardo.invite.client.service-token-scope=cardo-invite` property. See the
 [scoped service-token rollout](../../../docs/how-to/roll-out-scoped-service-tokens.md)
 before enabling it in a deployed caller.
 

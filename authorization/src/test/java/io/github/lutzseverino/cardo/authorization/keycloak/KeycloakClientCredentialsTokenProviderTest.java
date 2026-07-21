@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +29,7 @@ import org.springframework.web.client.RestClient;
 class KeycloakClientCredentialsTokenProviderTest {
 
   private final AtomicInteger requests = new AtomicInteger();
+  private final List<String> requestBodies = new CopyOnWriteArrayList<>();
   private final AtomicReference<String> response =
       new AtomicReference<>("{\"access_token\":\"service-token-1\",\"expires_in\":60}");
   private HttpServer server;
@@ -39,6 +41,8 @@ class KeycloakClientCredentialsTokenProviderTest {
         "/realms/cardo/protocol/openid-connect/token",
         exchange -> {
           requests.incrementAndGet();
+          requestBodies.add(
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
           byte[] body = response.get().getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(HttpStatus.OK.value(), body.length);
@@ -67,6 +71,31 @@ class KeycloakClientCredentialsTokenProviderTest {
 
     assertThat(provider.clientCredentialsToken()).isEqualTo("service-token-2");
     assertThat(requests).hasValue(2);
+  }
+
+  @Test
+  void isolatesScopedTokensFromOtherScopesAndTheUnscopedAdministrationToken() {
+    KeycloakClientCredentialsTokenProvider provider =
+        provider(new MutableClock(Instant.EPOCH), Duration.ZERO);
+
+    assertThat(provider.clientCredentialsToken("  invite-service   billing-service "))
+        .isEqualTo("service-token-1");
+    assertThat(provider.clientCredentialsToken("billing-service invite-service"))
+        .isEqualTo("service-token-1");
+
+    response.set("{\"access_token\":\"service-token-2\",\"expires_in\":60}");
+    assertThat(provider.clientCredentialsToken("identity-service")).isEqualTo("service-token-2");
+
+    response.set("{\"access_token\":\"admin-token\",\"expires_in\":60}");
+    assertThat(provider.clientCredentialsToken()).isEqualTo("admin-token");
+    assertThat(provider.clientCredentialsToken()).isEqualTo("admin-token");
+
+    assertThat(requests).hasValue(3);
+    assertThat(requestBodies)
+        .containsExactly(
+            "client_id=service&client_secret=secret&grant_type=client_credentials&scope=billing-service+invite-service",
+            "client_id=service&client_secret=secret&grant_type=client_credentials&scope=identity-service",
+            "client_id=service&client_secret=secret&grant_type=client_credentials");
   }
 
   @Test
@@ -103,6 +132,58 @@ class KeycloakClientCredentialsTokenProviderTest {
       }
     }
     assertThat(requests).hasValue(1);
+  }
+
+  @Test
+  void collapsesConcurrentRefreshesForTheSameNormalizedScope() throws Exception {
+    KeycloakClientCredentialsTokenProvider provider =
+        provider(new MutableClock(Instant.EPOCH), Duration.ZERO);
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (ExecutorService executor = Executors.newFixedThreadPool(8)) {
+      List<Future<String>> tokens =
+          java.util.stream.IntStream.range(0, 8)
+              .mapToObj(
+                  index ->
+                      executor.submit(
+                          () -> {
+                            start.await();
+                            return provider.clientCredentialsToken(
+                                index % 2 == 0 ? "identity-service" : " identity-service  ");
+                          }))
+              .toList();
+      start.countDown();
+
+      for (Future<String> token : tokens) {
+        assertThat(token.get()).isEqualTo("service-token-1");
+      }
+    }
+    assertThat(requests).hasValue(1);
+  }
+
+  @Test
+  void rejectsMissingScopedTokenInputBeforeCallingKeycloak() {
+    KeycloakClientCredentialsTokenProvider provider =
+        provider(new MutableClock(Instant.EPOCH), Duration.ZERO);
+
+    assertThatThrownBy(() -> provider.clientCredentialsToken("  "))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("scope must not be blank.");
+    assertThat(requests).hasValue(0);
+  }
+
+  @Test
+  void failsClosedInsteadOfReusingATokenAtItsRefreshBoundary() {
+    MutableClock clock = new MutableClock(Instant.EPOCH);
+    KeycloakClientCredentialsTokenProvider provider = provider(clock, Duration.ZERO);
+
+    assertThat(provider.clientCredentialsToken("identity-service")).isEqualTo("service-token-1");
+    clock.advance(Duration.ofSeconds(60));
+    server.stop(0);
+
+    assertThatThrownBy(() -> provider.clientCredentialsToken("identity-service"))
+        .isInstanceOf(KeycloakAuthorizationException.class)
+        .hasMessage("Keycloak client credentials request failed.");
   }
 
   @Test

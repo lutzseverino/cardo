@@ -39,7 +39,8 @@ public class InviteClientAutoConfiguration {
                 json,
                 ApiClient.createDefaultDateFormat())
             .setBasePath(properties.baseUrl());
-    apiClient.setBearerToken(() -> serviceToken(clientCredentialsTokens));
+    apiClient.setBearerToken(
+        () -> serviceToken(clientCredentialsTokens, properties.serviceTokenScope()));
     return new HttpInvitationsClient(
         new InvitationsApi(apiClient), new InvitationTokensApi(apiClient));
   }
@@ -51,8 +52,9 @@ public class InviteClientAutoConfiguration {
     return factory;
   }
 
-  private String serviceToken(KeycloakClientCredentialsTokenProvider clientCredentialsTokens) {
-    String token = clientCredentialsTokens.clientCredentialsToken();
+  private String serviceToken(
+      KeycloakClientCredentialsTokenProvider clientCredentialsTokens, String scope) {
+    String token = clientCredentialsTokens.clientCredentialsToken(scope);
     if (token == null || token.isBlank()) {
       throw ApiException.of(
           500, "invite_service_token_missing", "Invite service token provider is missing.");

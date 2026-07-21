@@ -63,6 +63,7 @@ cardo:
   identity:
     client:
       base-url: ${IDENTITY_BASE_URL:http://localhost:8081/api/v1}
+      service-token-scope: ${IDENTITY_SERVICE_TOKEN_SCOPE:identity}
 
 server:
   port: ${INVITE_PORT:8083}

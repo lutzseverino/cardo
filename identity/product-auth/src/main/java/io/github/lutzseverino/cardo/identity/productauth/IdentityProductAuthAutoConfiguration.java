@@ -3,6 +3,7 @@ package io.github.lutzseverino.cardo.identity.productauth;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakRequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader;
+import io.github.lutzseverino.cardo.authorization.spring.RequiredExpirationValidator;
 import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvaluator;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.identity.productauth.IdentityProductAuthProperties.ActiveTokenValidation;

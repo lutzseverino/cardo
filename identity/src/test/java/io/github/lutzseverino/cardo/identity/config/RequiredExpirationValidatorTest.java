@@ -2,6 +2,7 @@ package io.github.lutzseverino.cardo.identity.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.lutzseverino.cardo.authorization.spring.RequiredExpirationValidator;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;

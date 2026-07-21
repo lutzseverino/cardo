@@ -2,6 +2,7 @@ package io.github.lutzseverino.cardo.identity.config;
 
 import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrantAuthorityReader;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
+import io.github.lutzseverino.cardo.authorization.spring.RequiredExpirationValidator;
 import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvaluator;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import org.springframework.beans.factory.annotation.Value;

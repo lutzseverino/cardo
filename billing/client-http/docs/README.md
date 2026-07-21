@@ -3,6 +3,11 @@
 Documentation for the Billing HTTP Client project starts with its
 [project overview](../README.md).
 
+Every host application must configure the required
+`cardo.billing.client.service-token-scope=billing` property. See the
+[scoped service-token rollout](../../../docs/how-to/roll-out-scoped-service-tokens.md)
+before enabling it in a deployed caller.
+
 ## Related Repository Documentation
 
 - [Generated client code](../../../docs/reference/generated-client-code.md)

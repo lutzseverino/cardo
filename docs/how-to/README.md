@@ -28,4 +28,5 @@ Use the [how-to template](../_templates/how-to.template.md) for new guides.
 ## Guides
 
 - [Embed Authorization](embed-authorization.md)
+- [Roll Out Scoped Service Tokens](roll-out-scoped-service-tokens.md)
 - [Set Up Stripe Billing](set-up-stripe-billing.md)

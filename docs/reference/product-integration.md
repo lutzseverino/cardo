@@ -106,9 +106,10 @@ requires.
 
 Use `invite-client` for compile-time product code and `invite-client-http` as a
 runtime dependency. Configure `cardo.invite.client.base-url` with the Invite
-`/api/v1` base URL. The HTTP client obtains a service token from the shared
-client-credentials provider; Invite derives product ownership from that token's
-OAuth client identifier.
+`/api/v1` base URL and `cardo.invite.client.service-token-scope=cardo-invite`.
+The HTTP client obtains a service token from the shared client-credentials
+provider; Invite derives product ownership from that token's OAuth client
+identifier.
 
 The Identity, Invite, and Billing HTTP clients default to two-second connection
 and response timeouts. Override the relevant
@@ -119,6 +120,26 @@ Keycloak returns a positive `expires_in` value and refreshes it shortly before
 that expiry. Its default acquisition timeouts are two seconds and its default
 refresh skew is thirty seconds. Consumers that need different bounds construct
 the provider with `KeycloakClientCredentialsTokenSettings`.
+
+Each adapter requires a non-blank target scope and requests only that scope:
+
+| Adapter | Required property | Deployed value and exact token audience |
+| --- | --- | --- |
+| Identity | `cardo.identity.client.service-token-scope` | `identity` |
+| Billing | `cardo.billing.client.service-token-scope` | `billing` |
+| Invite | `cardo.invite.client.service-token-scope` | `cardo-invite` |
+
+The provider normalizes scope lists and isolates their caches. Scoped tokens
+never share the unscoped cache used for Cardo's Keycloak administration calls.
+Follow the [ordered scoped service-token rollout](../how-to/roll-out-scoped-service-tokens.md);
+adding these properties without the matching optional Keycloak scopes and
+audience mappers fails closed at the first remote call.
+
+Billing and Invite perform issuer discovery lazily when the first bearer token
+is decoded, preserving Spring Boot's startup behavior. Public health can
+therefore remain available during an issuer outage, while protected bearer
+authentication fails closed. Deployment smoke tests must exercise a protected
+authenticated route rather than relying on startup or health alone.
 
 This cache removes a Keycloak request from the ordinary service-call path, but
 it also means revoking a service credential does not remove an already-issued

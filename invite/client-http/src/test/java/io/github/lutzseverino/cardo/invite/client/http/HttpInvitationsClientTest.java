@@ -1,6 +1,7 @@
 package io.github.lutzseverino.cardo.invite.client.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -36,14 +37,17 @@ import tools.jackson.databind.json.JsonMapper;
 
 class HttpInvitationsClientTest {
 
-  private final ApplicationContextRunner context =
+  private final ApplicationContextRunner baseContext =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(InviteClientAutoConfiguration.class))
           .withBean(JsonMapper.class, () -> JsonMapper.builder().build())
           .withBean(
               KeycloakClientCredentialsTokenProvider.class,
-              () -> mock(KeycloakClientCredentialsTokenProvider.class))
-          .withPropertyValues("cardo.invite.client.base-url=http://invite.test/api/v1");
+              () -> mock(KeycloakClientCredentialsTokenProvider.class));
+  private final ApplicationContextRunner context =
+      baseContext.withPropertyValues(
+          "cardo.invite.client.base-url=http://invite.test/api/v1",
+          "cardo.invite.client.service-token-scope=cardo-invite");
 
   @Test
   void autoConfiguresTheStableClientContract() {
@@ -53,6 +57,7 @@ class HttpInvitationsClientTest {
           InviteClientProperties properties = application.getBean(InviteClientProperties.class);
           assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
           assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(2));
+          assertThat(properties.serviceTokenScope()).isEqualTo("cardo-invite");
         });
   }
 
@@ -74,6 +79,34 @@ class HttpInvitationsClientTest {
     context
         .withPropertyValues("cardo.invite.client.read-timeout=0s")
         .run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
+  void rejectsMissingAndBlankServiceTokenScopesAtStartup() {
+    baseContext
+        .withPropertyValues("cardo.invite.client.base-url=http://invite.test/api/v1")
+        .run(application -> assertThat(application).hasFailed());
+    context
+        .withPropertyValues("cardo.invite.client.service-token-scope=  ")
+        .run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
+  void requestsOnlyTheConfiguredInviteServiceTokenScope() {
+    context
+        .withPropertyValues("cardo.invite.client.base-url=http://localhost:1/api/v1")
+        .run(
+            application -> {
+              KeycloakClientCredentialsTokenProvider tokens =
+                  application.getBean(KeycloakClientCredentialsTokenProvider.class);
+              when(tokens.clientCredentialsToken("cardo-invite")).thenReturn("invite-token");
+
+              assertThatThrownBy(
+                      () -> application.getBean(InvitationsClient.class).get(UUID.randomUUID()))
+                  .isInstanceOf(RuntimeException.class);
+              verify(tokens).clientCredentialsToken("cardo-invite");
+              verify(tokens, org.mockito.Mockito.never()).clientCredentialsToken();
+            });
   }
 
   @Test

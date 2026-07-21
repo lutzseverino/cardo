@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.identity.productauth;
 
+import io.github.lutzseverino.cardo.authorization.spring.ExactAudienceValidator;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;

@@ -1,6 +1,7 @@
 package io.github.lutzseverino.cardo.identity.client.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -34,14 +35,17 @@ import tools.jackson.databind.json.JsonMapper;
 
 class HttpIdentityUsersClientTest {
 
-  private final ApplicationContextRunner context =
+  private final ApplicationContextRunner baseContext =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(IdentityClientAutoConfiguration.class))
           .withBean(JsonMapper.class, () -> JsonMapper.builder().build())
           .withBean(
               KeycloakClientCredentialsTokenProvider.class,
-              () -> mock(KeycloakClientCredentialsTokenProvider.class))
-          .withPropertyValues("cardo.identity.client.base-url=http://identity.test/api/v1");
+              () -> mock(KeycloakClientCredentialsTokenProvider.class));
+  private final ApplicationContextRunner context =
+      baseContext.withPropertyValues(
+          "cardo.identity.client.base-url=http://identity.test/api/v1",
+          "cardo.identity.client.service-token-scope=identity");
 
   @Test
   void autoConfiguresTheStableClientContract() {
@@ -51,6 +55,7 @@ class HttpIdentityUsersClientTest {
           IdentityClientProperties properties = application.getBean(IdentityClientProperties.class);
           assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
           assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(2));
+          assertThat(properties.serviceTokenScope()).isEqualTo("identity");
         });
   }
 
@@ -73,6 +78,37 @@ class HttpIdentityUsersClientTest {
     context
         .withPropertyValues("cardo.identity.client.read-timeout=0s")
         .run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
+  void rejectsMissingAndBlankServiceTokenScopesAtStartup() {
+    baseContext
+        .withPropertyValues("cardo.identity.client.base-url=http://identity.test/api/v1")
+        .run(application -> assertThat(application).hasFailed());
+    context
+        .withPropertyValues("cardo.identity.client.service-token-scope=  ")
+        .run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
+  void requestsOnlyTheConfiguredIdentityServiceTokenScope() {
+    context
+        .withPropertyValues("cardo.identity.client.base-url=http://localhost:1/api/v1")
+        .run(
+            application -> {
+              KeycloakClientCredentialsTokenProvider tokens =
+                  application.getBean(KeycloakClientCredentialsTokenProvider.class);
+              when(tokens.clientCredentialsToken("identity")).thenReturn("identity-token");
+
+              assertThatThrownBy(
+                      () ->
+                          application
+                              .getBean(IdentityUsersClient.class)
+                              .searchByAuthorizationSubjects(Set.of("subject-1")))
+                  .isInstanceOf(RuntimeException.class);
+              verify(tokens).clientCredentialsToken("identity");
+              verify(tokens, org.mockito.Mockito.never()).clientCredentialsToken();
+            });
   }
 
   @Test
