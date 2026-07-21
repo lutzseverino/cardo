@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyToken;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenRequest;
+import java.net.URI;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -13,19 +14,29 @@ public class KeycloakRequestingPartyTokenClient implements RequestingPartyTokenC
 
   private static final String UMA_TICKET_GRANT = "urn:ietf:params:oauth:grant-type:uma-ticket";
 
-  private final String realm;
+  private final URI tokenEndpoint;
   private final RestClient rest;
 
   public KeycloakRequestingPartyTokenClient(String baseUrl, String realm, RestClient.Builder rest) {
-    this.realm = realm;
-    this.rest = rest.baseUrl(baseUrl).build();
+    this(
+        URI.create(
+            baseUrl.replaceFirst("/+$", "")
+                + "/realms/"
+                + realm
+                + "/protocol/openid-connect/token"),
+        rest);
+  }
+
+  public KeycloakRequestingPartyTokenClient(URI tokenEndpoint, RestClient.Builder rest) {
+    this.tokenEndpoint = tokenEndpoint;
+    this.rest = rest.build();
   }
 
   @Override
   public RequestingPartyToken authorize(RequestingPartyTokenRequest request) {
     TokenResponse token =
         rest.post()
-            .uri("/realms/{realm}/protocol/openid-connect/token", realm)
+            .uri(tokenEndpoint)
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + request.accessToken())
             .body(authorizationRequest(request))
             .retrieve()

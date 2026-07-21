@@ -19,7 +19,7 @@ auto-configures the shared Spring Security pieces for product services:
 - authenticated-user reading
 - method security
 - OAuth2 resource-server setup
-- session-cookie bearer token resolution
+- Identity-session validation and product-token exchange
 - cookie-selected CSRF enforcement
 
 Products still own product access. Identity must not silently grant product-domain
@@ -31,9 +31,10 @@ actions.
 The accepted production [browser-session contract](../docs/reference/browser-sessions.md) requires
 one HTTPS origin for the product frontend, product API, and reverse-proxied Identity session routes.
 Identity implements the access/refresh cookie lifecycle, CSRF bootstrap and session-mutation
-enforcement, refresh rotation, refresh-token logout, and exact `identity` audience validation.
-Product-token exchange and grant convergence remain dependent slices, so browser-session consumers
-are not yet production-ready.
+enforcement, refresh rotation, and refresh-token logout. `identity-product-auth` implements strict
+Identity-session validation and product-token exchange, while Authorization exposes durable grant
+convergence. Consumers still provision their provider, product, frontend, and deployment portions
+of the contract.
 
 ## Browser Session Configuration
 
@@ -99,9 +100,12 @@ spring:
 cardo:
   identity:
     product-auth:
-      public-paths:
-        - ${product.api.base-path}/status
+      identity-session-audience: identity
+      product-audience: ${product.keycloak.resource-server-client-id}
 ```
+
+The product also supplies a `ProductRequestPolicy` bean for method-aware public and authenticated
+routes. See the [product integration reference](../docs/reference/product-integration.md).
 
 ## Documentation
 

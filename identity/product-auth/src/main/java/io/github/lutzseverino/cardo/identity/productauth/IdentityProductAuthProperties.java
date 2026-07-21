@@ -2,18 +2,18 @@ package io.github.lutzseverino.cardo.identity.productauth;
 
 import java.net.URI;
 import java.time.Duration;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "cardo.identity.product-auth")
 public record IdentityProductAuthProperties(
-    List<String> publicPaths,
     String sessionCookieName,
     String csrfCookieName,
+    String identitySessionAudience,
+    String productAudience,
+    TokenExchange tokenExchange,
     ActiveTokenValidation activeTokenValidation) {
 
   public IdentityProductAuthProperties {
-    publicPaths = publicPaths == null ? List.of() : List.copyOf(publicPaths);
     sessionCookieName =
         sessionCookieName == null || sessionCookieName.isBlank()
             ? "cardo.session"
@@ -23,10 +23,42 @@ public record IdentityProductAuthProperties(
     if (sessionCookieName.equals(csrfCookieName)) {
       throw new IllegalArgumentException("session and CSRF cookie names must be distinct");
     }
+    requireText(identitySessionAudience, "identity session audience");
+    requireText(productAudience, "product audience");
+    if (identitySessionAudience.equals(productAudience)) {
+      throw new IllegalArgumentException("identity session and product audiences must be distinct");
+    }
+    tokenExchange = tokenExchange == null ? new TokenExchange(null, null) : tokenExchange;
     activeTokenValidation =
         activeTokenValidation == null
             ? new ActiveTokenValidation(false, null, null, null, null, null, null, null)
             : activeTokenValidation;
+  }
+
+  public record TokenExchange(Duration connectTimeout, Duration readTimeout) {
+
+    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(2);
+
+    public TokenExchange {
+      connectTimeout = connectTimeout == null ? DEFAULT_CONNECT_TIMEOUT : connectTimeout;
+      readTimeout = readTimeout == null ? DEFAULT_READ_TIMEOUT : readTimeout;
+    }
+
+    void validate() {
+      if (connectTimeout.isNegative() || connectTimeout.isZero()) {
+        throw new IllegalStateException("Token exchange connect timeout must be positive.");
+      }
+      if (readTimeout.isNegative() || readTimeout.isZero()) {
+        throw new IllegalStateException("Token exchange read timeout must be positive.");
+      }
+    }
+  }
+
+  private static void requireText(String value, String name) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalArgumentException(name + " must not be blank");
+    }
   }
 
   public record ActiveTokenValidation(
