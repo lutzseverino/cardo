@@ -86,10 +86,7 @@ class CustomerProvisioner {
   }
 
   private void process(CustomerProvisioningWork work) {
-    List<String> providerCustomerIds =
-        work.firstRemoteAttempt()
-            ? List.of(provider.createCustomer(work.subjectId(), work.id()))
-            : provider.findCustomersByProvisioningId(work.id());
+    List<String> providerCustomerIds = findOrCreateProviderCustomers(work);
     if (providerCustomerIds.isEmpty()) {
       throw new UnresolvedProvisioningException(UNRESOLVED);
     }
@@ -125,6 +122,17 @@ class CustomerProvisioner {
         .addKeyValue("provider", work.provider())
         .addKeyValue("providerCustomerId", providerCustomerId)
         .log("Billing customer provisioning completed");
+  }
+
+  private List<String> findOrCreateProviderCustomers(CustomerProvisioningWork work) {
+    if (work.firstRemoteAttempt()) {
+      List<String> legacy = provider.findCustomersBySubjectId(work.subjectId());
+      return legacy.isEmpty()
+          ? List.of(provider.createCustomer(work.subjectId(), work.id()))
+          : legacy;
+    }
+    List<String> correlated = provider.findCustomersByProvisioningId(work.id());
+    return correlated.isEmpty() ? provider.findCustomersBySubjectId(work.subjectId()) : correlated;
   }
 
   private void recordRetryableFailure(CustomerProvisioningWork work, RuntimeException failure) {

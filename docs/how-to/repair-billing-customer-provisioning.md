@@ -2,9 +2,12 @@
 
 Billing records a customer-provisioning operation before calling Stripe. A healthy request still
 creates its Stripe customer and checkout or portal session synchronously. If the Stripe response is
-ambiguous or Billing stops before saving the local mapping, the background reconciler searches for
-the operation UUID stored in Stripe metadata as `cardo_provisioning_id`. It never creates a second
-customer during recovery.
+ambiguous or Billing stops before saving the local mapping, the background reconciler searches first
+for the operation UUID stored in Stripe metadata as `cardo_provisioning_id`, then for the exact
+legacy `subject_id` marker. Before the first durable create, Billing also searches `subject_id` and
+replays the original subject-scoped Stripe idempotency key with its original parameters. It then adds
+the operation marker with a separately idempotent update. This preserves pre-migration idempotency
+without creating a second customer during recovery.
 
 ## Configuration
 
@@ -36,9 +39,9 @@ This prevents a customer-facing retry from replacing an ambiguous Stripe custome
    ORDER BY updated_at DESC;
    ```
 
-2. In Stripe test or live mode matching the Billing deployment, search customer metadata for the
-   exact `cardo_provisioning_id` value. Also correlate the structured Billing log field
-   `operationId`.
+2. In Stripe test or live mode matching the Billing deployment, search customer metadata for both
+   the exact `cardo_provisioning_id` value and the operation's exact `subject_id`. Also correlate the
+   structured Billing log field `operationId`.
 3. Inspect the local rows for both uniqueness dimensions:
 
    ```sql
@@ -154,8 +157,7 @@ operation; Billing still will not derive a new marker from the failed row on its
 
 Older Stripe customers do not have `cardo_provisioning_id`; they only carry `subject_id`. Search
 Stripe by the exact subject metadata and compare every result with `billing_customers`, Stripe
-request logs, and creation timestamps. If there is exactly one unambiguous orphan and no conflicting
-local mapping, insert that mapping in a transaction using the same uniqueness checks above, without
-updating a provisioning operation. If there are multiple candidates, record the evidence and have a
-billing owner choose the canonical customer. This runbook intentionally provides no automatic
-customer deletion or merge procedure.
+request logs, and creation timestamps. The provisioning workflow automatically adopts one exact
+legacy match and records it against the durable operation. Multiple matches fail terminally; record
+the evidence and have a billing owner choose the canonical customer using the repair procedure
+above. This runbook intentionally provides no automatic customer deletion or merge procedure.

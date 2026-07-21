@@ -13,6 +13,8 @@ public interface BillingProvider {
 
   List<String> findCustomersByProvisioningId(UUID provisioningId);
 
+  List<String> findCustomersBySubjectId(UUID subjectId);
+
   void deleteCustomer(String providerCustomerId);
 
   BillingSessionResult createCheckoutSession(

@@ -6,6 +6,7 @@ import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.CustomerSearchParams;
+import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.stripe.param.checkout.SessionCreateParams.LineItem;
 import com.stripe.param.checkout.SessionCreateParams.Mode;
@@ -26,7 +27,9 @@ public class StripeBillingProvider implements BillingProvider {
 
   static final String PROVIDER = "stripe";
   static final String PROVISIONING_METADATA_KEY = "cardo_provisioning_id";
-  private static final String CUSTOMER_CREATION_KEY_PREFIX = "cardo-billing-customer-v2:";
+  private static final String SUBJECT_METADATA_KEY = "subject_id";
+  private static final String CUSTOMER_CREATION_KEY_PREFIX = "cardo-billing-customer-v1:";
+  private static final String PROVISIONING_MARKER_KEY_PREFIX = "cardo-billing-customer-marker-v2:";
 
   private final StripeCheckoutCatalog prices;
   private final StripeClient stripe;
@@ -45,12 +48,22 @@ public class StripeBillingProvider implements BillingProvider {
               .customers()
               .create(
                   CustomerCreateParams.builder()
-                      .putMetadata("subject_id", subjectId.toString())
-                      .putMetadata(PROVISIONING_METADATA_KEY, provisioningId.toString())
+                      .putMetadata(SUBJECT_METADATA_KEY, subjectId.toString())
                       .build(),
                   RequestOptions.builder()
-                      .setIdempotencyKey(customerCreationIdempotencyKey(provisioningId))
+                      .setIdempotencyKey(customerCreationIdempotencyKey(subjectId))
                       .build());
+      stripe
+          .v1()
+          .customers()
+          .update(
+              customer.getId(),
+              CustomerUpdateParams.builder()
+                  .putMetadata(PROVISIONING_METADATA_KEY, provisioningId.toString())
+                  .build(),
+              RequestOptions.builder()
+                  .setIdempotencyKey(provisioningMarkerIdempotencyKey(provisioningId))
+                  .build());
       return customer.getId();
     } catch (StripeException exception) {
       throw ApiException.of(
@@ -60,14 +73,22 @@ public class StripeBillingProvider implements BillingProvider {
 
   @Override
   public List<String> findCustomersByProvisioningId(UUID provisioningId) {
+    return findCustomersByMetadata(PROVISIONING_METADATA_KEY, provisioningId);
+  }
+
+  @Override
+  public List<String> findCustomersBySubjectId(UUID subjectId) {
+    return findCustomersByMetadata(SUBJECT_METADATA_KEY, subjectId);
+  }
+
+  private List<String> findCustomersByMetadata(String key, UUID value) {
     try {
       return stripe
           .v1()
           .customers()
           .search(
               CustomerSearchParams.builder()
-                  .setQuery(
-                      "metadata['" + PROVISIONING_METADATA_KEY + "']:'" + provisioningId + "'")
+                  .setQuery("metadata['" + key + "']:'" + value + "'")
                   .setLimit(2L)
                   .build())
           .getData()
@@ -80,8 +101,12 @@ public class StripeBillingProvider implements BillingProvider {
     }
   }
 
-  private String customerCreationIdempotencyKey(UUID provisioningId) {
-    return CUSTOMER_CREATION_KEY_PREFIX + provisioningId;
+  private String customerCreationIdempotencyKey(UUID subjectId) {
+    return CUSTOMER_CREATION_KEY_PREFIX + subjectId;
+  }
+
+  private String provisioningMarkerIdempotencyKey(UUID provisioningId) {
+    return PROVISIONING_MARKER_KEY_PREFIX + provisioningId;
   }
 
   @Override

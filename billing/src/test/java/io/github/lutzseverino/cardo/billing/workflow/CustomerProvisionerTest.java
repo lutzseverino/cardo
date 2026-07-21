@@ -52,7 +52,21 @@ class CustomerProvisionerTest {
     assertThat(provisioner.getOrCreate(SUBJECT_ID)).isEqualTo(customer);
 
     verify(provider).createCustomer(SUBJECT_ID, OPERATION_ID);
+    verify(provider).findCustomersBySubjectId(SUBJECT_ID);
     verify(provider, never()).findCustomersByProvisioningId(OPERATION_ID);
+  }
+
+  @Test
+  void firstDurableAttemptAdoptsALegacyCustomerWithoutCreatingAnother() {
+    when(operations.claim(OPERATION_ID)).thenReturn(Optional.of(work(true)));
+    when(provider.findCustomersBySubjectId(SUBJECT_ID)).thenReturn(List.of("cus_legacy"));
+    when(operations.complete(OPERATION_ID, LEASE_TOKEN, "cus_legacy"))
+        .thenReturn(CustomerProvisioningCompletion.COMPLETED);
+
+    provisioner.reconcileInBackground(OPERATION_ID);
+
+    verify(provider).findCustomersBySubjectId(SUBJECT_ID);
+    verify(provider, never()).createCustomer(SUBJECT_ID, OPERATION_ID);
   }
 
   @Test
@@ -80,6 +94,21 @@ class CustomerProvisionerTest {
             org.mockito.ArgumentMatchers.eq(OPERATION_ID),
             org.mockito.ArgumentMatchers.eq(LEASE_TOKEN),
             org.mockito.ArgumentMatchers.any());
+    verify(provider, never()).createCustomer(SUBJECT_ID, OPERATION_ID);
+  }
+
+  @Test
+  void retryFallsBackToTheLegacySubjectMarkerWhenTheOperationMarkerIsMissing() {
+    when(operations.claim(OPERATION_ID)).thenReturn(Optional.of(work(false)));
+    when(provider.findCustomersByProvisioningId(OPERATION_ID)).thenReturn(List.of());
+    when(provider.findCustomersBySubjectId(SUBJECT_ID)).thenReturn(List.of("cus_legacy"));
+    when(operations.complete(OPERATION_ID, LEASE_TOKEN, "cus_legacy"))
+        .thenReturn(CustomerProvisioningCompletion.COMPLETED);
+
+    provisioner.reconcileInBackground(OPERATION_ID);
+
+    verify(provider).findCustomersByProvisioningId(OPERATION_ID);
+    verify(provider).findCustomersBySubjectId(SUBJECT_ID);
     verify(provider, never()).createCustomer(SUBJECT_ID, OPERATION_ID);
   }
 
