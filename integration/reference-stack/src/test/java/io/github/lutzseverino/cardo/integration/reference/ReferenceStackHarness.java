@@ -33,7 +33,7 @@ final class ReferenceStackHarness implements AutoCloseable {
           .withNetwork(network)
           .withNetworkAliases("mailpit")
           .withExposedPorts(1025, 8025)
-          .waitingFor(Wait.forHttp("/api/v1/info").forStatusCode(200));
+          .waitingFor(Wait.forHttp("/api/v1/info").forPort(8025).forStatusCode(200));
   private final GenericContainer<?> keycloak =
       new GenericContainer<>(DockerImageName.parse(System.getProperty("cardo.test.keycloak.image")))
           .withNetwork(network)

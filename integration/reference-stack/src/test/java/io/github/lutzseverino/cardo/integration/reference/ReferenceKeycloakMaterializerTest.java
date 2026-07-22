@@ -59,8 +59,6 @@ class ReferenceKeycloakMaterializerTest {
           "billing",
           "billing",
           "entitlement:read");
-      assertToken(
-          materializer.clientToken("identity", null), "identity", "identity", "uma_protection");
 
       String runtime = materializer.clientToken("cardo-identity", null);
       String inviteRuntime = materializer.clientToken("cardo-invite", null);
@@ -68,9 +66,12 @@ class ReferenceKeycloakMaterializerTest {
       String product = materializer.clientToken(ReferenceContract.PRODUCT_CLIENT, null);
       String outbound =
           materializer.clientToken(ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "cardo-invite");
+      assertCatalogToken(catalog, "identity");
+      assertCatalogToken(product, ReferenceContract.PRODUCT_CLIENT);
       assertThat(materializer.adminReadStatus(runtime)).isEqualTo(200);
       assertThat(materializer.adminReadStatus(catalog)).isEqualTo(403);
       assertThat(materializer.protectionReadStatus(catalog)).isEqualTo(200);
+      assertThat(materializer.protectionReadStatus(product)).isEqualTo(200);
       assertThat(materializer.protectionReadStatus(inviteRuntime)).isEqualTo(403);
       assertThat(materializer.adminReadStatus(product)).isEqualTo(403);
       assertThat(materializer.adminReadStatus(outbound)).isEqualTo(403);
@@ -97,5 +98,16 @@ class ReferenceKeycloakMaterializerTest {
     Collection<String> roles =
         (Collection<String>) ((Map<String, Object>) resourceAccess.get(resource)).get("roles");
     assertThat(roles).containsExactly(role);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void assertCatalogToken(String token, String clientId) throws Exception {
+    var claims = JWTParser.parse(token).getJWTClaimsSet();
+    assertThat(claims.getStringClaim("azp")).isEqualTo(clientId);
+    Map<String, Object> resourceAccess = (Map<String, Object>) claims.getClaim("resource_access");
+    assertThat(resourceAccess).containsOnlyKeys(clientId);
+    Collection<String> roles =
+        (Collection<String>) ((Map<String, Object>) resourceAccess.get(clientId)).get("roles");
+    assertThat(roles).containsExactly("uma_protection");
   }
 }
