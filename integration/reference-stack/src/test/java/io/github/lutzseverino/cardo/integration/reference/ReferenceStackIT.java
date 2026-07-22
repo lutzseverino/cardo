@@ -54,7 +54,6 @@ class ReferenceStackIT {
           () -> grant(internal, stack, ownerReceipt));
 
       Browser ownerBrowser = login(stack, OWNER_EMAIL, OWNER_PASSWORD);
-      assertThat(ownerBrowser.lastLogin().status()).isEqualTo(201);
       assertProductionCookies(ownerBrowser.lastLogin());
       assertThat(
               ownerBrowser
@@ -447,6 +446,9 @@ class ReferenceStackIT {
                 .status())
         .isEqualTo(403);
     ReferenceHttp.Response login = browser.request("POST", loginUri, credentials);
+    assertThat(login.status())
+        .as("identity response: %s", ReferenceDiagnostics.sanitize(login.body()))
+        .isEqualTo(201);
     return new Browser(browser.http(), browser.cookies(), login);
   }
 
