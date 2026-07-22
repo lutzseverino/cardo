@@ -4,9 +4,11 @@ import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.invite.config.InvitationCompletionProperties;
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionOperation;
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionResult;
+import io.github.lutzseverino.cardo.invite.model.InvitationCompletionStatus;
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionWork;
 import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.model.PendingInvitation;
+import io.github.lutzseverino.cardo.invite.operations.InviteWorkflowMetrics;
 import io.github.lutzseverino.cardo.invite.repository.InvitationCompletionOperationRepository;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -28,6 +30,7 @@ public class InvitationCompletionService {
   private final InvitationCompletionOperationRepository operations;
   private final InvitationCompletionProperties properties;
   private final InvitationService invitations;
+  private final InviteWorkflowMetrics metrics;
 
   @Transactional
   public InvitationCompletionResult request(String token, String product) {
@@ -70,6 +73,7 @@ public class InvitationCompletionService {
     OffsetDateTime now = now();
     if (InvitationStatus.REVOKED.equals(invitationStatus)) {
       operation.revoke(now);
+      metrics.completion("terminal");
       return Optional.empty();
     }
     if (!operation.ready(now)) {
@@ -77,56 +81,105 @@ public class InvitationCompletionService {
     }
     if (operation.expired(now)) {
       operation.failTerminal("Invitation expired before credential setup completed.", now);
+      metrics.completion("terminal");
       return Optional.empty();
     }
-    operation.claimUntil(now.plus(properties.claimLease()));
+    UUID leaseToken = operation.claimUntil(now.plus(properties.claimLease()));
     return Optional.of(
         new InvitationCompletionWork(
             operation.getId(),
+            leaseToken,
             operation.getInvitedUserId(),
             operation.getStatus(),
             operation.getExpiresAt()));
   }
 
   @Transactional
-  public void markAwaitingIdentity(UUID operationId, OffsetDateTime actionExpiresAt) {
-    requireLockedOperation(operationId)
-        .awaitIdentity(now().plus(properties.pollDelay()), actionExpiresAt);
-  }
-
-  @Transactional
-  public void reschedule(UUID operationId, OffsetDateTime actionExpiresAt) {
-    requireLockedOperation(operationId)
-        .reschedule(now().plus(properties.pollDelay()), actionExpiresAt);
-  }
-
-  @Transactional
-  public void complete(UUID operationId) {
+  public boolean markAwaitingIdentity(
+      UUID operationId, UUID leaseToken, OffsetDateTime actionExpiresAt) {
     InvitationCompletionOperation operation = requireLockedOperation(operationId);
     OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.completion("stale-ack");
+      return false;
+    }
+    operation.awaitIdentity(now.plus(properties.pollDelay()), actionExpiresAt);
+    metrics.completion("success");
+    return true;
+  }
+
+  @Transactional
+  public boolean reschedule(UUID operationId, UUID leaseToken, OffsetDateTime actionExpiresAt) {
+    InvitationCompletionOperation operation = requireLockedOperation(operationId);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.completion("stale-ack");
+      return false;
+    }
+    operation.reschedule(now.plus(properties.pollDelay()), actionExpiresAt);
+    metrics.completion("success");
+    return true;
+  }
+
+  @Transactional
+  public boolean complete(UUID operationId, UUID leaseToken) {
+    InvitationCompletionOperation operation = requireLockedOperation(operationId);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.completion("stale-ack");
+      return false;
+    }
     if (operation.expired(now)) {
       operation.failTerminal("Invitation expired before credential setup completed.", now);
-      return;
+      metrics.completion("terminal");
+      return true;
     }
     operation.complete(now);
+    metrics.completion("success");
+    return true;
   }
 
   @Transactional
-  public void recordFailure(UUID operationId, RuntimeException failure) {
-    requireLockedOperation(operationId)
-        .fail(safeMessage(failure), now(), properties.retryBaseDelay(), properties.maxAttempts());
+  public boolean recordFailure(UUID operationId, UUID leaseToken, RuntimeException failure) {
+    InvitationCompletionOperation operation = requireLockedOperation(operationId);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.completion("stale-ack");
+      return false;
+    }
+    operation.fail(
+        safeMessage(failure), now, properties.retryBaseDelay(), properties.maxAttempts());
+    metrics.completion(
+        InvitationCompletionStatus.FAILED.equals(operation.getStatus()) ? "terminal" : "retry");
+    return true;
   }
 
   @Transactional
-  public void recordTerminalFailure(UUID operationId, RuntimeException failure) {
-    requireLockedOperation(operationId).failTerminal(safeMessage(failure), now());
+  public boolean recordTerminalFailure(
+      UUID operationId, UUID leaseToken, RuntimeException failure) {
+    InvitationCompletionOperation operation = requireLockedOperation(operationId);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.completion("stale-ack");
+      return false;
+    }
+    operation.failTerminal(safeMessage(failure), now);
+    metrics.completion("terminal");
+    return true;
   }
 
   @Transactional
-  public void recordIdentityFailure(UUID operationId, String identityError) {
+  public boolean recordIdentityFailure(UUID operationId, UUID leaseToken, String identityError) {
     String detail = Objects.requireNonNullElse(identityError, "unknown identity failure");
-    requireLockedOperation(operationId)
-        .failTerminal(safeMessage("Identity credential setup failed: " + detail), now());
+    InvitationCompletionOperation operation = requireLockedOperation(operationId);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.completion("stale-ack");
+      return false;
+    }
+    operation.failTerminal(safeMessage("Identity credential setup failed: " + detail), now);
+    metrics.completion("terminal");
+    return true;
   }
 
   @Transactional(propagation = Propagation.MANDATORY)

@@ -10,6 +10,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityOperationType;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationWork;
 import io.github.lutzseverino.cardo.identity.model.User;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
+import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.repository.IdentityOperationRepository;
 import io.github.lutzseverino.cardo.identity.repository.UserRepository;
 import java.time.Clock;
@@ -36,6 +37,7 @@ public class IdentityOperationService {
   private final IdentityOperationRepository operations;
   private final UserRepository users;
   private final IdentityOperationProperties properties;
+  private final IdentityWorkflowMetrics metrics;
 
   @Transactional
   @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
@@ -167,42 +169,63 @@ public class IdentityOperationService {
     }
     if (operation.hardDeadlineExpired(now)) {
       operation.expire("Invitation expired before credential setup completed.", now);
+      metrics.operation(operation.getType(), "terminal");
       return Optional.empty();
     }
-    operation.claimUntil(now.plus(properties.claimLease()));
-    return Optional.of(toWork(operation, now));
+    UUID leaseToken = operation.claimUntil(now.plus(properties.claimLease()));
+    return Optional.of(toWork(operation, leaseToken, now));
   }
 
   @Transactional
-  public void markAwaitingUser(UUID operationId, OffsetDateTime actionExpiresAt) {
+  public boolean markAwaitingUser(
+      UUID operationId, UUID leaseToken, OffsetDateTime actionExpiresAt) {
     IdentityOperation operation = requireLockedOperation(operationId);
     OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.operation(operation.getType(), "stale-ack");
+      return false;
+    }
     if (operation.hardDeadlineExpired(now) || !actionExpiresAt.isAfter(now)) {
       operation.expire("Invitation expired before credential setup started.", now);
-      return;
+      metrics.operation(operation.getType(), "terminal");
+      return true;
     }
     operation.awaitUser(now.plus(properties.pollDelay()), actionExpiresAt);
+    metrics.operation(operation.getType(), "success");
+    return true;
   }
 
   @Transactional
-  public void reschedulePoll(UUID operationId) {
+  public boolean reschedulePoll(UUID operationId, UUID leaseToken) {
     IdentityOperation operation = requireLockedOperation(operationId);
     OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.operation(operation.getType(), "stale-ack");
+      return false;
+    }
     if (operation.credentialSetupExpired(now)) {
       operation.expire("Credential setup expired before completion.", now);
-      return;
+      metrics.operation(operation.getType(), "terminal");
+      return true;
     }
     operation.reschedule(now.plus(properties.pollDelay()));
+    metrics.operation(operation.getType(), "success");
+    return true;
   }
 
   @Transactional
-  public void completeCredentialSetup(UUID operationId, String name) {
+  public boolean completeCredentialSetup(UUID operationId, UUID leaseToken, String name) {
     IdentityOperation operation = requireLockedOperation(operationId);
     requireType(operation, IdentityOperationType.CREDENTIAL_SETUP);
     OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.operation(operation.getType(), "stale-ack");
+      return false;
+    }
     if (operation.hardDeadlineExpired(now) || operation.credentialSetupExpired(now)) {
       operation.expire("Invitation expired before credential setup completed.", now);
-      return;
+      metrics.operation(operation.getType(), "terminal");
+      return true;
     }
     User user = requireUser(operation.getUserId());
     if (UserStatus.INVITED.equals(user.getStatus())) {
@@ -212,12 +235,19 @@ public class IdentityOperationService {
           "user_status_conflict", "Identity user cannot complete credential setup.");
     }
     operation.complete(now);
+    metrics.operation(operation.getType(), "success");
+    return true;
   }
 
   @Transactional
-  public void completeProvisionalDeletion(UUID operationId) {
+  public boolean completeProvisionalDeletion(UUID operationId, UUID leaseToken) {
     IdentityOperation operation = requireLockedOperation(operationId);
     requireType(operation, IdentityOperationType.PROVISIONAL_DELETION);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.operation(operation.getType(), "stale-ack");
+      return false;
+    }
     users
         .findById(operation.getUserId())
         .ifPresent(
@@ -228,19 +258,39 @@ public class IdentityOperationService {
               }
               users.delete(user);
             });
-    operation.complete(now());
+    operation.complete(now);
+    metrics.operation(operation.getType(), "success");
+    return true;
   }
 
   @Transactional
-  public void recordFailure(UUID operationId, RuntimeException failure) {
+  public boolean recordFailure(UUID operationId, UUID leaseToken, RuntimeException failure) {
     IdentityOperation operation = requireLockedOperation(operationId);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.operation(operation.getType(), "stale-ack");
+      return false;
+    }
     operation.fail(
-        safeMessage(failure), now(), properties.retryBaseDelay(), properties.maxAttempts());
+        safeMessage(failure), now, properties.retryBaseDelay(), properties.maxAttempts());
+    metrics.operation(
+        operation.getType(),
+        IdentityOperationStatus.FAILED.equals(operation.getStatus()) ? "terminal" : "retry");
+    return true;
   }
 
   @Transactional
-  public void recordTerminalFailure(UUID operationId, RuntimeException failure) {
-    requireLockedOperation(operationId).expire(safeMessage(failure), now());
+  public boolean recordTerminalFailure(
+      UUID operationId, UUID leaseToken, RuntimeException failure) {
+    IdentityOperation operation = requireLockedOperation(operationId);
+    OffsetDateTime now = now();
+    if (!operation.ownsLease(leaseToken, now)) {
+      metrics.operation(operation.getType(), "stale-ack");
+      return false;
+    }
+    operation.expire(safeMessage(failure), now);
+    metrics.operation(operation.getType(), "terminal");
+    return true;
   }
 
   private void requireNoDeletion(UUID userId) {
@@ -366,7 +416,8 @@ public class IdentityOperationService {
         operation.getUpdatedAt());
   }
 
-  private IdentityOperationWork toWork(IdentityOperation operation, OffsetDateTime now) {
+  private IdentityOperationWork toWork(
+      IdentityOperation operation, UUID leaseToken, OffsetDateTime now) {
     OffsetDateTime actionExpiresAt = operation.getExpiresAt();
     if (IdentityOperationStatus.REQUESTED.equals(operation.getStatus())) {
       actionExpiresAt =
@@ -374,6 +425,7 @@ public class IdentityOperationService {
     }
     return new IdentityOperationWork(
         operation.getId(),
+        leaseToken,
         operation.getUserId(),
         operation.getProviderSubject(),
         operation.getType(),

@@ -8,6 +8,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationTermi
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationType;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationWork;
 import io.github.lutzseverino.cardo.identity.model.PasswordProvisioningIntent;
+import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.repository.IdentityProviderMutationRepository;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -25,9 +26,16 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class IdentityProviderMutationService {
 
+  public enum FailureAcknowledgement {
+    STALE,
+    RETRY_SCHEDULED,
+    TERMINAL
+  }
+
   private final Clock clock = Clock.systemUTC();
   private final IdentityProviderMutationRepository mutations;
   private final IdentityProviderMutationProperties properties;
+  private final IdentityWorkflowMetrics metrics;
 
   @Transactional
   public PasswordProvisioningIntent requestPasswordProvision(String email, String name) {
@@ -86,7 +94,9 @@ public class IdentityProviderMutationService {
   public UUID completePasswordProvision(
       PasswordProvisioningIntent intent, String providerSubject, UUID userId) {
     IdentityProviderMutation mutation = requireLocked(intent.mutationId());
+    requireOwnedLease(mutation, intent.leaseToken());
     mutation.bindProvisionedUser(intent.leaseToken(), providerSubject, userId, now());
+    metrics.mutation(mutation.getType(), "success");
     IdentityProviderMutation binding =
         IdentityProviderMutation.bindUser(UUID.randomUUID(), userId, providerSubject, now());
     mutations.save(binding);
@@ -97,7 +107,9 @@ public class IdentityProviderMutationService {
   public UUID completeRecoveredPasswordProvision(
       IdentityProviderMutationWork work, String providerSubject, UUID userId) {
     IdentityProviderMutation mutation = requireLocked(work.id());
+    requireOwnedLease(mutation, work.leaseToken());
     mutation.bindProvisionedUser(work.leaseToken(), providerSubject, userId, now());
+    metrics.mutation(mutation.getType(), "success");
     IdentityProviderMutation binding =
         IdentityProviderMutation.bindUser(UUID.randomUUID(), userId, providerSubject, now());
     mutations.save(binding);
@@ -108,7 +120,9 @@ public class IdentityProviderMutationService {
   public UUID completeProvisionalProvision(
       IdentityProviderMutationWork work, String providerSubject, UUID userId) {
     IdentityProviderMutation mutation = requireLocked(work.id());
+    requireOwnedLease(mutation, work.leaseToken());
     mutation.bindProvisionedUser(work.leaseToken(), providerSubject, userId, now());
+    metrics.mutation(mutation.getType(), "success");
     IdentityProviderMutation binding =
         IdentityProviderMutation.bindUser(UUID.randomUUID(), userId, providerSubject, now());
     mutations.save(binding);
@@ -150,44 +164,62 @@ public class IdentityProviderMutationService {
 
   @Transactional
   public boolean complete(IdentityProviderMutationWork work) {
-    return requireLocked(work.id()).complete(work.leaseToken(), work.desiredVersion(), now());
+    IdentityProviderMutation mutation = requireLocked(work.id());
+    boolean completed = mutation.complete(work.leaseToken(), work.desiredVersion(), now());
+    metrics.mutation(mutation.getType(), completed ? "success" : "stale-ack");
+    return completed;
   }
 
   @Transactional
-  public boolean recordFailure(
+  public FailureAcknowledgement recordFailure(
       IdentityProviderMutationWork work,
       RuntimeException failure,
       IdentityProviderMutationTerminalReason exhaustedReason) {
-    return requireLocked(work.id())
-        .fail(
+    IdentityProviderMutation mutation = requireLocked(work.id());
+    if (!mutation.ownsLease(work.leaseToken())) {
+      metrics.mutation(mutation.getType(), "stale-ack");
+      return FailureAcknowledgement.STALE;
+    }
+    boolean terminal =
+        mutation.fail(
             work.leaseToken(),
             safeMessage(failure),
             now(),
             properties.retryBaseDelay(),
             properties.maxAttempts(),
             exhaustedReason);
+    metrics.mutation(mutation.getType(), terminal ? "terminal" : "retry");
+    return terminal ? FailureAcknowledgement.TERMINAL : FailureAcknowledgement.RETRY_SCHEDULED;
   }
 
   @Transactional
-  public boolean recordTerminalFailure(
+  public FailureAcknowledgement recordTerminalFailure(
       IdentityProviderMutationWork work,
       RuntimeException failure,
       IdentityProviderMutationTerminalReason reason) {
-    return requireLocked(work.id())
-        .terminal(work.leaseToken(), safeMessage(failure), reason, now());
+    IdentityProviderMutation mutation = requireLocked(work.id());
+    boolean terminal = mutation.terminal(work.leaseToken(), safeMessage(failure), reason, now());
+    metrics.mutation(mutation.getType(), terminal ? "terminal" : "stale-ack");
+    return terminal ? FailureAcknowledgement.TERMINAL : FailureAcknowledgement.STALE;
   }
 
   @Transactional
   public void recordPasswordDispatchFailure(
       PasswordProvisioningIntent intent, RuntimeException failure) {
     IdentityProviderMutation mutation = requireLocked(intent.mutationId());
-    mutation.fail(
-        intent.leaseToken(),
-        safeMessage(failure),
-        now(),
-        properties.retryBaseDelay(),
-        properties.maxAttempts(),
-        IdentityProviderMutationTerminalReason.CREDENTIAL_RESUBMISSION_REQUIRED);
+    if (!mutation.ownsLease(intent.leaseToken())) {
+      metrics.mutation(mutation.getType(), "stale-ack");
+      return;
+    }
+    boolean terminal =
+        mutation.fail(
+            intent.leaseToken(),
+            safeMessage(failure),
+            now(),
+            properties.retryBaseDelay(),
+            properties.maxAttempts(),
+            IdentityProviderMutationTerminalReason.CREDENTIAL_RESUBMISSION_REQUIRED);
+    metrics.mutation(mutation.getType(), terminal ? "terminal" : "retry");
   }
 
   @Transactional
@@ -199,19 +231,23 @@ public class IdentityProviderMutationService {
         && reason != IdentityProviderMutationTerminalReason.PROVIDER_REJECTED) {
       throw new IllegalArgumentException("Unsupported password provisioning terminal reason.");
     }
-    requireLocked(intent.mutationId())
-        .terminal(intent.leaseToken(), safeMessage(failure), reason, now());
+    IdentityProviderMutation mutation = requireLocked(intent.mutationId());
+    boolean terminal = mutation.terminal(intent.leaseToken(), safeMessage(failure), reason, now());
+    metrics.mutation(mutation.getType(), terminal ? "terminal" : "stale-ack");
   }
 
   @Transactional
   public boolean recordPasswordCompletionConflict(
       PasswordProvisioningIntent intent, RuntimeException failure) {
-    return requireLocked(intent.mutationId())
-        .terminal(
+    IdentityProviderMutation mutation = requireLocked(intent.mutationId());
+    boolean terminal =
+        mutation.terminal(
             intent.leaseToken(),
             safeMessage(failure),
             IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT,
             now());
+    metrics.mutation(mutation.getType(), terminal ? "terminal" : "stale-ack");
+    return terminal;
   }
 
   private IdentityProviderMutation reusablePasswordProvision(
@@ -264,6 +300,13 @@ public class IdentityProviderMutationService {
                 ApiException.notFound(
                     "identity_provider_mutation_not_found",
                     "Identity provider mutation not found."));
+  }
+
+  private void requireOwnedLease(IdentityProviderMutation mutation, UUID leaseToken) {
+    if (!mutation.ownsLease(leaseToken)) {
+      metrics.mutation(mutation.getType(), "stale-ack");
+      throw new IllegalStateException("Identity provider mutation lease was lost.");
+    }
   }
 
   private IdentityProviderMutationWork toWork(IdentityProviderMutation mutation, UUID leaseToken) {

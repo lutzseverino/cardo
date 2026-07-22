@@ -37,7 +37,8 @@ public class ReconcileIdentityOperationsWorkflow {
     try {
       if (IdentityOperationType.PROVISIONAL_DELETION.equals(work.type())) {
         provider.deleteIdentity(work.providerSubject());
-        operations.completeProvisionalDeletion(work.id());
+        logAcknowledgement(
+            work, operations.completeProvisionalDeletion(work.id(), work.leaseToken()));
         return;
       }
       if (IdentityOperationStatus.REQUESTED.equals(work.status())) {
@@ -46,22 +47,49 @@ public class ReconcileIdentityOperationsWorkflow {
           throw new IllegalStateException("Credential setup deadline passed before dispatch.");
         }
         provider.requestCredentialSetup(work.providerSubject(), lifespan);
-        operations.markAwaitingUser(work.id(), work.actionExpiresAt());
+        logAcknowledgement(
+            work,
+            operations.markAwaitingUser(work.id(), work.leaseToken(), work.actionExpiresAt()));
         return;
       }
       provider
           .completedIdentityProfile(work.providerSubject())
           .ifPresentOrElse(
-              profile -> operations.completeCredentialSetup(work.id(), profile.name()),
-              () -> operations.reschedulePoll(work.id()));
+              profile ->
+                  logAcknowledgement(
+                      work,
+                      operations.completeCredentialSetup(
+                          work.id(), work.leaseToken(), profile.name())),
+              () ->
+                  logAcknowledgement(
+                      work, operations.reschedulePoll(work.id(), work.leaseToken())));
     } catch (RuntimeException failure) {
       if (permanent(failure)) {
-        logger.error("Identity operation {} failed permanently", work.id(), failure);
-        operations.recordTerminalFailure(work.id(), failure);
+        logger
+            .atError()
+            .addKeyValue("operationId", work.id())
+            .addKeyValue("operationType", work.type())
+            .addKeyValue("outcome", "terminal")
+            .addKeyValue("reason", "provider-rejected")
+            .log("Identity operation requires operator inspection");
+        logAcknowledgement(
+            work, operations.recordTerminalFailure(work.id(), work.leaseToken(), failure));
       } else {
-        logger.warn("Identity operation {} failed and will be retried", work.id(), failure);
-        operations.recordFailure(work.id(), failure);
+        logger
+            .atWarn()
+            .addKeyValue("operationId", work.id())
+            .addKeyValue("operationType", work.type())
+            .addKeyValue("outcome", "retry")
+            .addKeyValue("failureType", failure.getClass().getSimpleName())
+            .log("Identity operation will be retried");
+        logAcknowledgement(work, operations.recordFailure(work.id(), work.leaseToken(), failure));
       }
+    }
+  }
+
+  private void logAcknowledgement(IdentityOperationWork work, boolean accepted) {
+    if (!accepted) {
+      logger.info("identity_operation_stale_ack id={} type={}", work.id(), work.type());
     }
   }
 

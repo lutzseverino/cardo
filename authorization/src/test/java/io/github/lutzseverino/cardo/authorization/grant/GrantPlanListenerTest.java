@@ -12,6 +12,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class GrantPlanListenerTest {
 
@@ -27,8 +31,9 @@ class GrantPlanListenerTest {
   private final GrantReceiptStore receipts = mock(GrantReceiptStore.class);
   private final GrantReceiptProcessingLock processingLock = mock(GrantReceiptProcessingLock.class);
   private final GrantReceiptFailureRecorder failures = mock(GrantReceiptFailureRecorder.class);
+  private final AuthorizationWorkflowMetrics metrics = mock(AuthorizationWorkflowMetrics.class);
   private final GrantPlanListener listener =
-      new GrantPlanListener(processor, receipts, processingLock, failures, 3);
+      new GrantPlanListener(processor, receipts, processingLock, failures, metrics, 3);
 
   GrantPlanListenerTest() {
     when(processingLock.tryAcquire(any())).thenReturn(true);
@@ -84,6 +89,37 @@ class GrantPlanListenerTest {
     verify(failures).record(staged.receiptId(), 3);
     verify(receipts).find(staged.receiptId());
     verifyNoMoreInteractions(receipts);
+  }
+
+  @Test
+  void terminalReceiptLogCorrelatesWithoutPlanOrProviderDetails() {
+    StagedGrantPlan staged = staged();
+    IllegalStateException failure =
+        new IllegalStateException("sensitive provider response must not be logged");
+    doThrow(failure).when(processor).apply(staged.plan());
+    when(failures.record(staged.receiptId(), 3)).thenReturn(true);
+    Logger logger = (Logger) LoggerFactory.getLogger(GrantPlanListener.class);
+    ListAppender<ILoggingEvent> events = new ListAppender<>();
+    events.start();
+    logger.addAppender(events);
+
+    try {
+      listener.apply(staged);
+    } finally {
+      logger.detachAppender(events);
+    }
+
+    String rendered =
+        events.list.stream()
+            .map(event -> event.getFormattedMessage() + event.getKeyValuePairs())
+            .reduce("", String::concat);
+    assertThat(rendered)
+        .contains(
+            staged.receiptId().toString(),
+            "outcome=\"terminal\"",
+            "reason=\"attempts-exhausted\"",
+            "failureType=\"IllegalStateException\"")
+        .doesNotContain("subject-1", failure.getMessage());
   }
 
   @Test

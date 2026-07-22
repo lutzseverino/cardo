@@ -28,5 +28,7 @@ Use the [how-to template](../_templates/how-to.template.md) for new guides.
 ## Guides
 
 - [Embed Authorization](embed-authorization.md)
+- [Operate Durable Workflows](operate-durable-workflows.md)
+- [Repair Billing Customer Provisioning](repair-billing-customer-provisioning.md)
 - [Roll Out Scoped Service Tokens](roll-out-scoped-service-tokens.md)
 - [Set Up Stripe Billing](set-up-stripe-billing.md)

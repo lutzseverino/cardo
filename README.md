@@ -56,6 +56,8 @@ complete Maven test suite.
 
 Start with the [documentation index](docs/README.md). Documentation is organized
 by reader intent so durable guidance has one predictable home.
+Operators can inspect and repair persisted background work through the
+[durable workflow operations guide](docs/how-to/operate-durable-workflows.md).
 
 ## License
 

@@ -22,6 +22,7 @@ class ReconcileInvitationCompletionsWorkflowTest {
 
   private static final UUID OPERATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
   private static final UUID USER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+  private static final UUID LEASE_TOKEN = UUID.fromString("33333333-3333-3333-3333-333333333333");
   private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-07-17T10:00:00Z");
 
   @Test
@@ -36,7 +37,7 @@ class ReconcileInvitationCompletionsWorkflowTest {
     new ReconcileInvitationCompletionsWorkflow(completions, identity).reconcile(OPERATION_ID);
 
     verify(identity).requestCredentialSetup(USER_ID, OPERATION_ID, NOW.plusDays(1));
-    verify(completions).markAwaitingIdentity(OPERATION_ID, null);
+    verify(completions).markAwaitingIdentity(OPERATION_ID, LEASE_TOKEN, null);
   }
 
   @Test
@@ -50,7 +51,7 @@ class ReconcileInvitationCompletionsWorkflowTest {
 
     new ReconcileInvitationCompletionsWorkflow(completions, identity).reconcile(OPERATION_ID);
 
-    verify(completions).complete(OPERATION_ID);
+    verify(completions).complete(OPERATION_ID, LEASE_TOKEN);
   }
 
   @Test
@@ -64,10 +65,12 @@ class ReconcileInvitationCompletionsWorkflowTest {
 
     new ReconcileInvitationCompletionsWorkflow(completions, identity).reconcile(OPERATION_ID);
 
-    verify(completions).recordFailure(OPERATION_ID, failure);
+    verify(completions).recordFailure(OPERATION_ID, LEASE_TOKEN, failure);
     verify(completions, never())
         .markAwaitingIdentity(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -92,9 +95,13 @@ class ReconcileInvitationCompletionsWorkflowTest {
     new ReconcileInvitationCompletionsWorkflow(completions, identity).reconcile(OPERATION_ID);
 
     verify(completions)
-        .recordIdentityFailure(OPERATION_ID, "Credential setup expired before completion.");
+        .recordIdentityFailure(
+            OPERATION_ID, LEASE_TOKEN, "Credential setup expired before completion.");
     verify(completions, never())
-        .recordFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        .recordFailure(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -108,9 +115,12 @@ class ReconcileInvitationCompletionsWorkflowTest {
 
     new ReconcileInvitationCompletionsWorkflow(completions, identity).reconcile(OPERATION_ID);
 
-    verify(completions).recordTerminalFailure(OPERATION_ID, failure);
+    verify(completions).recordTerminalFailure(OPERATION_ID, LEASE_TOKEN, failure);
     verify(completions, never())
-        .recordFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        .recordFailure(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -124,10 +134,12 @@ class ReconcileInvitationCompletionsWorkflowTest {
 
     new ReconcileInvitationCompletionsWorkflow(completions, identity).reconcile(OPERATION_ID);
 
-    verify(completions).recordFailure(OPERATION_ID, failure);
+    verify(completions).recordFailure(OPERATION_ID, LEASE_TOKEN, failure);
     verify(completions, never())
         .recordTerminalFailure(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -148,7 +160,8 @@ class ReconcileInvitationCompletionsWorkflowTest {
   }
 
   private InvitationCompletionWork work(InvitationCompletionStatus status) {
-    return new InvitationCompletionWork(OPERATION_ID, USER_ID, status, NOW.plusDays(1));
+    return new InvitationCompletionWork(
+        OPERATION_ID, LEASE_TOKEN, USER_ID, status, NOW.plusDays(1));
   }
 
   private IdentityOperation identity(IdentityOperationStatus status) {

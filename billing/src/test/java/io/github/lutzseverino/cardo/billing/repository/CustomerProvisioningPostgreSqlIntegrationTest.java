@@ -7,6 +7,7 @@ import io.github.lutzseverino.cardo.billing.model.Customer;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningCompletion;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningOperation;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningStatus;
+import io.github.lutzseverino.cardo.billing.operations.BillingWorkflowMetrics;
 import io.github.lutzseverino.cardo.billing.service.CustomerProvisioningService;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
@@ -50,6 +52,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class CustomerProvisioningPostgreSqlIntegrationTest {
+
+  @MockitoBean private BillingWorkflowMetrics metrics;
 
   private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-07-21T10:00:00Z");
 
@@ -84,13 +88,15 @@ class CustomerProvisioningPostgreSqlIntegrationTest {
             jdbc.queryForList(
                 "select version from flyway_schema_history_billing where success order by installed_rank",
                 String.class))
-        .containsExactly("1", "2");
+        .containsExactly("1", "2", "3");
     assertThat(
             jdbc.queryForList(
                 "select indexname from pg_indexes where tablename = 'billing_customer_provisioning_operations'",
                 String.class))
         .contains(
-            "uq_billing_customer_provisioning_active", "ix_billing_customer_provisioning_ready");
+            "uq_billing_customer_provisioning_active",
+            "ix_billing_customer_provisioning_ready",
+            "idx_billing_customer_provisioning_terminal");
   }
 
   @Test

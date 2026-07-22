@@ -40,27 +40,49 @@ public class ReconcileInvitationCompletionsWorkflow {
               ? identityUsers.requestCredentialSetup(
                   work.invitedUserId(), work.id(), work.expiresAt())
               : identityUsers.getCredentialSetup(work.invitedUserId(), work.id());
-      reconcile(work.id(), identity);
+      reconcile(work, identity);
     } catch (RuntimeException failure) {
       if (permanent(failure)) {
-        logger.error("Invitation completion {} failed permanently", work.id(), failure);
-        completions.recordTerminalFailure(work.id(), failure);
+        logger
+            .atError()
+            .addKeyValue("operationId", work.id())
+            .addKeyValue("outcome", "terminal")
+            .addKeyValue("reason", "identity-rejected")
+            .log("Invitation completion requires operator inspection");
+        logAcknowledgement(
+            work, completions.recordTerminalFailure(work.id(), work.leaseToken(), failure));
       } else {
-        logger.warn("Invitation completion {} failed and will be retried", work.id(), failure);
-        completions.recordFailure(work.id(), failure);
+        logger
+            .atWarn()
+            .addKeyValue("operationId", work.id())
+            .addKeyValue("outcome", "retry")
+            .addKeyValue("failureType", failure.getClass().getSimpleName())
+            .log("Invitation completion will be retried");
+        logAcknowledgement(work, completions.recordFailure(work.id(), work.leaseToken(), failure));
       }
     }
   }
 
-  private void reconcile(UUID operationId, IdentityOperation identity) {
+  private void reconcile(InvitationCompletionWork work, IdentityOperation identity) {
     if (IdentityOperationStatus.COMPLETED.equals(identity.status())) {
-      completions.complete(operationId);
+      logAcknowledgement(work, completions.complete(work.id(), work.leaseToken()));
     } else if (IdentityOperationStatus.FAILED.equals(identity.status())) {
-      completions.recordIdentityFailure(operationId, identity.lastError());
+      logAcknowledgement(
+          work,
+          completions.recordIdentityFailure(work.id(), work.leaseToken(), identity.lastError()));
     } else if (IdentityOperationStatus.REQUESTED.equals(identity.status())) {
-      completions.markAwaitingIdentity(operationId, identity.expiresAt());
+      logAcknowledgement(
+          work,
+          completions.markAwaitingIdentity(work.id(), work.leaseToken(), identity.expiresAt()));
     } else {
-      completions.reschedule(operationId, identity.expiresAt());
+      logAcknowledgement(
+          work, completions.reschedule(work.id(), work.leaseToken(), identity.expiresAt()));
+    }
+  }
+
+  private void logAcknowledgement(InvitationCompletionWork work, boolean accepted) {
+    if (!accepted) {
+      logger.info("invitation_completion_stale_ack id={}", work.id());
     }
   }
 

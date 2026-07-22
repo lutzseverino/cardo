@@ -20,6 +20,9 @@ CREATE INDEX IF NOT EXISTS event_publication_serialized_event_hash_idx
 CREATE INDEX IF NOT EXISTS event_publication_by_completion_date_idx
   ON ${authorizationSchema}.event_publication (completion_date);
 
+CREATE INDEX IF NOT EXISTS event_publication_by_listener_completion_date_idx
+  ON ${authorizationSchema}.event_publication (listener_id, completion_date, publication_date);
+
 CREATE TABLE IF NOT EXISTS ${authorizationSchema}.grant_receipt
 (
   id            UUID NOT NULL,
@@ -36,3 +39,6 @@ CREATE TABLE IF NOT EXISTS ${authorizationSchema}.grant_receipt
       OR (status <> 'FAILED' AND failure_code IS NULL)
   )
 );
+
+CREATE INDEX IF NOT EXISTS grant_receipt_by_status_updated_at_idx
+  ON ${authorizationSchema}.grant_receipt (status, updated_at);

@@ -17,6 +17,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityOperationStatus;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationType;
 import io.github.lutzseverino.cardo.identity.model.User;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
+import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.repository.IdentityOperationRepository;
 import io.github.lutzseverino.cardo.identity.repository.UserRepository;
 import java.time.Duration;
@@ -122,11 +123,12 @@ class IdentityOperationServiceTest {
     IdentityOperation operation =
         IdentityOperation.credentialSetup(OPERATION_ID, USER_ID, "subject-1", NOT_AFTER, NOW);
     operation.awaitUser(NOW, NOT_AFTER);
+    UUID leaseToken = operation.claimUntil(OffsetDateTime.now().plusHours(1));
     User invited = User.invited("subject-1", "employee@example.com");
     when(operations.findEntityByIdForUpdate(OPERATION_ID)).thenReturn(Optional.of(operation));
     when(users.findById(USER_ID)).thenReturn(Optional.of(invited));
 
-    service(operations, users).completeCredentialSetup(OPERATION_ID, "Employee");
+    service(operations, users).completeCredentialSetup(OPERATION_ID, leaseToken, "Employee");
 
     assertThat(invited.getStatus()).isEqualTo(UserStatus.ACTIVE);
     assertThat(invited.getName()).isEqualTo("Employee");
@@ -210,6 +212,7 @@ class IdentityOperationServiceTest {
             Duration.ofSeconds(1),
             Duration.ofSeconds(30),
             5,
-            25));
+            25),
+        mock(IdentityWorkflowMetrics.class));
   }
 }

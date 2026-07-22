@@ -1,7 +1,10 @@
 package io.github.lutzseverino.cardo.authorization.grant;
 
 import io.github.lutzseverino.cardo.authorization.AuthorizationAdminClient;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
@@ -53,11 +56,13 @@ public class AuthorizationPlanConfiguration {
       GrantReceiptStore receipts,
       GrantReceiptProcessingLock processingLock,
       GrantReceiptFailureRecorder failures,
+      AuthorizationWorkflowMetrics metrics,
       @Value("${cardo.authorization.plans.max-attempts:12}") int maxAttempts) {
     if (maxAttempts < 1) {
       throw new IllegalArgumentException("authorization plan max attempts must be positive");
     }
-    return new GrantPlanListener(processor, receipts, processingLock, failures, maxAttempts);
+    return new GrantPlanListener(
+        processor, receipts, processingLock, failures, metrics, maxAttempts);
   }
 
   @Bean
@@ -66,8 +71,9 @@ public class AuthorizationPlanConfiguration {
   }
 
   @Bean
-  RevocationPlanListener revocationPlanListener(RevocationProcessor processor) {
-    return new RevocationPlanListener(processor);
+  RevocationPlanListener revocationPlanListener(
+      RevocationProcessor processor, AuthorizationWorkflowMetrics metrics) {
+    return new RevocationPlanListener(processor, metrics);
   }
 
   @Bean
@@ -75,5 +81,15 @@ public class AuthorizationPlanConfiguration {
       IncompleteEventPublications publications,
       @Value("${cardo.authorization.plans.retry-delay:PT1M}") Duration retryDelay) {
     return new AuthorizationPlanRecovery(publications, retryDelay);
+  }
+
+  @Bean
+  AuthorizationWorkflowMetrics authorizationWorkflowMetrics(
+      ObjectProvider<MeterRegistry> registries,
+      JdbcOperations jdbc,
+      @Value("${spring.modulith.events.jdbc.schema}") String eventSchema,
+      @Value("${cardo.authorization.plans.retry-delay:PT1M}") Duration retryDelay) {
+    return new AuthorizationWorkflowMetrics(
+        registries.getIfAvailable(SimpleMeterRegistry::new), jdbc, eventSchema, retryDelay);
   }
 }

@@ -9,6 +9,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityOperation;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationResult;
 import io.github.lutzseverino.cardo.identity.model.IdentityOperationStatus;
 import io.github.lutzseverino.cardo.identity.model.User;
+import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.service.IdentityOperationService;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -38,6 +39,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,6 +75,8 @@ class IdentityOperationPostgreSqlIntegrationTest {
   private final IdentityOperationService service;
   private final JdbcTemplate jdbc;
   private final TransactionTemplate transactions;
+
+  @MockitoBean private IdentityWorkflowMetrics metrics;
 
   @Autowired
   IdentityOperationPostgreSqlIntegrationTest(
@@ -116,7 +120,7 @@ class IdentityOperationPostgreSqlIntegrationTest {
             jdbc.queryForList(
                 "select version from flyway_schema_history_identity where success order by installed_rank",
                 String.class))
-        .containsExactly("1", "2", "3", "4");
+        .containsExactly("1", "2", "3", "4", "5");
     assertThat(operations.findAll())
         .extracting(IdentityOperation::getStatus)
         .containsExactlyInAnyOrder(
@@ -181,6 +185,31 @@ class IdentityOperationPostgreSqlIntegrationTest {
               assertThat(failure.code()).isEqualTo("identity_operation_conflict");
             });
     assertThat(operations.count()).isOne();
+  }
+
+  @Test
+  void restartReclaimsExpiredLeaseAndFencesTheEarlierAcknowledgement() {
+    UUID userId = invitedUser();
+    UUID operationId = UUID.randomUUID();
+    service.requestCredentialSetup(operationId, userId, NOT_AFTER);
+
+    var first = service.claim(operationId).orElseThrow();
+    jdbc.update(
+        "update identity_operations set next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second'"
+            + " where id = ?",
+        operationId);
+    var recovered = service.claim(operationId).orElseThrow();
+
+    assertThat(recovered.leaseToken()).isNotEqualTo(first.leaseToken());
+    assertThat(
+            service.recordFailure(
+                operationId, first.leaseToken(), new IllegalStateException("late timeout")))
+        .isFalse();
+    assertThat(
+            service.recordFailure(
+                operationId, recovered.leaseToken(), new IllegalStateException("retry")))
+        .isTrue();
+    assertThat(operations.findById(operationId).orElseThrow().getAttemptCount()).isOne();
   }
 
   @Test

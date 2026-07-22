@@ -7,6 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningCompletion;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningFailure;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningWork;
@@ -20,6 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 
 class CustomerProvisionerTest {
@@ -80,6 +84,34 @@ class CustomerProvisionerTest {
 
     verify(provider).findCustomersByProvisioningId(OPERATION_ID);
     verify(provider, never()).createCustomer(SUBJECT_ID, OPERATION_ID);
+  }
+
+  @Test
+  void structuredLogsCorrelateByOperationWithoutSensitiveProviderOrLeaseValues() {
+    String providerCustomerId = "cus_sensitive_value";
+    when(operations.claim(OPERATION_ID)).thenReturn(Optional.of(work(false)));
+    when(provider.findCustomersByProvisioningId(OPERATION_ID))
+        .thenReturn(List.of(providerCustomerId));
+    when(operations.complete(OPERATION_ID, LEASE_TOKEN, providerCustomerId))
+        .thenReturn(CustomerProvisioningCompletion.COMPLETED);
+    Logger logger = (Logger) LoggerFactory.getLogger(CustomerProvisioner.class);
+    ListAppender<ILoggingEvent> events = new ListAppender<>();
+    events.start();
+    logger.addAppender(events);
+
+    try {
+      provisioner.reconcileInBackground(OPERATION_ID);
+    } finally {
+      logger.detachAppender(events);
+    }
+
+    String rendered =
+        events.list.stream()
+            .map(event -> event.getFormattedMessage() + event.getKeyValuePairs())
+            .reduce("", String::concat);
+    assertThat(rendered).contains(OPERATION_ID.toString());
+    assertThat(rendered)
+        .doesNotContain(SUBJECT_ID.toString(), LEASE_TOKEN.toString(), providerCustomerId);
   }
 
   @Test

@@ -8,7 +8,10 @@ import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutation;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationStatus;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationType;
 import io.github.lutzseverino.cardo.identity.model.User;
+import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.service.IdentityProviderMutationService;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -28,8 +31,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
@@ -50,7 +56,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
     })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
-@Import(IdentityProviderMutationService.class)
+@Import({
+  IdentityProviderMutationService.class,
+  IdentityWorkflowMetrics.class,
+  IdentityProviderMutationPostgreSqlIntegrationTest.Config.class
+})
 @EnableConfigurationProperties(IdentityProviderMutationProperties.class)
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -66,15 +76,21 @@ class IdentityProviderMutationPostgreSqlIntegrationTest {
   private final IdentityProviderMutationRepository mutations;
   private final UserRepository users;
   private final IdentityProviderMutationService service;
+  private final JdbcTemplate jdbc;
+  private final MeterRegistry registry;
 
   @Autowired
   IdentityProviderMutationPostgreSqlIntegrationTest(
       IdentityProviderMutationRepository mutations,
       UserRepository users,
-      IdentityProviderMutationService service) {
+      IdentityProviderMutationService service,
+      JdbcTemplate jdbc,
+      MeterRegistry registry) {
     this.mutations = mutations;
     this.users = users;
     this.service = service;
+    this.jdbc = jdbc;
+    this.registry = registry;
   }
 
   @DynamicPropertySource
@@ -127,6 +143,62 @@ class IdentityProviderMutationPostgreSqlIntegrationTest {
               assertThat(mutation.getDesiredEnabled()).isTrue();
               assertThat(mutation.getDesiredVersion()).isEqualTo(2);
             });
+  }
+
+  @Test
+  void actionableMetricsExcludeProviderMutationsWithAnUnexpiredLease() {
+    OffsetDateTime now = OffsetDateTime.now();
+    IdentityProviderMutation actionable =
+        IdentityProviderMutation.provisionalProvision(
+            UUID.randomUUID(), "actionable@example.com", "marker-actionable", now.minusHours(2));
+    IdentityProviderMutation leased =
+        IdentityProviderMutation.provisionalProvision(
+            UUID.randomUUID(), "leased@example.com", "marker-leased", now.minusHours(4));
+    leased.claim(now.plusHours(1));
+    mutations.saveAllAndFlush(List.of(actionable, leased));
+    jdbc.update(
+        "update identity_provider_mutations set created_at = CURRENT_TIMESTAMP - INTERVAL '2 hours'"
+            + " where id = ?",
+        actionable.getId());
+    jdbc.update(
+        "update identity_provider_mutations set created_at = CURRENT_TIMESTAMP - INTERVAL '4 hours'"
+            + " where id = ?",
+        leased.getId());
+
+    assertThat(
+            registry
+                .get("cardo.durable.workflow.work")
+                .tags(
+                    "workflow",
+                    "identity-provider-mutation",
+                    "type",
+                    "provision-provisional-user",
+                    "state",
+                    "active")
+                .gauge()
+                .value())
+        .isEqualTo(2D);
+    assertThat(
+            registry
+                .get("cardo.durable.workflow.work")
+                .tags(
+                    "workflow",
+                    "identity-provider-mutation",
+                    "type",
+                    "provision-provisional-user",
+                    "state",
+                    "actionable")
+                .gauge()
+                .value())
+        .isEqualTo(1D);
+    assertThat(
+            registry
+                .get("cardo.durable.workflow.oldest.actionable.age")
+                .tags(
+                    "workflow", "identity-provider-mutation", "type", "provision-provisional-user")
+                .gauge()
+                .value())
+        .isBetween(7_100D, 7_300D);
   }
 
   @Test
@@ -269,5 +341,14 @@ class IdentityProviderMutationPostgreSqlIntegrationTest {
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     connection.setSchema(schema);
     return connection;
+  }
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class Config {
+
+    @Bean
+    MeterRegistry meterRegistry() {
+      return new SimpleMeterRegistry();
+    }
   }
 }
