@@ -33,8 +33,9 @@ class ReferenceStackIT {
     try (ReferenceStackHarness stack = new ReferenceStackHarness()) {
       stack.start();
       ReferenceHttp internal = ReferenceHttp.plain();
+      ReferenceHttp external = new ReferenceHttp(stack.httpsOrigin().browser());
       assertThat(
-              internal
+              external
                   .request(
                       "GET",
                       stack.origin().resolve("/internal/reference/grants/unknown"),
