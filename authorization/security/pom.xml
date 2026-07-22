@@ -8,28 +8,27 @@
     <groupId>io.github.lutzseverino.cardo</groupId>
     <artifactId>cardo</artifactId>
     <version>${revision}</version>
-    <relativePath>../pom.xml</relativePath>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
 
-  <artifactId>authorization-keycloak-client</artifactId>
+  <artifactId>authorization-security</artifactId>
   <packaging>jar</packaging>
 
-  <name>Cardo Authorization Keycloak Client</name>
-  <description>Dependency-light Keycloak token acquisition and exchange clients.</description>
+  <name>Cardo Authorization Security</name>
+  <description>Dependency-light Cardo Spring Security and JWT mechanics.</description>
 
   <dependencies>
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-annotations</artifactId>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>tools.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <scope>runtime</scope>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-oauth2-jose</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-web</artifactId>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-oauth2-resource-server</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

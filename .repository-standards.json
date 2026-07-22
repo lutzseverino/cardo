@@ -6,8 +6,11 @@
   "boundaries": [
     {"path": ".", "type": "repository", "title": "Cardo"},
     {"path": "common", "type": "project", "title": "Common"},
-    {"path": "openapi", "type": "project", "title": "OpenAPI Support"},
+    {"path": "common/api", "type": "project", "title": "Common API"},
+    {"path": "openapi-support", "type": "project", "title": "OpenAPI Support"},
     {"path": "authorization", "type": "project", "title": "Authorization"},
+    {"path": "authorization/keycloak-client", "type": "project", "title": "Authorization Keycloak Client"},
+    {"path": "authorization/security", "type": "project", "title": "Authorization Security"},
     {"path": "identity", "type": "project", "title": "Identity"},
     {"path": "identity/client", "type": "project", "title": "Identity Client API"},
     {"path": "identity/client-http", "type": "project", "title": "Identity HTTP Client"},

@@ -44,12 +44,12 @@
   </scm>
 
   <modules>
-    <module>common-api</module>
+    <module>common/api</module>
     <module>common</module>
     <module>cardo-bom</module>
-    <module>openapi</module>
-    <module>authorization-keycloak-client</module>
-    <module>authorization-security</module>
+    <module>openapi-support</module>
+    <module>authorization/keycloak-client</module>
+    <module>authorization/security</module>
     <module>authorization</module>
     <module>identity/client</module>
     <module>identity/client-http</module>
