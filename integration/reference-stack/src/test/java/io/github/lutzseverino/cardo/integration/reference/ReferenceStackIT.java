@@ -1,7 +1,6 @@
 package io.github.lutzseverino.cardo.integration.reference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.nimbusds.jwt.JWTParser;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakRequestingPartyTokenClient;
@@ -181,9 +180,18 @@ class ReferenceStackIT {
       assertThat(UUID.fromString(string(invitedUser, "id"))).isEqualTo(invitedUserId);
       String invitedSubject = string(invitedUser, "authorizationSubject");
       String invitedIdentityToken = invitedBrowser.cookie("__Host-cardo.session");
-      assertThatThrownBy(() -> rpt(stack, invitedIdentityToken))
-          .isInstanceOf(RuntimeException.class);
-      assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(401);
+      String unprivilegedRpt = rpt(stack, invitedIdentityToken);
+      assertThat(
+              internal
+                  .request(
+                      "GET",
+                      stack.productInternal(
+                          "/api/reference/tenants/" + ReferenceContract.TENANT_ID),
+                      null,
+                      bearer(unprivilegedRpt))
+                  .status())
+          .isEqualTo(403);
+      assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(403);
 
       URI accept = stack.origin().resolve("/api/reference/invitations/" + invitationId + "/accept");
       createUser(internal, stack, OTHER_EMAIL, OTHER_PASSWORD, "Other");
@@ -259,7 +267,7 @@ class ReferenceStackIT {
       UUID receiptId = UUID.fromString(string(pending, "receiptId"));
       assertThat(stack.databases().referenceReceiptCount(invitationId)).isOne();
       assertThat(stack.databases().referenceMembershipCount(invitedSubject)).isOne();
-      assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(401);
+      assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(403);
       control(internal, stack, "/internal/reference/grants/release");
       Map<String, Object> applied =
           await(
