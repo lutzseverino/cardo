@@ -27,3 +27,5 @@ jobs:
           cache: maven
       - name: Run validation
         run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Smoke runtime artifacts
+        run: ./scripts/smoke-runtime-artifacts.sh

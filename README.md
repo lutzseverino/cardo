@@ -35,6 +35,8 @@ staging participates in the application transaction that produces the grant.
 
 See the [integration reference](docs/reference/product-integration.md)
 for artifact selection, configuration, and ownership rules.
+Deployments consume the executable JAR and OCI image process contract described
+in the [runtime artifact reference](docs/reference/runtime-artifacts.md).
 
 ## Development
 
