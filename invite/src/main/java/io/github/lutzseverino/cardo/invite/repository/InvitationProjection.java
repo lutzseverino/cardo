@@ -42,6 +42,8 @@ public interface InvitationProjection {
 
   OffsetDateTime getRevokedAt();
 
+  UUID getGrantReceiptId();
+
   OffsetDateTime getCreatedAt();
 
   OffsetDateTime getUpdatedAt();

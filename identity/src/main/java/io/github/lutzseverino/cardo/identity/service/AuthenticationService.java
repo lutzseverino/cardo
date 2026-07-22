@@ -54,7 +54,7 @@ public class AuthenticationService {
             current.sessionId(),
             AuthenticationMethod.OIDC,
             current.expiresAt());
-    assertEnabled(principal);
+    assertOperational(principal);
     return new AuthenticationResult(principal, current.grants());
   }
 
@@ -79,7 +79,7 @@ public class AuthenticationService {
               providerSession.sessionId(),
               authenticationMethod,
               authorization.expiresAt());
-      assertEnabled(principal);
+      assertOperational(principal);
       return new SessionResult(
           new AuthenticationResult(principal, authorization.grants()),
           new SessionCredential(authorizationToken, authorization.expiresAt()),
@@ -124,11 +124,18 @@ public class AuthenticationService {
     }
   }
 
-  private void assertEnabled(AuthenticatedPrincipal principal) {
-    if (!UserStatus.DISABLED.equals(principal.userStatus())) {
+  private void assertOperational(AuthenticatedPrincipal principal) {
+    if (UserStatus.ACTIVE.equals(principal.userStatus())) {
       return;
     }
-    throw ApiException.forbidden("user_disabled", "User is disabled.");
+    if (UserStatus.DISABLED.equals(principal.userStatus())) {
+      throw ApiException.forbidden("user_disabled", "User is disabled.");
+    }
+    if (UserStatus.INVITED.equals(principal.userStatus())) {
+      throw ApiException.forbidden(
+          "user_invited", "Invited users cannot establish a session before activation.");
+    }
+    throw ApiException.forbidden("user_inactive", "User is not active.");
   }
 
   private void revokeAfterFailedEstablishment(String refreshToken, RuntimeException failure) {

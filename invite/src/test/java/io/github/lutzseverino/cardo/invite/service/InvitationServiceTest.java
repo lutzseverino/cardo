@@ -31,16 +31,18 @@ class InvitationServiceTest {
   @Test
   void rejectsAnAcceptanceTimestampBeforeTheInvitationCreationWindow() {
     InvitationRepository invitations = mock(InvitationRepository.class);
-    InvitationProjection projection = mock(InvitationProjection.class);
+    Invitation invitation = mock(Invitation.class);
     UUID invitationId = UUID.randomUUID();
     OffsetDateTime createdAt = OffsetDateTime.now().minusDays(1);
-    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(projection));
-    when(projection.getProduct()).thenReturn("clinic");
-    when(projection.getCreatedAt()).thenReturn(createdAt);
+    when(invitations.findEntityByIdForUpdate(invitationId)).thenReturn(Optional.of(invitation));
+    when(invitation.getProduct()).thenReturn("clinic");
+    when(invitation.getStatus())
+        .thenReturn(io.github.lutzseverino.cardo.invite.model.InvitationStatus.PENDING);
+    when(invitation.getCreatedAt()).thenReturn(createdAt);
     InvitationService service = service(invitations);
 
     assertThatThrownBy(
-            () -> service.requirePending(invitationId, "clinic", createdAt.minusMinutes(6)))
+            () -> service.prepareAcceptance(invitationId, "clinic", createdAt.minusMinutes(6)))
         .isInstanceOf(ApiException.class)
         .extracting(exception -> ((ApiException) exception).code())
         .isEqualTo("invitation_acceptance_time_invalid");
@@ -49,35 +51,34 @@ class InvitationServiceTest {
   @Test
   void rejectsAnAcceptanceTimestampBeyondTheFutureClockSkewWindow() {
     InvitationRepository invitations = mock(InvitationRepository.class);
-    InvitationProjection projection = mock(InvitationProjection.class);
+    Invitation invitation = mock(Invitation.class);
     UUID invitationId = UUID.randomUUID();
-    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(projection));
-    when(projection.getProduct()).thenReturn("clinic");
-    when(projection.getCreatedAt()).thenReturn(OffsetDateTime.now().minusDays(1));
+    when(invitations.findEntityByIdForUpdate(invitationId)).thenReturn(Optional.of(invitation));
+    when(invitation.getProduct()).thenReturn("clinic");
+    when(invitation.getStatus())
+        .thenReturn(io.github.lutzseverino.cardo.invite.model.InvitationStatus.PENDING);
+    when(invitation.getCreatedAt()).thenReturn(OffsetDateTime.now().minusDays(1));
     InvitationService service = service(invitations);
 
     assertThatThrownBy(
             () ->
-                service.requirePending(invitationId, "clinic", OffsetDateTime.now().plusMinutes(6)))
+                service.prepareAcceptance(
+                    invitationId, "clinic", OffsetDateTime.now().plusMinutes(6)))
         .isInstanceOf(ApiException.class)
         .extracting(exception -> ((ApiException) exception).code())
         .isEqualTo("invitation_acceptance_time_invalid");
   }
 
   @Test
-  void revokesThroughTheInvitationOwnerAndReturnsTheUpdatedProjection() {
+  void revokesThroughTheLockedInvitationOwner() {
     InvitationDelivery delivery = mock(InvitationDelivery.class);
     InvitationApplicationMapper mapper = mock(InvitationApplicationMapper.class);
     InvitationRepository invitations = mock(InvitationRepository.class);
     Invitation entity = mock(Invitation.class);
-    InvitationProjection projection = mock(InvitationProjection.class);
-    io.github.lutzseverino.cardo.invite.model.InvitationResult result =
-        mock(io.github.lutzseverino.cardo.invite.model.InvitationResult.class);
     UUID invitationId = UUID.randomUUID();
-    when(invitations.findEntityById(invitationId)).thenReturn(Optional.of(entity));
+    when(invitations.findEntityByIdForUpdate(invitationId)).thenReturn(Optional.of(entity));
     when(entity.getProduct()).thenReturn("clinic");
-    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(projection));
-    when(mapper.toResult(projection)).thenReturn(result);
+    when(entity.revoke(any(java.time.OffsetDateTime.class))).thenReturn(true);
     InvitationService service =
         new InvitationService(
             delivery,
@@ -85,8 +86,7 @@ class InvitationServiceTest {
             new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),
             invitations);
 
-    org.assertj.core.api.Assertions.assertThat(service.revoke(invitationId, "clinic"))
-        .isSameAs(result);
+    org.assertj.core.api.Assertions.assertThat(service.revoke(invitationId, "clinic")).isTrue();
 
     verify(entity).revoke(any(java.time.OffsetDateTime.class));
   }

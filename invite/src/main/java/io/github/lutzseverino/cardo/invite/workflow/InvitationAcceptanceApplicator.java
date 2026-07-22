@@ -17,12 +17,12 @@ class InvitationAcceptanceApplicator {
   private final InvitationService invitations;
 
   void apply(PendingInvitation invitation, OffsetDateTime acceptedAt) {
-    if (invitations.accept(invitation.id(), acceptedAt)) {
-      grants.stage(
-          planner.acceptance(
-              invitation.tenantId(),
-              invitation.invitedAuthorizationSubject(),
-              invitation.grants()));
-    }
+    var receipt =
+        grants.stage(
+            planner.acceptance(
+                invitation.tenantId(),
+                invitation.invitedAuthorizationSubject(),
+                invitation.grants()));
+    invitations.accept(invitation.id(), acceptedAt, receipt.id());
   }
 }

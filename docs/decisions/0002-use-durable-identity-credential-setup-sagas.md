@@ -43,6 +43,10 @@ operation row is the durable saga state and dispatch work item for that service:
 - The invitation's hard expiry is persisted and propagated to Identity. It caps the Keycloak
   action lifetime and prevents reconciliation from activating a user after the invitation expires.
 - Product services continue to accept invitations explicitly after their own domain transition.
+- Invite revocation terminalizes unclaimed local completion work as `REVOKED`. Revocation and claim
+  serialize on the invitation row; a claim that commits first may still dispatch. Keycloak has no
+  supported per-action cancellation contract, so Invite does not cancel the Identity operation,
+  delete or disable a shared provisional user, or claim to recall an issued action link.
 
 Operations retry transient failures with bounded exponential backoff. Non-retryable provider and
 cross-service 4xx failures become terminal immediately; request timeout, too-early, and rate-limit
@@ -62,6 +66,8 @@ fresh action instead of polling forever.
   Cardo operation are idempotent.
 - Credential-setup redirect URIs and action lifetimes become Identity configuration.
 - Product invitation acceptance and authorization staging remain independently retryable.
+- Completion status remains readable after invitation revocation, and late worker callbacks cannot
+  reopen terminal `REVOKED` work.
 
 ## Alternatives Considered
 

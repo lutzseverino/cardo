@@ -23,6 +23,10 @@ public interface InvitationRepository extends JpaRepository<Invitation, UUID> {
 
   Optional<Invitation> findEntityById(UUID id);
 
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select invitation from Invitation invitation where invitation.id = :id")
+  Optional<Invitation> findEntityByIdForUpdate(@Param("id") UUID id);
+
   Optional<Invitation> findEntityByToken(String token);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)

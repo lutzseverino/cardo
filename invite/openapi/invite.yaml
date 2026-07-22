@@ -17,6 +17,8 @@ tags:
     description: Product-service invitation operations.
   - name: Invitation Tokens
     description: Token-based invitation operations used by product acceptance flows.
+  - name: Invitation Grant Convergence
+    description: Invite-owned authorization convergence for accepted invitations.
 paths:
   /invite:
     get:
@@ -112,6 +114,32 @@ paths:
           $ref: "#/components/responses/Conflict"
         "410":
           $ref: "#/components/responses/Gone"
+  /invitations/{invitationId}/grant-convergence:
+    parameters:
+      - $ref: "#/components/parameters/InvitationId"
+    get:
+      tags: [Invitation Grant Convergence]
+      operationId: getInvitationGrantConvergence
+      summary: Get authorization convergence for an accepted invitation.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Invitation grant convergence found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationGrantConvergenceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /invitations/{invitationId}/revocation:
     parameters:
       - $ref: "#/components/parameters/InvitationId"
@@ -233,6 +261,8 @@ components:
       $ref: "../../common/openapi/errors.yaml#/components/responses/Conflict"
     Gone:
       $ref: "../../common/openapi/errors.yaml#/components/responses/Gone"
+    InternalServerError:
+      $ref: "../../common/openapi/errors.yaml#/components/responses/InternalServerError"
   schemas:
     ServiceStatusResponse:
       type: object
@@ -307,7 +337,22 @@ components:
           description: Product-owned URL base; Invite appends the secret token as one path segment.
     InvitationCompletionStatus:
       type: string
-      enum: [requested, awaiting_identity, completed, failed]
+      enum: [requested, awaiting_identity, completed, failed, revoked]
+    InvitationGrantConvergenceStatus:
+      type: string
+      enum: [pending, applied, failed, unknown]
+    InvitationGrantConvergenceResponse:
+      type: object
+      required: [invitationId, status]
+      properties:
+        invitationId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/InvitationGrantConvergenceStatus"
+        failureCode:
+          type: string
+          nullable: true
     InvitationCompletionResponse:
       type: object
       required:

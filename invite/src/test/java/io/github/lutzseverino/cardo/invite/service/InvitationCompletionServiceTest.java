@@ -56,19 +56,19 @@ class InvitationCompletionServiceTest {
   }
 
   @Test
-  void terminalOperationCanBeReadWithoutRequiringAPendingInvitation() {
+  void revokedOperationCanBeReadWithoutRequiringAPendingInvitation() {
     InvitationCompletionOperationRepository operations =
         mock(InvitationCompletionOperationRepository.class);
     InvitationService invitations = mock(InvitationService.class);
     InvitationCompletionOperation operation =
         new InvitationCompletionOperation(
             INVITATION_ID, USER_ID, "clinic", EXPIRES_AT, OffsetDateTime.now());
-    operation.failTerminal("Invitation expired before credential setup completed.", EXPIRES_AT);
+    operation.revoke(EXPIRES_AT);
     when(invitations.requireOwnedId("token-1", "clinic")).thenReturn(INVITATION_ID);
     when(operations.findById(INVITATION_ID)).thenReturn(Optional.of(operation));
 
     assertThat(service(operations, invitations).get("token-1", "clinic").status())
-        .isEqualTo(InvitationCompletionStatus.FAILED);
+        .isEqualTo(InvitationCompletionStatus.REVOKED);
 
     verify(invitations).requireOwnedId("token-1", "clinic");
     verify(invitations, never()).requirePending("token-1", "clinic");
@@ -94,6 +94,60 @@ class InvitationCompletionServiceTest {
 
     assertThat(operation.getStatus()).isEqualTo(InvitationCompletionStatus.REQUESTED);
     assertThat(operation.getActionExpiresAt()).isNull();
+  }
+
+  @Test
+  void revocationTerminalizesQueuedWorkAndWorkerCallbacksPreserveIt() {
+    InvitationCompletionOperation operation =
+        new InvitationCompletionOperation(
+            INVITATION_ID, USER_ID, "clinic", EXPIRES_AT, OffsetDateTime.now());
+    OffsetDateTime revokedAt = OffsetDateTime.now();
+
+    operation.revoke(revokedAt);
+    operation.awaitIdentity(revokedAt.plusMinutes(1), EXPIRES_AT);
+    operation.failTerminal("late failure", revokedAt.plusMinutes(2));
+    operation.complete(revokedAt.plusMinutes(3));
+    operation.retry(revokedAt.plusMinutes(4));
+
+    assertThat(operation.getStatus()).isEqualTo(InvitationCompletionStatus.REVOKED);
+    assertThat(operation.ready(revokedAt.plusDays(1))).isFalse();
+  }
+
+  @Test
+  void claimSuppressesWorkWhenInvitationRevocationWonTheRowLock() {
+    InvitationCompletionOperationRepository operations =
+        mock(InvitationCompletionOperationRepository.class);
+    InvitationService invitations = mock(InvitationService.class);
+    InvitationCompletionOperation operation =
+        new InvitationCompletionOperation(
+            INVITATION_ID, USER_ID, "clinic", EXPIRES_AT, OffsetDateTime.now());
+    when(invitations.lockStatus(INVITATION_ID))
+        .thenReturn(io.github.lutzseverino.cardo.invite.model.InvitationStatus.REVOKED);
+    when(operations.findEntityByIdForUpdate(INVITATION_ID)).thenReturn(Optional.of(operation));
+
+    assertThat(service(operations, invitations).claim(INVITATION_ID)).isEmpty();
+    assertThat(operation.getStatus()).isEqualTo(InvitationCompletionStatus.REVOKED);
+  }
+
+  @Test
+  void claimReturnsDispatchWorkWhenItWinsBeforeRevocation() {
+    InvitationCompletionOperationRepository operations =
+        mock(InvitationCompletionOperationRepository.class);
+    InvitationService invitations = mock(InvitationService.class);
+    InvitationCompletionOperation operation =
+        new InvitationCompletionOperation(
+            INVITATION_ID, USER_ID, "clinic", EXPIRES_AT, OffsetDateTime.now().minusMinutes(1));
+    when(invitations.lockStatus(INVITATION_ID))
+        .thenReturn(io.github.lutzseverino.cardo.invite.model.InvitationStatus.PENDING);
+    when(operations.findEntityByIdForUpdate(INVITATION_ID)).thenReturn(Optional.of(operation));
+
+    assertThat(service(operations, invitations).claim(INVITATION_ID))
+        .hasValueSatisfying(
+            work -> assertThat(work.status()).isEqualTo(InvitationCompletionStatus.REQUESTED));
+
+    operation.revoke(OffsetDateTime.now());
+    operation.complete(OffsetDateTime.now());
+    assertThat(operation.getStatus()).isEqualTo(InvitationCompletionStatus.REVOKED);
   }
 
   private InvitationCompletionService service(

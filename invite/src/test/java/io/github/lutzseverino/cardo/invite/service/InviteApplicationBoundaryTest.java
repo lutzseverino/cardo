@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.lutzseverino.cardo.invite.workflow.AcceptInvitationWorkflow;
 import io.github.lutzseverino.cardo.invite.workflow.CreateInvitationWorkflow;
 import io.github.lutzseverino.cardo.invite.workflow.ReconcileInvitationCompletionsWorkflow;
+import io.github.lutzseverino.cardo.invite.workflow.RevokeInvitationWorkflow;
 import jakarta.persistence.Entity;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -28,9 +29,11 @@ class InviteApplicationBoundaryTest {
   private static final Class<?>[] APPLICATION_BOUNDARIES = {
     InvitationService.class,
     InvitationCompletionService.class,
+    InvitationGrantConvergenceService.class,
     AcceptInvitationWorkflow.class,
     CreateInvitationWorkflow.class,
-    ReconcileInvitationCompletionsWorkflow.class
+    ReconcileInvitationCompletionsWorkflow.class,
+    RevokeInvitationWorkflow.class
   };
 
   @Test
@@ -71,7 +74,11 @@ class InviteApplicationBoundaryTest {
   @Test
   void workflowsThatCoordinateLocalMutationsOwnTransactions() {
     assertThat(
-            List.of(AcceptInvitationWorkflow.class, CreateInvitationWorkflow.class).stream()
+            List.of(
+                    AcceptInvitationWorkflow.class,
+                    CreateInvitationWorkflow.class,
+                    RevokeInvitationWorkflow.class)
+                .stream()
                 .allMatch(
                     workflow ->
                         Arrays.stream(workflow.getDeclaredMethods()).anyMatch(this::transactional)))
@@ -97,20 +104,30 @@ class InviteApplicationBoundaryTest {
         .isEqualTo(Propagation.MANDATORY);
     assertThat(
             InvitationService.class
-                .getMethod("accept", java.util.UUID.class, java.time.OffsetDateTime.class)
+                .getMethod(
+                    "accept",
+                    java.util.UUID.class,
+                    java.time.OffsetDateTime.class,
+                    java.util.UUID.class)
                 .getAnnotation(Transactional.class)
                 .propagation())
         .isEqualTo(Propagation.MANDATORY);
   }
 
   @Test
-  void singleOwnerRevocationOwnsItsServiceTransaction() throws Exception {
+  void revocationOwnerMutationRequiresTheWorkflowTransaction() throws Exception {
     assertThat(
             InvitationService.class
                 .getMethod("revoke", java.util.UUID.class, String.class)
                 .getAnnotation(Transactional.class)
                 .propagation())
-        .isEqualTo(Propagation.REQUIRED);
+        .isEqualTo(Propagation.MANDATORY);
+    assertThat(
+            InvitationCompletionService.class
+                .getMethod("revoke", java.util.UUID.class)
+                .getAnnotation(Transactional.class)
+                .propagation())
+        .isEqualTo(Propagation.MANDATORY);
   }
 
   @Test

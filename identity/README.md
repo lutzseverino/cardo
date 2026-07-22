@@ -81,6 +81,10 @@ provider call, performs provider work outside database transactions, and
 reconciles with leases and bounded retry. The operation response exposes its
 status and action expiry. Provisional deletion follows the same model and is
 queryable after the request, including after the local user row is gone.
+An `INVITED` user is not operational: password login, refresh, and current-session
+establishment fail until credential setup activates the user. Failed password or
+refresh establishment revokes the provider session that was just issued or rotated;
+the existing `DISABLED` rejection remains distinct.
 
 Ordinary password-user provisioning and global enabled-state changes use a
 separate internal `identity_provider_mutations` lifecycle. Cardo persists only

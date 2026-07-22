@@ -42,6 +42,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiError"
+    InternalServerError:
+      description: An internal integrity or processing error occurred.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
     BadGateway:
       description: An upstream service returned an invalid response.
       content:

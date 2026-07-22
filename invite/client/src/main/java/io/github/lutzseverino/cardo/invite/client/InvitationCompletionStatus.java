@@ -4,5 +4,6 @@ public enum InvitationCompletionStatus {
   REQUESTED,
   AWAITING_IDENTITY,
   COMPLETED,
-  FAILED
+  FAILED,
+  REVOKED
 }

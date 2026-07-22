@@ -1,10 +1,9 @@
 package io.github.lutzseverino.cardo.invite.workflow;
 
 import io.github.lutzseverino.cardo.invite.model.InvitationResult;
+import io.github.lutzseverino.cardo.invite.service.InvitationCompletionService;
 import io.github.lutzseverino.cardo.invite.service.InvitationService;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,17 +13,15 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @Component
 @RequiredArgsConstructor
-public class AcceptInvitationWorkflow {
+public class RevokeInvitationWorkflow {
 
-  private final InvitationAcceptanceApplicator acceptance;
+  private final InvitationCompletionService completions;
   private final InvitationService invitations;
 
   @Transactional
-  public InvitationResult accept(
-      UUID invitationId, @NotBlank String product, @NotNull OffsetDateTime acceptedAt) {
-    invitations
-        .prepareAcceptance(invitationId, product, acceptedAt)
-        .ifPresent(invitation -> acceptance.apply(invitation, acceptedAt));
+  public InvitationResult revoke(UUID invitationId, @NotBlank String product) {
+    invitations.revoke(invitationId, product);
+    completions.revoke(invitationId);
     return invitations.get(invitationId, product);
   }
 }

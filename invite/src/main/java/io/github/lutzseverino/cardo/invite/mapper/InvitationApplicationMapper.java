@@ -14,7 +14,8 @@ public interface InvitationApplicationMapper {
         "grants",
         "invitedAuthorizationSubject",
         "acceptUrlBase",
-        "token"
+        "token",
+        "grantReceiptId"
       })
   InvitationResult toResult(InvitationProjection projection);
 }

@@ -130,6 +130,23 @@ class ReconcileInvitationCompletionsWorkflowTest {
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
   }
 
+  @Test
+  void doesNotCrossTheIdentityBoundaryWhenRevocationPreventsClaim() {
+    InvitationCompletionService completions = mock(InvitationCompletionService.class);
+    IdentityUsersClient identity = mock(IdentityUsersClient.class);
+    when(completions.claim(OPERATION_ID)).thenReturn(Optional.empty());
+
+    new ReconcileInvitationCompletionsWorkflow(completions, identity).reconcile(OPERATION_ID);
+
+    verify(identity, never())
+        .requestCredentialSetup(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+    verify(identity, never())
+        .getCredentialSetup(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+  }
+
   private InvitationCompletionWork work(InvitationCompletionStatus status) {
     return new InvitationCompletionWork(OPERATION_ID, USER_ID, status, NOW.plusDays(1));
   }

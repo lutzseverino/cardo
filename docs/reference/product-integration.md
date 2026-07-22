@@ -10,7 +10,7 @@ the same wiring and the packaged shape can stay product-neutral.
 | --- | --- | --- | --- | --- |
 | Identity | users, authentication, sessions, authenticated principal | `identity-client` | `identity-client-http` | `identity-product-auth` for accepting logged-in Cardo users |
 | Authorization | resource naming, permission evaluation, access profiles, grant staging, provider adapters | embedded Java APIs | none while authorization has no HTTP owner | embedded mechanics and docs |
-| Invite | invitation tokens, expiry, delivery, provisional identity completion, lifecycle state, grant-snapshot staging | `invite-client` | `invite-client-http` | none until multiple products repeat durable invite orchestration |
+| Invite | invitation tokens, expiry, delivery, provisional identity completion, lifecycle state, grant-snapshot staging and convergence | `invite-client` | `invite-client-http` | none until multiple products repeat durable invite orchestration |
 | Billing | customers, entitlements, checkout, portal, provider webhooks | `billing-client` | `billing-client-http` | none until products repeat billing guard or flow wiring |
 | Common | shared API errors, data markers, value objects, validation, cookie helpers | embedded Java APIs | none | none |
 | OpenAPI Support | generated transport mapping helpers and PATCH presence conversion | embedded Java APIs | none | none |
@@ -167,12 +167,26 @@ and revoke are idempotent in their matching terminal state. Carry the product's
 committed acceptance timestamp in the durable accept command; Invite evaluates
 expiry against that business timestamp rather than the eventual retry time.
 
+After acceptance, poll the separate `InvitationGrantConvergenceClient` with the
+Invite invitation identifier. Invite exposes only `PENDING`, `APPLIED`,
+`FAILED` with its stable failure code, or `UNKNOWN` for accepted invitations
+created before receipt retention. The authorization receipt identifier remains
+internal to Invite. Pending or revoked invitations return a semantic conflict;
+products must not represent access as converged until the state is `APPLIED`.
+
 Invitation credential setup is asynchronous and does not carry a password.
 Call the completion request and poll the same invitation-scoped completion
-resource until it is `completed` or `failed`. Failure is durable, and an
+resource until it is `completed`, `failed`, or `revoked`. Failure is durable, and an
 explicit repeat of the same request restarts exhausted or expired work.
 Completion only establishes the Identity user; it never accepts the product
 invitation or applies the product's domain transition.
+
+Revocation suppresses credential-setup dispatch only when it commits before
+Invite claims the completion work. A claim that commits first may still cross
+the Identity boundary, and an already-issued Keycloak action remains usable.
+Invite records local terminal `REVOKED`; it does not recall provider actions,
+cancel or delete a shared provisional user, or reverse global Identity
+activation. The completion resource remains readable after revocation.
 
 When another Cardo capability starts to leak repeated product ceremony, first
 convert one active product and then a second independent consumer. If the shape
