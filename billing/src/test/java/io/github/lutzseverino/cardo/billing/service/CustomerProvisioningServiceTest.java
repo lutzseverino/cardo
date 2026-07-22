@@ -12,6 +12,7 @@ import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningCompletion
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningFailure;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningOperation;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningStatus;
+import io.github.lutzseverino.cardo.billing.operations.BillingWorkflowMetrics;
 import io.github.lutzseverino.cardo.billing.repository.CustomerProvisioningOperationRepository;
 import io.github.lutzseverino.cardo.billing.repository.CustomerRepository;
 import java.time.Duration;
@@ -41,7 +42,8 @@ class CustomerProvisioningServiceTest {
             operations,
             mock(CustomerRepository.class),
             new CustomerProvisioningProperties(
-                Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofMinutes(1), 6, 50));
+                Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofMinutes(1), 6, 50),
+            mock(BillingWorkflowMetrics.class));
 
     assertThat(service.request(subjectId, "stripe")).isEqualTo(operationId);
 
@@ -129,6 +131,7 @@ class CustomerProvisioningServiceTest {
         operations,
         customers,
         new CustomerProvisioningProperties(
-            Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofMinutes(1), 6, 50));
+            Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofMinutes(1), 6, 50),
+        mock(BillingWorkflowMetrics.class));
   }
 }

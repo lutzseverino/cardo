@@ -15,6 +15,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationTermi
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationType;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationWork;
 import io.github.lutzseverino.cardo.identity.model.PasswordProvisioningIntent;
+import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.repository.IdentityProviderMutationRepository;
 import io.github.lutzseverino.cardo.identity.workflow.ReconcileIdentityProviderMutationsWorkflow;
@@ -347,7 +348,8 @@ class IdentityProviderMutationServiceTest {
     return new IdentityProviderMutationService(
         mutations,
         new IdentityProviderMutationProperties(
-            Duration.ofSeconds(5), retryBaseDelay, Duration.ofMinutes(1), 3, 50));
+            Duration.ofSeconds(5), retryBaseDelay, Duration.ofMinutes(1), 3, 50),
+        mock(IdentityWorkflowMetrics.class));
   }
 
   private IdentityProviderMutation passwordProvision(OffsetDateTime now) {

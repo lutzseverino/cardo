@@ -95,7 +95,7 @@ class CustomerProvisioner {
         logStale(work);
         return;
       }
-      logTerminal(work, DUPLICATE);
+      logTerminal(work, "duplicate-provider-marker");
       throw new TerminalProvisioningException(DUPLICATE);
     }
 
@@ -112,15 +112,14 @@ class CustomerProvisioner {
       return;
     }
     if (CustomerProvisioningCompletion.MISMATCH.equals(completion)) {
-      logTerminal(work, MISMATCH);
+      logTerminal(work, "local-mapping-mismatch");
       throw new TerminalProvisioningException(MISMATCH);
     }
     logger
         .atInfo()
         .addKeyValue("operationId", work.id())
-        .addKeyValue("subjectId", work.subjectId())
         .addKeyValue("provider", work.provider())
-        .addKeyValue("providerCustomerId", providerCustomerId)
+        .addKeyValue("outcome", "success")
         .log("Billing customer provisioning completed");
   }
 
@@ -146,15 +145,15 @@ class CustomerProvisioner {
       return;
     }
     if (CustomerProvisioningFailure.TERMINAL.equals(outcome)) {
-      logTerminal(work, failure.getMessage());
+      logTerminal(work, "retry-exhausted");
       return;
     }
     logger
         .atWarn()
         .addKeyValue("operationId", work.id())
-        .addKeyValue("subjectId", work.subjectId())
         .addKeyValue("provider", work.provider())
-        .setCause(failure)
+        .addKeyValue("outcome", "retry")
+        .addKeyValue("failureType", failure.getClass().getSimpleName())
         .log("Billing customer provisioning failed and will be retried if attempts remain");
   }
 
@@ -162,8 +161,8 @@ class CustomerProvisioner {
     logger
         .atError()
         .addKeyValue("operationId", work.id())
-        .addKeyValue("subjectId", work.subjectId())
         .addKeyValue("provider", work.provider())
+        .addKeyValue("outcome", "terminal")
         .addKeyValue("reason", reason)
         .log("Billing customer provisioning requires operator inspection");
   }
@@ -172,9 +171,8 @@ class CustomerProvisioner {
     logger
         .atInfo()
         .addKeyValue("operationId", work.id())
-        .addKeyValue("leaseToken", work.leaseToken())
-        .addKeyValue("subjectId", work.subjectId())
         .addKeyValue("provider", work.provider())
+        .addKeyValue("outcome", "stale-ack")
         .log("Ignored stale billing customer provisioning acknowledgement");
   }
 

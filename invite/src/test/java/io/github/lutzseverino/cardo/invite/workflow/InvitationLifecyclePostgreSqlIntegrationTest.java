@@ -19,6 +19,7 @@ import io.github.lutzseverino.cardo.invite.model.InvitationCompletionStatus;
 import io.github.lutzseverino.cardo.invite.model.InvitationGrantConvergenceStatus;
 import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
 import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
+import io.github.lutzseverino.cardo.invite.operations.InviteWorkflowMetrics;
 import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationCompletionOperationRepository;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
@@ -50,6 +51,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -78,6 +80,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class InvitationLifecyclePostgreSqlIntegrationTest {
+
+  @MockitoBean private InviteWorkflowMetrics metrics;
 
   @Container
   static final PostgreSQLContainer POSTGRES =
@@ -248,22 +252,50 @@ class InvitationLifecyclePostgreSqlIntegrationTest {
             () -> revocation.revoke(invitationId, "clinic"));
 
     assertThat(attempts).allMatch(Attempt::succeeded);
-    assertThat((java.util.Optional<?>) attempts.getFirst().result()).isPresent();
+    var claimed =
+        (java.util.Optional<io.github.lutzseverino.cardo.invite.model.InvitationCompletionWork>)
+            attempts.getFirst().result();
+    assertThat(claimed).isPresent();
+    UUID leaseToken = claimed.orElseThrow().leaseToken();
     assertThat(invitations.findById(invitationId).orElseThrow().getStatus())
         .isEqualTo(InvitationStatus.REVOKED);
     assertThat(completions.findById(invitationId).orElseThrow().getStatus())
         .isEqualTo(InvitationCompletionStatus.REVOKED);
 
-    completionService.markAwaitingIdentity(invitationId, OffsetDateTime.now().plusHours(1));
-    completionService.reschedule(invitationId, OffsetDateTime.now().plusHours(1));
-    completionService.complete(invitationId);
-    completionService.recordFailure(invitationId, new RuntimeException("late provider failure"));
+    completionService.markAwaitingIdentity(
+        invitationId, leaseToken, OffsetDateTime.now().plusHours(1));
+    completionService.reschedule(invitationId, leaseToken, OffsetDateTime.now().plusHours(1));
+    completionService.complete(invitationId, leaseToken);
+    completionService.recordFailure(
+        invitationId, leaseToken, new RuntimeException("late provider failure"));
     completionService.recordTerminalFailure(
-        invitationId, new RuntimeException("late terminal provider failure"));
-    completionService.recordIdentityFailure(invitationId, "late identity failure");
+        invitationId, leaseToken, new RuntimeException("late terminal provider failure"));
+    completionService.recordIdentityFailure(invitationId, leaseToken, "late identity failure");
 
     assertThat(completions.findById(invitationId).orElseThrow().getStatus())
         .isEqualTo(InvitationCompletionStatus.REVOKED);
+  }
+
+  @Test
+  void restartReclaimsExpiredCompletionLeaseAndFencesTheEarlierAcknowledgement() {
+    UUID invitationId = invitationWithCompletion();
+    var first = completionService.claim(invitationId).orElseThrow();
+    jdbc.update(
+        "update invitation_completion_operations"
+            + " set next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second' where id = ?",
+        invitationId);
+    var recovered = completionService.claim(invitationId).orElseThrow();
+
+    assertThat(recovered.leaseToken()).isNotEqualTo(first.leaseToken());
+    assertThat(
+            completionService.recordFailure(
+                invitationId, first.leaseToken(), new IllegalStateException("late timeout")))
+        .isFalse();
+    assertThat(
+            completionService.reschedule(
+                invitationId, recovered.leaseToken(), OffsetDateTime.now().plusHours(1)))
+        .isTrue();
+    assertThat(completions.findById(invitationId).orElseThrow().getAttemptCount()).isZero();
   }
 
   private UUID invitation() {

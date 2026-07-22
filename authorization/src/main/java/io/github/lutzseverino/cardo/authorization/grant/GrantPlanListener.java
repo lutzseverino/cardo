@@ -8,6 +8,7 @@ class GrantPlanListener {
   private final GrantReceiptStore receipts;
   private final GrantReceiptProcessingLock processingLock;
   private final GrantReceiptFailureRecorder failures;
+  private final AuthorizationWorkflowMetrics metrics;
   private final int maxAttempts;
 
   GrantPlanListener(
@@ -15,18 +16,26 @@ class GrantPlanListener {
       GrantReceiptStore receipts,
       GrantReceiptProcessingLock processingLock,
       GrantReceiptFailureRecorder failures,
+      AuthorizationWorkflowMetrics metrics,
       int maxAttempts) {
     this.processor = processor;
     this.receipts = receipts;
     this.processingLock = processingLock;
     this.failures = failures;
+    this.metrics = metrics;
     this.maxAttempts = maxAttempts;
   }
 
   @ApplicationModuleListener(id = "authorization.grant-plan")
   void apply(GrantPlanPublication publication) {
     if (publication instanceof GrantPlan legacyPlan) {
-      processor.apply(legacyPlan);
+      try {
+        processor.apply(legacyPlan);
+        metrics.grant("success");
+      } catch (RuntimeException failure) {
+        metrics.grant("retry");
+        throw failure;
+      }
       return;
     }
     applyStaged((StagedGrantPlan) publication);
@@ -34,6 +43,7 @@ class GrantPlanListener {
 
   private void applyStaged(StagedGrantPlan staged) {
     if (!processingLock.tryAcquire(staged.receiptId())) {
+      metrics.grant("retry");
       throw new IllegalStateException(
           "Grant receipt is already being processed: " + staged.receiptId());
     }
@@ -49,10 +59,13 @@ class GrantPlanListener {
       processor.apply(staged.plan());
     } catch (RuntimeException failure) {
       if (!failures.record(staged.receiptId(), maxAttempts)) {
+        metrics.grant("retry");
         throw failure;
       }
+      metrics.grant("terminal");
       return;
     }
     receipts.markApplied(staged.receiptId());
+    metrics.grant("success");
   }
 }

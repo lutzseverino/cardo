@@ -56,9 +56,9 @@ one marker, or a local mapping to a different customer, requires a billing-owner
 state is changed.
 
 Each claim writes a new `lease_token`. Completion and failure acknowledgements must carry that exact
-token while the operation is still `REQUESTED`; an expired worker is logged with its `leaseToken`
-and ignored. This fencing prevents a late timeout or response from overwriting a newer worker's
-completion.
+token while the operation is still `REQUESTED`; an expired worker is correlated by `operationId`,
+counted as `stale-ack`, and ignored without logging the opaque token. This fencing prevents a late
+timeout or response from overwriting a newer worker's completion.
 
 All current terminal causes are unsafe for automatic reprovisioning: an exhausted search can still
 follow a lost create response, duplicate marker matches need a canonical-customer decision, and a

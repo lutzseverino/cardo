@@ -10,6 +10,7 @@ import io.github.lutzseverino.cardo.invite.config.InvitationCompletionProperties
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionOperation;
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionStatus;
 import io.github.lutzseverino.cardo.invite.model.PendingInvitation;
+import io.github.lutzseverino.cardo.invite.operations.InviteWorkflowMetrics;
 import io.github.lutzseverino.cardo.invite.repository.InvitationCompletionOperationRepository;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
 import jakarta.persistence.LockModeType;
@@ -161,6 +162,7 @@ class InvitationCompletionServiceTest {
             Duration.ofMinutes(1),
             12,
             50),
-        invitations);
+        invitations,
+        mock(InviteWorkflowMetrics.class));
   }
 }

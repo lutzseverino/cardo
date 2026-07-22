@@ -7,6 +7,7 @@ import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningFailure;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningOperation;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningStatus;
 import io.github.lutzseverino.cardo.billing.model.CustomerProvisioningWork;
+import io.github.lutzseverino.cardo.billing.operations.BillingWorkflowMetrics;
 import io.github.lutzseverino.cardo.billing.repository.CustomerProvisioningOperationRepository;
 import io.github.lutzseverino.cardo.billing.repository.CustomerRepository;
 import io.github.lutzseverino.cardo.common.api.ApiException;
@@ -31,6 +32,7 @@ public class CustomerProvisioningService {
   private final CustomerProvisioningOperationRepository operations;
   private final CustomerRepository customers;
   private final CustomerProvisioningProperties properties;
+  private final BillingWorkflowMetrics metrics;
 
   @Transactional
   public UUID request(UUID subjectId, String provider) {
@@ -86,6 +88,7 @@ public class CustomerProvisioningService {
       UUID operationId, UUID leaseToken, String providerCustomerId) {
     CustomerProvisioningOperation operation = requireLocked(operationId);
     if (!operation.ownsLease(leaseToken, now())) {
+      metrics.record("stale-ack");
       return CustomerProvisioningCompletion.STALE;
     }
     Optional<Customer> bySubject =
@@ -105,6 +108,7 @@ public class CustomerProvisioningService {
     customers.saveAndFlush(
         Customer.create(operation.getSubjectId(), operation.getProvider(), providerCustomerId));
     operation.complete(providerCustomerId, now());
+    metrics.record("success");
     return CustomerProvisioningCompletion.COMPLETED;
   }
 
@@ -113,6 +117,7 @@ public class CustomerProvisioningService {
       UUID operationId, UUID leaseToken, String providerCustomerId) {
     CustomerProvisioningOperation operation = requireLocked(operationId);
     if (!operation.ownsLease(leaseToken, now())) {
+      metrics.record("stale-ack");
       return CustomerProvisioningCompletion.STALE;
     }
     Optional<Customer> bySubject =
@@ -128,6 +133,7 @@ public class CustomerProvisioningService {
       return completeFromExisting(operation, byProviderCustomer.orElseThrow(), providerCustomerId);
     }
     operation.failTerminal(MAPPING_MISMATCH, now());
+    metrics.record("terminal");
     return CustomerProvisioningCompletion.MISMATCH;
   }
 
@@ -136,10 +142,13 @@ public class CustomerProvisioningService {
       UUID operationId, UUID leaseToken, RuntimeException failure) {
     CustomerProvisioningOperation operation = requireLocked(operationId);
     if (!operation.ownsLease(leaseToken, now())) {
+      metrics.record("stale-ack");
       return CustomerProvisioningFailure.STALE;
     }
     operation.fail(
         safeMessage(failure), now(), properties.retryBaseDelay(), properties.maxAttempts());
+    metrics.record(
+        CustomerProvisioningStatus.FAILED.equals(operation.getStatus()) ? "terminal" : "retry");
     return CustomerProvisioningStatus.FAILED.equals(operation.getStatus())
         ? CustomerProvisioningFailure.TERMINAL
         : CustomerProvisioningFailure.RETRY_SCHEDULED;
@@ -149,9 +158,11 @@ public class CustomerProvisioningService {
   public boolean recordTerminalFailure(UUID operationId, UUID leaseToken, String error) {
     CustomerProvisioningOperation operation = requireLocked(operationId);
     if (!operation.ownsLease(leaseToken, now())) {
+      metrics.record("stale-ack");
       return false;
     }
     operation.failTerminal(error, now());
+    metrics.record("terminal");
     return true;
   }
 
@@ -161,9 +172,11 @@ public class CustomerProvisioningService {
         && existing.getProvider().equals(operation.getProvider())
         && existing.getProviderCustomerId().equals(providerCustomerId)) {
       operation.complete(providerCustomerId, now());
+      metrics.record("success");
       return CustomerProvisioningCompletion.COMPLETED;
     }
     operation.failTerminal(MAPPING_MISMATCH, now());
+    metrics.record("terminal");
     return CustomerProvisioningCompletion.MISMATCH;
   }
 

@@ -6,6 +6,7 @@ Documentation for the Authorization project starts with its
 ## Related Repository Documentation
 
 - [Authorization grant lifecycle](../../docs/reference/authorization-grants.md)
+- [Operate durable workflows](../../docs/how-to/operate-durable-workflows.md)
 - [Embed Authorization](../../docs/how-to/embed-authorization.md)
 - [Authorization architecture decision](../../docs/decisions/0001-keep-authorization-embedded-until-it-owns-http.md)
 - [Cardo documentation](../../docs/README.md)

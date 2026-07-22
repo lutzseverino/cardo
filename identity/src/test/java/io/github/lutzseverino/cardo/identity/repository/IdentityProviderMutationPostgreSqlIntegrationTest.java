@@ -8,6 +8,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutation;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationStatus;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationType;
 import io.github.lutzseverino.cardo.identity.model.User;
+import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.service.IdentityProviderMutationService;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -32,6 +33,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
@@ -55,6 +57,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class IdentityProviderMutationPostgreSqlIntegrationTest {
+
+  @MockitoBean private IdentityWorkflowMetrics metrics;
 
   @Container
   static final PostgreSQLContainer POSTGRES =

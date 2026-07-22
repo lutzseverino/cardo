@@ -22,6 +22,7 @@ class ReconcileIdentityOperationsWorkflowTest {
 
   private static final UUID OPERATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
   private static final UUID USER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+  private static final UUID LEASE_TOKEN = UUID.fromString("33333333-3333-3333-3333-333333333333");
   private static final OffsetDateTime ACTION_EXPIRES_AT =
       OffsetDateTime.parse("2030-07-17T10:00:00Z");
 
@@ -38,10 +39,12 @@ class ReconcileIdentityOperationsWorkflowTest {
         .requestCredentialSetup(
             org.mockito.ArgumentMatchers.eq("subject-1"),
             org.mockito.ArgumentMatchers.any(Duration.class));
-    verify(operations).markAwaitingUser(OPERATION_ID, ACTION_EXPIRES_AT);
+    verify(operations).markAwaitingUser(OPERATION_ID, LEASE_TOKEN, ACTION_EXPIRES_AT);
     verify(operations, never())
         .completeCredentialSetup(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -56,7 +59,7 @@ class ReconcileIdentityOperationsWorkflowTest {
 
     new ReconcileIdentityOperationsWorkflow(operations, provider).reconcile(OPERATION_ID);
 
-    verify(operations).completeCredentialSetup(OPERATION_ID, "Employee");
+    verify(operations).completeCredentialSetup(OPERATION_ID, LEASE_TOKEN, "Employee");
   }
 
   @Test
@@ -74,9 +77,12 @@ class ReconcileIdentityOperationsWorkflowTest {
 
     new ReconcileIdentityOperationsWorkflow(operations, provider).reconcile(OPERATION_ID);
 
-    verify(operations).recordFailure(OPERATION_ID, failure);
+    verify(operations).recordFailure(OPERATION_ID, LEASE_TOKEN, failure);
     verify(operations, never())
-        .markAwaitingUser(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        .markAwaitingUser(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -94,9 +100,12 @@ class ReconcileIdentityOperationsWorkflowTest {
 
     new ReconcileIdentityOperationsWorkflow(operations, provider).reconcile(OPERATION_ID);
 
-    verify(operations).recordTerminalFailure(OPERATION_ID, failure);
+    verify(operations).recordTerminalFailure(OPERATION_ID, LEASE_TOKEN, failure);
     verify(operations, never())
-        .recordFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        .recordFailure(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -114,10 +123,12 @@ class ReconcileIdentityOperationsWorkflowTest {
 
     new ReconcileIdentityOperationsWorkflow(operations, provider).reconcile(OPERATION_ID);
 
-    verify(operations).recordFailure(OPERATION_ID, failure);
+    verify(operations).recordFailure(OPERATION_ID, LEASE_TOKEN, failure);
     verify(operations, never())
         .recordTerminalFailure(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test
@@ -127,6 +138,7 @@ class ReconcileIdentityOperationsWorkflowTest {
     IdentityOperationWork deletion =
         new IdentityOperationWork(
             OPERATION_ID,
+            LEASE_TOKEN,
             USER_ID,
             "subject-1",
             IdentityOperationType.PROVISIONAL_DELETION,
@@ -137,12 +149,13 @@ class ReconcileIdentityOperationsWorkflowTest {
     new ReconcileIdentityOperationsWorkflow(operations, provider).reconcile(OPERATION_ID);
 
     verify(provider).deleteIdentity("subject-1");
-    verify(operations).completeProvisionalDeletion(OPERATION_ID);
+    verify(operations).completeProvisionalDeletion(OPERATION_ID, LEASE_TOKEN);
   }
 
   private IdentityOperationWork work(IdentityOperationStatus status) {
     return new IdentityOperationWork(
         OPERATION_ID,
+        LEASE_TOKEN,
         USER_ID,
         "subject-1",
         IdentityOperationType.CREDENTIAL_SETUP,

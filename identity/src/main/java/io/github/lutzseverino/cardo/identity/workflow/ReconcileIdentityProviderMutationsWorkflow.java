@@ -132,11 +132,11 @@ public class ReconcileIdentityProviderMutationsWorkflow {
               : IdentityProviderMutationTerminalReason.PROVIDER_REJECTED;
       if (mutations.recordTerminalFailure(work, failure, reason)) {
         logger.error(
-            "identity_provider_mutation_failed id={} type={} terminal_reason={}",
+            "identity_provider_mutation_failed id={} type={} terminal_reason={} failure_type={}",
             work.id(),
             work.type(),
             reason,
-            failure);
+            failure.getClass().getSimpleName());
       }
       return;
     }
@@ -146,10 +146,10 @@ public class ReconcileIdentityProviderMutationsWorkflow {
     logRetryOrTerminal(work, terminal, "retry_exhausted");
     if (!terminal) {
       logger.warn(
-          "identity_provider_mutation_retry_scheduled id={} type={}",
+          "identity_provider_mutation_retry_scheduled id={} type={} failure_type={}",
           work.id(),
           work.type(),
-          failure);
+          failure.getClass().getSimpleName());
     }
   }
 

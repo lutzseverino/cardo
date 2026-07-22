@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.invite.integration.event;
 
+import io.github.lutzseverino.cardo.invite.operations.InviteWorkflowMetrics;
 import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.provider.InvitationSender;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
@@ -27,8 +28,9 @@ class InvitationDeliveryConfiguration {
   }
 
   @Bean
-  InvitationDeliveryListener invitationDeliveryListener(InvitationDeliveryProcessor processor) {
-    return new InvitationDeliveryListener(processor);
+  InvitationDeliveryListener invitationDeliveryListener(
+      InvitationDeliveryProcessor processor, InviteWorkflowMetrics metrics) {
+    return new InvitationDeliveryListener(processor, metrics);
   }
 
   @Bean

@@ -43,6 +43,9 @@ public class IdentityOperation extends AuditedEntity {
   @Column(name = "next_attempt_at", nullable = false)
   private OffsetDateTime nextAttemptAt;
 
+  @Column(name = "lease_token")
+  private UUID leaseToken;
+
   @Column(name = "last_error")
   private String lastError;
 
@@ -98,8 +101,18 @@ public class IdentityOperation extends AuditedEntity {
         && !notAfter.isAfter(now);
   }
 
-  public void claimUntil(OffsetDateTime leaseUntil) {
+  public UUID claimUntil(OffsetDateTime leaseUntil) {
+    leaseToken = UUID.randomUUID();
     nextAttemptAt = leaseUntil;
+    return leaseToken;
+  }
+
+  public boolean ownsLease(UUID token, OffsetDateTime now) {
+    return (IdentityOperationStatus.REQUESTED.equals(status)
+            || IdentityOperationStatus.AWAITING_USER.equals(status))
+        && leaseToken != null
+        && leaseToken.equals(token)
+        && nextAttemptAt.isAfter(now);
   }
 
   public void awaitUser(OffsetDateTime nextPollAt, OffsetDateTime expiresAt) {
@@ -108,15 +121,18 @@ public class IdentityOperation extends AuditedEntity {
     lastError = null;
     nextAttemptAt = nextPollAt;
     this.expiresAt = expiresAt;
+    leaseToken = null;
   }
 
   public void reschedule(OffsetDateTime nextAttemptAt) {
     this.nextAttemptAt = nextAttemptAt;
+    leaseToken = null;
   }
 
   public void fail(String error, OffsetDateTime now, Duration retryDelay, int maxAttempts) {
     attemptCount++;
     lastError = error;
+    leaseToken = null;
     if (attemptCount >= maxAttempts) {
       status = IdentityOperationStatus.FAILED;
       nextAttemptAt = now;
@@ -134,6 +150,7 @@ public class IdentityOperation extends AuditedEntity {
     lastError = null;
     nextAttemptAt = now;
     expiresAt = null;
+    leaseToken = null;
   }
 
   public boolean credentialSetupExpired(OffsetDateTime now) {
@@ -146,6 +163,7 @@ public class IdentityOperation extends AuditedEntity {
     status = IdentityOperationStatus.FAILED;
     lastError = error;
     nextAttemptAt = now;
+    leaseToken = null;
   }
 
   public void complete(OffsetDateTime now) {
@@ -153,5 +171,6 @@ public class IdentityOperation extends AuditedEntity {
     completedAt = now;
     lastError = null;
     nextAttemptAt = now;
+    leaseToken = null;
   }
 }

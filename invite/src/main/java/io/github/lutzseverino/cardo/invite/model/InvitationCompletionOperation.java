@@ -42,6 +42,9 @@ public class InvitationCompletionOperation extends AuditedEntity {
   @Column(name = "next_attempt_at", nullable = false)
   private OffsetDateTime nextAttemptAt;
 
+  @Column(name = "lease_token")
+  private UUID leaseToken;
+
   @Column(name = "last_error")
   private String lastError;
 
@@ -81,8 +84,18 @@ public class InvitationCompletionOperation extends AuditedEntity {
     return !expiresAt.isAfter(now);
   }
 
-  public void claimUntil(OffsetDateTime leaseUntil) {
+  public UUID claimUntil(OffsetDateTime leaseUntil) {
+    leaseToken = UUID.randomUUID();
     nextAttemptAt = leaseUntil;
+    return leaseToken;
+  }
+
+  public boolean ownsLease(UUID token, OffsetDateTime now) {
+    return (InvitationCompletionStatus.REQUESTED.equals(status)
+            || InvitationCompletionStatus.AWAITING_IDENTITY.equals(status))
+        && leaseToken != null
+        && leaseToken.equals(token)
+        && nextAttemptAt.isAfter(now);
   }
 
   public void awaitIdentity(OffsetDateTime nextPollAt, OffsetDateTime actionExpiresAt) {
@@ -94,6 +107,7 @@ public class InvitationCompletionOperation extends AuditedEntity {
     lastError = null;
     nextAttemptAt = nextPollAt;
     this.actionExpiresAt = actionExpiresAt;
+    leaseToken = null;
   }
 
   public void reschedule(OffsetDateTime nextPollAt, OffsetDateTime actionExpiresAt) {
@@ -104,6 +118,7 @@ public class InvitationCompletionOperation extends AuditedEntity {
     if (actionExpiresAt != null) {
       this.actionExpiresAt = actionExpiresAt;
     }
+    leaseToken = null;
   }
 
   public void fail(String error, OffsetDateTime now, Duration retryDelay, int maxAttempts) {
@@ -112,6 +127,7 @@ public class InvitationCompletionOperation extends AuditedEntity {
     }
     attemptCount++;
     lastError = error;
+    leaseToken = null;
     if (attemptCount >= maxAttempts) {
       status = InvitationCompletionStatus.FAILED;
       nextAttemptAt = now;
@@ -129,6 +145,7 @@ public class InvitationCompletionOperation extends AuditedEntity {
     lastError = null;
     nextAttemptAt = now;
     actionExpiresAt = null;
+    leaseToken = null;
   }
 
   public void failTerminal(String error, OffsetDateTime now) {
@@ -138,6 +155,7 @@ public class InvitationCompletionOperation extends AuditedEntity {
     status = InvitationCompletionStatus.FAILED;
     lastError = error;
     nextAttemptAt = now;
+    leaseToken = null;
   }
 
   public void complete(OffsetDateTime now) {
@@ -148,6 +166,7 @@ public class InvitationCompletionOperation extends AuditedEntity {
     completedAt = now;
     lastError = null;
     nextAttemptAt = now;
+    leaseToken = null;
   }
 
   public void revoke(OffsetDateTime now) {
@@ -156,6 +175,7 @@ public class InvitationCompletionOperation extends AuditedEntity {
       status = InvitationCompletionStatus.REVOKED;
       nextAttemptAt = now;
       lastError = null;
+      leaseToken = null;
     }
   }
 

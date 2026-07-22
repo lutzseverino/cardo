@@ -4,4 +4,8 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record InvitationCompletionWork(
-    UUID id, UUID invitedUserId, InvitationCompletionStatus status, OffsetDateTime expiresAt) {}
+    UUID id,
+    UUID leaseToken,
+    UUID invitedUserId,
+    InvitationCompletionStatus status,
+    OffsetDateTime expiresAt) {}

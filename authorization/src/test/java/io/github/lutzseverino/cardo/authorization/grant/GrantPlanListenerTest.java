@@ -27,8 +27,9 @@ class GrantPlanListenerTest {
   private final GrantReceiptStore receipts = mock(GrantReceiptStore.class);
   private final GrantReceiptProcessingLock processingLock = mock(GrantReceiptProcessingLock.class);
   private final GrantReceiptFailureRecorder failures = mock(GrantReceiptFailureRecorder.class);
+  private final AuthorizationWorkflowMetrics metrics = mock(AuthorizationWorkflowMetrics.class);
   private final GrantPlanListener listener =
-      new GrantPlanListener(processor, receipts, processingLock, failures, 3);
+      new GrantPlanListener(processor, receipts, processingLock, failures, metrics, 3);
 
   GrantPlanListenerTest() {
     when(processingLock.tryAcquire(any())).thenReturn(true);
