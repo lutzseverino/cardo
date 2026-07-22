@@ -26,6 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class IdentityProviderMutationService {
 
+  public enum FailureAcknowledgement {
+    STALE,
+    RETRY_SCHEDULED,
+    TERMINAL
+  }
+
   private final Clock clock = Clock.systemUTC();
   private final IdentityProviderMutationRepository mutations;
   private final IdentityProviderMutationProperties properties;
@@ -165,14 +171,14 @@ public class IdentityProviderMutationService {
   }
 
   @Transactional
-  public boolean recordFailure(
+  public FailureAcknowledgement recordFailure(
       IdentityProviderMutationWork work,
       RuntimeException failure,
       IdentityProviderMutationTerminalReason exhaustedReason) {
     IdentityProviderMutation mutation = requireLocked(work.id());
     if (!mutation.ownsLease(work.leaseToken())) {
       metrics.mutation(mutation.getType(), "stale-ack");
-      return false;
+      return FailureAcknowledgement.STALE;
     }
     boolean terminal =
         mutation.fail(
@@ -183,18 +189,18 @@ public class IdentityProviderMutationService {
             properties.maxAttempts(),
             exhaustedReason);
     metrics.mutation(mutation.getType(), terminal ? "terminal" : "retry");
-    return terminal;
+    return terminal ? FailureAcknowledgement.TERMINAL : FailureAcknowledgement.RETRY_SCHEDULED;
   }
 
   @Transactional
-  public boolean recordTerminalFailure(
+  public FailureAcknowledgement recordTerminalFailure(
       IdentityProviderMutationWork work,
       RuntimeException failure,
       IdentityProviderMutationTerminalReason reason) {
     IdentityProviderMutation mutation = requireLocked(work.id());
     boolean terminal = mutation.terminal(work.leaseToken(), safeMessage(failure), reason, now());
     metrics.mutation(mutation.getType(), terminal ? "terminal" : "stale-ack");
-    return terminal;
+    return terminal ? FailureAcknowledgement.TERMINAL : FailureAcknowledgement.STALE;
   }
 
   @Transactional

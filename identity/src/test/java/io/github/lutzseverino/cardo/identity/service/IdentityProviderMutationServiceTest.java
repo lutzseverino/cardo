@@ -229,6 +229,60 @@ class IdentityProviderMutationServiceTest {
   }
 
   @Test
+  void failureAcknowledgementsDistinguishStaleRetryAndTerminal() {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    IdentityProviderMutationRepository staleRepository =
+        mock(IdentityProviderMutationRepository.class);
+    IdentityProviderMutation staleMutation = provisionalProvision(now);
+    UUID staleLease = staleMutation.claim(now.plusMinutes(1));
+    when(staleRepository.findEntityByIdForUpdate(staleMutation.getId()))
+        .thenReturn(Optional.of(staleMutation));
+    assertThat(
+            service(staleRepository)
+                .recordFailure(
+                    work(staleMutation, UUID.randomUUID()),
+                    new IllegalStateException("late"),
+                    IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED))
+        .isEqualTo(IdentityProviderMutationService.FailureAcknowledgement.STALE);
+
+    IdentityProviderMutationRepository retryRepository =
+        mock(IdentityProviderMutationRepository.class);
+    IdentityProviderMutation retryMutation = provisionalProvision(now);
+    UUID retryLease = retryMutation.claim(now.plusMinutes(1));
+    when(retryRepository.findEntityByIdForUpdate(retryMutation.getId()))
+        .thenReturn(Optional.of(retryMutation));
+    assertThat(
+            service(retryRepository)
+                .recordFailure(
+                    work(retryMutation, retryLease),
+                    new IllegalStateException("retry"),
+                    IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED))
+        .isEqualTo(IdentityProviderMutationService.FailureAcknowledgement.RETRY_SCHEDULED);
+
+    IdentityProviderMutationRepository terminalRepository =
+        mock(IdentityProviderMutationRepository.class);
+    IdentityProviderMutation terminalMutation = provisionalProvision(now);
+    UUID terminalLease = terminalMutation.claim(now.plusMinutes(1));
+    when(terminalRepository.findEntityByIdForUpdate(terminalMutation.getId()))
+        .thenReturn(Optional.of(terminalMutation));
+    IdentityProviderMutationService terminalService =
+        new IdentityProviderMutationService(
+            terminalRepository,
+            new IdentityProviderMutationProperties(
+                Duration.ofSeconds(5), Duration.ZERO, Duration.ofMinutes(1), 1, 50),
+            mock(IdentityWorkflowMetrics.class));
+    assertThat(
+            terminalService.recordFailure(
+                work(terminalMutation, terminalLease),
+                new IllegalStateException("exhausted"),
+                IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED))
+        .isEqualTo(IdentityProviderMutationService.FailureAcknowledgement.TERMINAL);
+
+    assertThat(staleMutation.ownsLease(staleLease)).isTrue();
+  }
+
+  @Test
   void expiredLeaseConflictRemainsRecoverableUntilTheOriginalMarkerBecomesVisible() {
     IdentityProviderMutationRepository repository = mock(IdentityProviderMutationRepository.class);
     OffsetDateTime now = OffsetDateTime.now();
@@ -360,5 +414,19 @@ class IdentityProviderMutationServiceTest {
   private IdentityProviderMutation provisionalProvision(OffsetDateTime now) {
     return IdentityProviderMutation.provisionalProvision(
         UUID.randomUUID(), "user@example.com", "marker-1", now);
+  }
+
+  private IdentityProviderMutationWork work(IdentityProviderMutation mutation, UUID leaseToken) {
+    return new IdentityProviderMutationWork(
+        mutation.getId(),
+        leaseToken,
+        mutation.getType(),
+        mutation.getUserId(),
+        mutation.getProviderSubject(),
+        mutation.getEmail(),
+        mutation.getName(),
+        mutation.getCorrelationMarker(),
+        mutation.getDesiredEnabled(),
+        mutation.getDesiredVersion());
   }
 }

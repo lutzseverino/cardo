@@ -46,10 +46,13 @@ ORDER BY status, next_attempt_at, created_at;
 
 An Identity operation claim writes a new opaque `lease_token` while preserving
 the existing `next_attempt_at` lease deadline. Provider mutations already use a
-token plus `lease_until`. A worker acknowledgement is accepted only for its
-current, unexpired token. After a crash the row becomes actionable at the
-deadline; a later claim changes the token, so the earlier worker is counted and
-logged as `stale-ack` and cannot overwrite the new result.
+token plus `lease_until`. Identity operations accept only the current,
+unexpired token. Provider mutations accept the current token while the row is
+`REQUESTED`; `lease_until` controls when another worker may reclaim it but does
+not by itself invalidate the current acknowledgement. After a crash the row
+becomes actionable when its retry time and provider lease have elapsed. A later
+claim changes the token, so the earlier worker is counted and logged as
+`stale-ack` and cannot overwrite the new result.
 
 For credential setup or provisional deletion, repair the provider/local cause,
 then repeat the existing idempotent request while its owner still permits it.
@@ -114,6 +117,14 @@ failed receipt and retry indefinitely. Preserve #22 semantics: a pending or
 failed invitation grant receipt is not converged access, while legacy
 `UNKNOWN` remains distinct from `PENDING`, `APPLIED`, and `FAILED`.
 
+Staged grant transitions log their `receiptId`, bounded outcome, and reason.
+Legacy grant plans and revocation plans do not carry a receipt or Modulith
+publication id in their listener payload, so their processing logs cannot add
+an equivalent identifier without broadening those event contracts. Correlate
+them through the incomplete-publication query, listener id, and publication
+time. Adding a durable correlation field to those contracts is deliberately
+deferred rather than changing compatibility in this operations slice.
+
 ## Inspect Billing
 
 Use the focused [Billing customer provisioning runbook](repair-billing-customer-provisioning.md).
@@ -123,8 +134,9 @@ because a row is delayed or terminal.
 
 ## Correlate Logs
 
-Search structured logs by `operationId` (or `id` in Identity provider-mutation
-messages), then constrain by the bounded workflow type, outcome, and reason.
+Search structured logs by `operationId`, `receiptId`, or `id` in Identity
+provider-mutation messages, then constrain by the bounded workflow type,
+outcome, and reason.
 Logs intentionally omit emails, invitation secrets, session or service tokens,
 lease tokens, provider subjects, provider customer ids, and raw upstream error
 bodies. Inspect sensitive provider data only in the owning system with its

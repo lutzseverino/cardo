@@ -5,7 +5,9 @@ import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationTermi
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationWork;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.service.IdentityProviderMutationService;
+import io.github.lutzseverino.cardo.identity.service.IdentityProviderMutationService.FailureAcknowledgement;
 import io.github.lutzseverino.cardo.identity.service.UserService;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -63,13 +65,15 @@ public class ReconcileIdentityProviderMutationsWorkflow {
     Optional<IdentityProvider.ProvisionedIdentity> identity =
         provider.findIdentityByCorrelationMarker(work.correlationMarker());
     if (identity.isEmpty()) {
-      boolean terminal =
+      RuntimeException failure =
+          new IllegalStateException(
+              "Provider dispatch could not be proven by the provisioning correlation marker.");
+      FailureAcknowledgement acknowledgement =
           mutations.recordFailure(
               work,
-              new IllegalStateException(
-                  "Provider dispatch could not be proven by the provisioning correlation marker."),
+              failure,
               IdentityProviderMutationTerminalReason.CREDENTIAL_RESUBMISSION_REQUIRED);
-      logRetryOrTerminal(work, terminal, "credential_resubmission_required");
+      logFailure(work, acknowledgement, "credential-resubmission-required", failure);
       return;
     }
     users.recoverPasswordProvision(work, identity.orElseThrow().subject());
@@ -130,40 +134,51 @@ public class ReconcileIdentityProviderMutationsWorkflow {
                   && "user_provisioning_conflict".equals(api.code())
               ? IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT
               : IdentityProviderMutationTerminalReason.PROVIDER_REJECTED;
-      if (mutations.recordTerminalFailure(work, failure, reason)) {
-        logger.error(
-            "identity_provider_mutation_failed id={} type={} terminal_reason={} failure_type={}",
-            work.id(),
-            work.type(),
-            reason,
-            failure.getClass().getSimpleName());
-      }
+      FailureAcknowledgement acknowledgement =
+          mutations.recordTerminalFailure(work, failure, reason);
+      logFailure(
+          work, acknowledgement, reason.name().toLowerCase(Locale.ROOT).replace('_', '-'), failure);
       return;
     }
-    boolean terminal =
+    FailureAcknowledgement acknowledgement =
         mutations.recordFailure(
             work, failure, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
-    logRetryOrTerminal(work, terminal, "retry_exhausted");
-    if (!terminal) {
-      logger.warn(
-          "identity_provider_mutation_retry_scheduled id={} type={} failure_type={}",
-          work.id(),
-          work.type(),
-          failure.getClass().getSimpleName());
-    }
+    logFailure(work, acknowledgement, "retry-exhausted", failure);
   }
 
-  private void logRetryOrTerminal(
-      IdentityProviderMutationWork work, boolean terminal, String terminalReason) {
-    if (terminal) {
-      logger.error(
-          "identity_provider_mutation_failed id={} type={} terminal_reason={}",
-          work.id(),
-          work.type(),
-          terminalReason);
-    } else {
-      logger.warn(
-          "identity_provider_mutation_retry_scheduled id={} type={}", work.id(), work.type());
+  private void logFailure(
+      IdentityProviderMutationWork work,
+      FailureAcknowledgement acknowledgement,
+      String terminalReason,
+      RuntimeException failure) {
+    switch (acknowledgement) {
+      case STALE ->
+          logger
+              .atInfo()
+              .addKeyValue("id", work.id())
+              .addKeyValue("type", work.type())
+              .addKeyValue("outcome", "stale-ack")
+              .addKeyValue("reason", "lease-superseded")
+              .addKeyValue("failureType", failure.getClass().getSimpleName())
+              .log("Ignored stale identity provider mutation failure acknowledgement");
+      case RETRY_SCHEDULED ->
+          logger
+              .atWarn()
+              .addKeyValue("id", work.id())
+              .addKeyValue("type", work.type())
+              .addKeyValue("outcome", "retry")
+              .addKeyValue("reason", "retry-scheduled")
+              .addKeyValue("failureType", failure.getClass().getSimpleName())
+              .log("Identity provider mutation failure scheduled for retry");
+      case TERMINAL ->
+          logger
+              .atError()
+              .addKeyValue("id", work.id())
+              .addKeyValue("type", work.type())
+              .addKeyValue("outcome", "terminal")
+              .addKeyValue("reason", terminalReason)
+              .addKeyValue("failureType", failure.getClass().getSimpleName())
+              .log("Identity provider mutation requires operator inspection");
     }
   }
 

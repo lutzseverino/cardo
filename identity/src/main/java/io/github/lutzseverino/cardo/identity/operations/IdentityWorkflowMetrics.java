@@ -30,7 +30,8 @@ public class IdentityWorkflowMetrics {
           "identity_operations",
           "operation_type",
           type.name(),
-          "status IN ('REQUESTED', 'AWAITING_USER')");
+          "status IN ('REQUESTED', 'AWAITING_USER')",
+          "next_attempt_at <= CURRENT_TIMESTAMP");
     }
     for (IdentityProviderMutationType type : IdentityProviderMutationType.values()) {
       register(
@@ -40,7 +41,9 @@ public class IdentityWorkflowMetrics {
           "identity_provider_mutations",
           "mutation_type",
           type.name(),
-          "status = 'REQUESTED'");
+          "status = 'REQUESTED'",
+          "next_attempt_at <= CURRENT_TIMESTAMP"
+              + " AND (lease_until IS NULL OR lease_until <= CURRENT_TIMESTAMP)");
     }
   }
 
@@ -59,17 +62,12 @@ public class IdentityWorkflowMetrics {
       String table,
       String typeColumn,
       String typeValue,
-      String active) {
+      String active,
+      String eligibility) {
     String where = typeColumn + " = '" + typeValue + "' AND ";
     gauge(jdbc, workflow, type, "active", table, where + active);
-    gauge(
-        jdbc,
-        workflow,
-        type,
-        "actionable",
-        table,
-        where + active + " AND next_attempt_at <= CURRENT_TIMESTAMP");
-    age(jdbc, workflow, type, table, where + active + " AND next_attempt_at <= CURRENT_TIMESTAMP");
+    gauge(jdbc, workflow, type, "actionable", table, where + active + " AND " + eligibility);
+    age(jdbc, workflow, type, table, where + active + " AND " + eligibility);
     gauge(jdbc, workflow, type, "terminal", table, where + "status = 'FAILED'");
   }
 
