@@ -13,19 +13,25 @@ fi
 version=$1
 repository=$(cd "$2" && pwd)
 base_url=https://repo1.maven.org/maven2/io/github/lutzseverino/cardo
+release_root="$repository/io/github/lutzseverino/cardo"
+[[ -d $release_root ]] || { echo "staged Cardo Maven repository is missing" >&2; exit 1; }
+
+temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/cardo-central-state.XXXXXX")
+trap 'rm -rf "$temporary_directory"' EXIT
 present=0
 absent=0
-components=("cardo:pom" "cardo-bom:pom")
-while IFS= read -r artifact; do
-  components+=("$artifact:jar")
-done <release/supported-artifacts.txt
+release_files=()
+while IFS= read -r expected; do
+  release_files+=("$expected")
+done < <(find "$release_root" -type f \
+  ! -name '*.md5' ! -name '*.sha1' ! -name '*.sha256' ! -name '*.sha512' | sort)
+[[ ${#release_files[@]} -gt 0 ]] \
+  || { echo "staged Cardo Maven repository contains no release files" >&2; exit 1; }
 
-for component in "${components[@]}"; do
-  artifact=${component%%:*}
-  extension=${component##*:}
-  relative="$artifact/$version/$artifact-$version.$extension"
-  expected="$repository/io/github/lutzseverino/cardo/$relative"
-  temporary=$(mktemp)
+for index in "${!release_files[@]}"; do
+  expected=${release_files[$index]}
+  relative=${expected#"$release_root/"}
+  temporary="$temporary_directory/$index"
   status=$(curl --location --silent --show-error --output "$temporary" --write-out '%{http_code}' \
     "$base_url/$relative")
   if [[ $status == 404 ]]; then
@@ -33,32 +39,17 @@ for component in "${components[@]}"; do
   elif [[ $status == 200 ]]; then
     present=$((present + 1))
     cmp --silent "$expected" "$temporary" \
-      || { rm -f "$temporary"; echo "Central already contains different bytes for $artifact:$version" >&2; exit 1; }
+      || { echo "Central already contains different bytes for $relative" >&2; exit 1; }
   else
-    rm -f "$temporary"
-    echo "Central state check failed with HTTP $status for $artifact:$version" >&2
+    echo "Central state check failed with HTTP $status for $relative" >&2
     exit 1
   fi
-  rm -f "$temporary"
 done
 
 if [[ $present -gt 0 && $absent -gt 0 ]]; then
   echo "Central contains a partial release for $version; immutable recovery requires a new version" >&2
   exit 1
-elif [[ $present -eq ${#components[@]} ]]; then
-  while IFS= read -r expected; do
-    relative=${expected#"$repository/io/github/lutzseverino/cardo/"}
-    temporary=$(mktemp)
-    status=$(curl --location --silent --show-error --output "$temporary" --write-out '%{http_code}' \
-      "$base_url/$relative")
-    if [[ $status != 200 ]] || ! cmp --silent "$expected" "$temporary"; then
-      rm -f "$temporary"
-      echo "Central release file is absent or differs: $relative" >&2
-      exit 1
-    fi
-    rm -f "$temporary"
-  done < <(find "$repository/io/github/lutzseverino/cardo" -type f \
-    ! -name '*.md5' ! -name '*.sha1' ! -name '*.sha256' ! -name '*.sha512' | sort)
+elif [[ $present -eq ${#release_files[@]} ]]; then
   echo published
 else
   echo absent

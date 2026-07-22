@@ -82,6 +82,7 @@ jobs:
       - name: Verify release fixtures
         run: |
           ./scripts/release/test-compatibility-fixtures.sh
+          ./scripts/release/test-central-state.sh
           ./scripts/release/test-image-rebuild.sh
           ./scripts/release/test-release-inputs.sh
           ./scripts/release/test-vulnerability-policy.sh

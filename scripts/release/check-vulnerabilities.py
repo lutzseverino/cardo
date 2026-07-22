@@ -23,6 +23,9 @@ def main() -> int:
         or exceptions["schemaVersion"] != 1
     ):
         raise SystemExit("vulnerability exceptions must use schemaVersion 1")
+    root_fields = {"schemaVersion", "exceptions"}
+    if set(exceptions) != root_fields:
+        raise SystemExit("vulnerability exceptions root must contain exactly schemaVersion and exceptions")
     exception_entries = exceptions.get("exceptions")
     if not isinstance(exception_entries, list):
         raise SystemExit("vulnerability exceptions must be a JSON array")
@@ -33,9 +36,12 @@ def main() -> int:
         if not isinstance(exception, dict):
             raise SystemExit("each vulnerability exception must be a JSON object")
         required = {"alertNumber", "owner", "reason", "trackingIssue", "expires"}
-        missing = required - exception.keys()
-        if missing:
-            raise SystemExit(f"vulnerability exception lacks {sorted(missing)}")
+        if set(exception) != required:
+            missing = sorted(required - exception.keys())
+            unknown = sorted(exception.keys() - required)
+            raise SystemExit(
+                f"vulnerability exception fields differ: missing={missing}, unknown={unknown}"
+            )
         alert_number = exception["alertNumber"]
         if not isinstance(alert_number, int) or isinstance(alert_number, bool) or alert_number < 1:
             raise SystemExit("vulnerability exception alertNumber must be a positive integer")

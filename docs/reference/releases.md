@@ -117,6 +117,9 @@ recorded release. The draft manifest must identify the requested version and
 revision, its digest must identify the preserved signed bundle, and that
 bundle's unsigned payload must equal a fresh candidate even if `main` has since
 advanced. Mixed or different state fails and requires a new version.
+Central state classification checks every staged non-checksum payload file,
+including sources, Javadocs, dependency inventories, and signatures; only an
+all-404 result is safe to upload and only an all-identical result can resume.
 The signed Central bundle is preserved in a draft release before the first
 Publisher API call. If the call succeeds but recording its deployment ID does
 not, a rerun stops for portal inspection instead of creating another
@@ -134,8 +137,10 @@ exception.
 New critical findings are triaged within one business day and high findings
 within three business days. An exception must name the alert, owner, reason,
 tracking issue, and expiry; expiry is never longer than 30 days without a new
-review. Medium and low findings are triaged in the next planned maintenance
-cycle. Disabling an alert without this record is not an exception process.
+review. The exception file rejects unrecognized root or entry fields so a typo
+cannot silently weaken the release gate. Medium and low findings are triaged in
+the next planned maintenance cycle. Disabling an alert without this record is
+not an exception process.
 
 ## Ownership Boundary
 
