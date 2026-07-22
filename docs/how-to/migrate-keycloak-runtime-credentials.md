@@ -34,7 +34,7 @@ credentials.
    role. Do not grant realm-management or Identity application roles to it.
    Keep the mapper on `cardo-identity`, `identity`, and `billing` (plus any other
    configured targets).
-7. Store distinct secrets in `KEYCLOAK_IDENTITY_CLIENT_SECRET` and
+7. Store distinct secrets in `KEYCLOAK_CLIENT_SECRET` and
    `KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET`. Missing, equal, known
    development, or placeholder values fail production startup.
 8. Before removing the old authority, stop every Identity replica that still

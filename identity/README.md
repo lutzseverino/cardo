@@ -186,7 +186,7 @@ routes. See the [product integration reference](../docs/reference/product-integr
 
 Set `IDENTITY_RUNTIME_MODE=production` together with production session mode, remote HTTPS
 Keycloak/issuer settings, distinct non-development
-`KEYCLOAK_IDENTITY_CLIENT_SECRET` and
+`KEYCLOAK_CLIENT_SECRET` and
 `KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET` values, and an Identity-owned PostgreSQL database with
 distinct no-login owner and login application roles. Startup verifies the effective database and
 roles after Flyway completes. Direct Keycloak, authorization, token, session, issuer, and JWK calls default to two-second
