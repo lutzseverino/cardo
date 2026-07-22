@@ -8,7 +8,9 @@ import io.github.lutzseverino.cardo.billing.service.EntitlementService;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -27,13 +29,14 @@ public class EntitlementController implements EntitlementsApi {
   }
 
   @Override
-  public ResponseEntity<EntitlementResponse> getSubjectEntitlement(UUID subjectId, String product) {
+  public ResponseEntity<EntitlementResponse> getSubjectEntitlement(
+      @PathVariable("subjectId") UUID subjectId, @RequestParam("product") String product) {
     return ResponseEntity.ok(mapper.toResponse(entitlements.get(subjectId, product)));
   }
 
   @Override
   public ResponseEntity<EntitlementResponse> requireSubjectEntitlement(
-      UUID subjectId, String product) {
+      @PathVariable("subjectId") UUID subjectId, @RequestParam("product") String product) {
     return ResponseEntity.ok(mapper.toResponse(entitlements.require(subjectId, product)));
   }
 }

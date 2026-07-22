@@ -8,7 +8,8 @@ info:
     tracked outside this active contract until their Keycloak-backed shape is
     designed.
   license:
-    name: Proprietary
+    name: MIT
+    url: https://opensource.org/license/mit
 servers:
   - url: /api/v1
 tags:
@@ -24,6 +25,7 @@ paths:
       tags: [Identity]
       operationId: getIdentityStatus
       summary: Get identity service status.
+      security: []
       responses:
         "200":
           description: Identity service status.
@@ -36,6 +38,7 @@ paths:
       tags: [Users]
       operationId: createUser
       summary: Create an identity user with password credentials.
+      security: []
       requestBody:
         required: true
         content:
@@ -53,6 +56,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "409":
           $ref: "#/components/responses/Conflict"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/ProviderFailure"
     get:
       tags: [Users]
       operationId: getUserByEmail
@@ -107,6 +116,14 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/ProviderFailure"
   /identity/users/search:
     post:
       tags: [Users]
@@ -352,7 +369,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: CSRF cookie or header is missing or invalid.
+          description: CSRF validation failed or the authenticated user cannot start a session.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "404":
           $ref: "#/components/responses/NotFound"
         "502":
@@ -364,6 +385,7 @@ paths:
       tags: [Sessions]
       operationId: getCsrfToken
       summary: Materialize the browser CSRF cookie when it is absent.
+      security: []
       responses:
         "204":
           description: CSRF cookie is available. The token is not returned in the body.
@@ -413,6 +435,10 @@ paths:
                 type: string
         "403":
           description: CSRF cookie or header is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
@@ -439,7 +465,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: CSRF cookie or header is missing or invalid.
+          description: CSRF validation failed or the authenticated user cannot refresh the session.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "404":
           $ref: "#/components/responses/NotFound"
         "502":
@@ -502,6 +532,12 @@ components:
       $ref: "../../common/openapi/errors.yaml#/components/responses/BadGateway"
     ServiceUnavailable:
       $ref: "../../common/openapi/errors.yaml#/components/responses/ServiceUnavailable"
+    ProviderFailure:
+      description: Identity provider request failed; the HTTP status mirrors the provider response.
+      content:
+        application/json:
+          schema:
+            $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
   schemas:
     ServiceStatusResponse:
       type: object

@@ -3,6 +3,9 @@ info:
   title: Billing API
   version: 0.1.0
   description: Entitlement and commercial access checks.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
 servers:
   - url: /api/v1
 tags:
@@ -22,6 +25,7 @@ paths:
       tags: [Billing]
       operationId: getBillingStatus
       summary: Get billing service status.
+      security: []
       responses:
         "200":
           description: Billing service is reachable.
@@ -51,6 +55,10 @@ paths:
                 $ref: "#/components/schemas/CheckoutSessionResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          $ref: "#/components/responses/BadGateway"
   /billing/portal/sessions:
     post:
       tags: [Portal Sessions]
@@ -73,6 +81,10 @@ paths:
                 $ref: "#/components/schemas/PortalSessionResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          $ref: "#/components/responses/BadGateway"
   /billing/entitlements/{product}:
     get:
       tags: [Entitlements]
@@ -91,6 +103,8 @@ paths:
                 $ref: "#/components/schemas/EntitlementResponse"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /billing/subjects/{subjectId}/entitlements/{product}:
     get:
       tags: [Entitlements]
@@ -110,6 +124,10 @@ paths:
                 $ref: "#/components/schemas/EntitlementResponse"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /billing/subjects/{subjectId}/entitlements/{product}/access:
     post:
       tags: [Entitlements]
@@ -131,11 +149,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /billing/webhooks/stripe:
     post:
       tags: [Stripe Webhooks]
       operationId: createStripeWebhookEvent
       summary: Receive a Stripe webhook event.
+      security: []
       parameters:
         - name: Stripe-Signature
           in: header
@@ -153,6 +174,8 @@ paths:
           description: Event accepted.
         "400":
           $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
 components:
   securitySchemes:
     bearerAuth:
@@ -177,10 +200,14 @@ components:
   responses:
     BadRequest:
       $ref: "../../common/openapi/errors.yaml#/components/responses/BadRequest"
+    Unauthorized:
+      $ref: "../../common/openapi/errors.yaml#/components/responses/Unauthorized"
     Forbidden:
       $ref: "../../common/openapi/errors.yaml#/components/responses/Forbidden"
     NotFound:
       $ref: "../../common/openapi/errors.yaml#/components/responses/NotFound"
+    BadGateway:
+      $ref: "../../common/openapi/errors.yaml#/components/responses/BadGateway"
   schemas:
     ServiceStatusResponse:
       type: object
@@ -254,10 +281,12 @@ components:
           enum: [active, trialing, past_due, canceled]
         tenantLimit:
           type: integer
+          format: int32
           nullable: true
           example: 1
         seatLimit:
           type: integer
+          format: int32
           nullable: true
           example: 5
         trialEndsAt:

@@ -1,0 +1,11 @@
+{
+  "name": "cardo-contract-tooling",
+  "private": true,
+  "scripts": {
+    "openapi:bundle": ".github/scripts/bundle-openapi.sh . target/openapi-bundles",
+    "openapi:fixtures": ".github/scripts/test-openapi-fixtures.sh"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.40.0"
+  }
+}

@@ -2,6 +2,8 @@
 
 Generated clients are contract artifacts. Treat their source as output, not hand-maintained application code.
 
+See [OpenAPI Contract Changes](openapi-contract-changes.md) for the canonical sources, runtime parity, and compatibility policy that govern those artifacts.
+
 ## Rules
 
 - Do not edit generated client source files directly.

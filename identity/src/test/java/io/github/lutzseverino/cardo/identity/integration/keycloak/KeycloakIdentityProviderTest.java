@@ -67,6 +67,90 @@ class KeycloakIdentityProviderTest {
   }
 
   @Test
+  void preservesProvisioningAuthenticationFailureStatus() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/admin/realms/cardo/users"))
+        .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+    assertThatThrownBy(
+            () ->
+                provider.provisionPasswordIdentity(
+                    "user@example.com", "password-1", "User", "marker-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(401);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+  }
+
+  @Test
+  void preservesTransientProvisioningFailureStatus() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/admin/realms/cardo/users"))
+        .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+    assertThatThrownBy(
+            () ->
+                provider.provisionPasswordIdentity(
+                    "user@example.com", "password-1", "User", "marker-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(503);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+  }
+
+  @Test
+  void mapsProvisionalProvisioningConflictToConflict() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/admin/realms/cardo/users"))
+        .andRespond(withStatus(HttpStatus.CONFLICT));
+
+    assertThatThrownBy(() -> provider.provisionProvisionalIdentity("user@example.com"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(409);
+              assertThat(exception.code()).isEqualTo("user_exists");
+            });
+  }
+
+  @Test
+  void mapsProvisioningTransportFailureToServiceUnavailable() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/admin/realms/cardo/users"))
+        .andRespond(
+            request -> {
+              throw new ResourceAccessException("connection refused");
+            });
+
+    assertThatThrownBy(
+            () ->
+                provider.provisionPasswordIdentity(
+                    "user@example.com", "password-1", "User", "marker-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(503);
+              assertThat(exception.code()).isEqualTo("identity_provider_unavailable");
+            });
+  }
+
+  @Test
   void findsAnAmbiguouslyProvisionedIdentityByExactCorrelationMarker() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();

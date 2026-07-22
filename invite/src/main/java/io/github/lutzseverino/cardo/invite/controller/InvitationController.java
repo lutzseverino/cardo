@@ -15,11 +15,17 @@ import io.github.lutzseverino.cardo.invite.service.InvitationService;
 import io.github.lutzseverino.cardo.invite.workflow.AcceptInvitationWorkflow;
 import io.github.lutzseverino.cardo.invite.workflow.CreateInvitationWorkflow;
 import io.github.lutzseverino.cardo.invite.workflow.RevokeInvitationWorkflow;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -38,7 +44,14 @@ public class InvitationController implements InvitationsApi, InvitationTokensApi
 
   @Override
   public ResponseEntity<CreateInvitationResponse> createInvitation(
-      @Valid CreateInvitationRequest request) {
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(
+              required = true,
+              content =
+                  @Content(
+                      mediaType = "application/json",
+                      schema = @Schema(implementation = CreateInvitationRequest.class)))
+          @Valid @RequestBody
+          CreateInvitationRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             mapper.toResponse(
@@ -46,7 +59,14 @@ public class InvitationController implements InvitationsApi, InvitationTokensApi
   }
 
   @Override
-  public ResponseEntity<InvitationResponse> getInvitation(UUID invitationId) {
+  public ResponseEntity<InvitationResponse> getInvitation(
+      @Parameter(
+              name = "invitationId",
+              required = true,
+              in = ParameterIn.PATH,
+              schema = @Schema(type = "string", format = "uuid"))
+          @PathVariable("invitationId")
+          UUID invitationId) {
     return ResponseEntity.ok(
         mapper.toResponse(invitations.get(invitationId, callers.currentProduct())));
   }
@@ -69,7 +89,21 @@ public class InvitationController implements InvitationsApi, InvitationTokensApi
 
   @Override
   public ResponseEntity<InvitationResponse> acceptInvitation(
-      UUID invitationId, @Valid AcceptInvitationRequest request) {
+      @Parameter(
+              name = "invitationId",
+              required = true,
+              in = ParameterIn.PATH,
+              schema = @Schema(type = "string", format = "uuid"))
+          @PathVariable("invitationId")
+          UUID invitationId,
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(
+              required = true,
+              content =
+                  @Content(
+                      mediaType = "application/json",
+                      schema = @Schema(implementation = AcceptInvitationRequest.class)))
+          @Valid @RequestBody
+          AcceptInvitationRequest request) {
     return ResponseEntity.ok(
         mapper.toResponse(
             acceptInvitation.accept(
@@ -77,7 +111,14 @@ public class InvitationController implements InvitationsApi, InvitationTokensApi
   }
 
   @Override
-  public ResponseEntity<InvitationResponse> revokeInvitation(UUID invitationId) {
+  public ResponseEntity<InvitationResponse> revokeInvitation(
+      @Parameter(
+              name = "invitationId",
+              required = true,
+              in = ParameterIn.PATH,
+              schema = @Schema(type = "string", format = "uuid"))
+          @PathVariable("invitationId")
+          UUID invitationId) {
     return ResponseEntity.ok(
         mapper.toResponse(revokeInvitation.revoke(invitationId, callers.currentProduct())));
   }

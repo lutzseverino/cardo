@@ -45,6 +45,14 @@ no HTTP client or product integration module here; products import
 `openapi-support` only when the shared conversion helpers remove local mapping
 noise.
 
+Service-owned configuration retains runtime API metadata and any corrections
+needed for service-specific generated models or security composition. Shared
+transport support does not rewrite response contracts globally.
+
+The module's attached `tests` classifier contains repository-internal parity
+assertions. It is not a supported consumer artifact; publication tooling must
+exclude it from the public release surface.
+
 ## Documentation
 
 Start with the [OpenAPI Support documentation index](docs/README.md).
