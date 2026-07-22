@@ -30,6 +30,44 @@ import org.springframework.web.client.RestClient;
 class KeycloakAuthorizationClientTest {
 
   @Test
+  void createsOwnerManagedResource() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakAuthorizationClient client = client(rest, "clinic");
+    AuthorizationResource resource =
+        new AuthorizationResource(
+            "clinic", "clinic:clinic:123", "clinic:clinic", null, List.of("read"));
+    server
+        .expect(requestTo(org.hamcrest.Matchers.containsString("exactName=true")))
+        .andExpect(method(GET))
+        .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+    server
+        .expect(requestTo(org.hamcrest.Matchers.endsWith("/authz/protection/resource_set")))
+        .andExpect(method(POST))
+        .andExpect(
+            content()
+                .json(
+                    """
+                    {
+                      "name": "clinic:clinic:123",
+                      "type": "clinic:clinic",
+                      "resource_scopes": ["read"],
+                      "ownerManagedAccess": true
+                    }
+                    """))
+        .andRespond(
+            withSuccess(
+                """
+                {"_id":"resource-1","name":"clinic:clinic:123"}
+                """,
+                MediaType.APPLICATION_JSON));
+
+    assertThat(client.ensureResource(resource).id()).isEqualTo("resource-1");
+
+    server.verify();
+  }
+
+  @Test
   void continuesEnsuringResourceAfterConcurrentCreation() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
@@ -63,6 +101,7 @@ class KeycloakAuthorizationClientTest {
                 {
                   "_id": "resource-1",
                   "name": "clinic:clinic:123",
+                  "ownerManagedAccess": true,
                   "resource_scopes": [{"name": "read"}]
                 }
                 """,
@@ -77,7 +116,8 @@ class KeycloakAuthorizationClientTest {
                     {
                       "name": "clinic:clinic:123",
                       "type": "clinic:clinic",
-                      "resource_scopes": ["read", "write"]
+                      "resource_scopes": ["read", "write"],
+                      "ownerManagedAccess": true
                     }
                     """))
         .andRespond(withNoContent());
@@ -265,6 +305,7 @@ class KeycloakAuthorizationClientTest {
                 {
                   "_id": "resource-1",
                   "name": "clinic:clinic:123",
+                  "ownerManagedAccess": true,
                   "resource_scopes": [{"name": "read"}]
                 }
                 """,
@@ -279,7 +320,8 @@ class KeycloakAuthorizationClientTest {
                     {
                       "name": "clinic:clinic:123",
                       "type": "clinic:clinic",
-                      "resource_scopes": ["read", "write"]
+                      "resource_scopes": ["read", "write"],
+                      "ownerManagedAccess": true
                     }
                     """))
         .andRespond(withNoContent());
@@ -290,7 +332,7 @@ class KeycloakAuthorizationClientTest {
   }
 
   @Test
-  void preservesExistingResourceScopes() {
+  void leavesOwnerManagedResourceUnchangedWhenScopesAlreadyExist() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
     KeycloakAuthorizationClient client = client(rest, "clinic");
@@ -315,6 +357,7 @@ class KeycloakAuthorizationClientTest {
                 {
                   "_id": "resource-1",
                   "name": "clinic:clinic:123",
+                  "ownerManagedAccess": true,
                   "resource_scopes": [{"name": "read"}, {"name": "write"}]
                 }
                 """,
@@ -323,6 +366,16 @@ class KeycloakAuthorizationClientTest {
     client.ensureResource(resource);
 
     server.verify();
+  }
+
+  @Test
+  void repairsDisabledOwnerManagedAccessWithoutChangingScopes() {
+    assertOwnerManagedAccessIsRepaired("\"ownerManagedAccess\": false,");
+  }
+
+  @Test
+  void repairsMissingOwnerManagedAccessWithoutChangingScopes() {
+    assertOwnerManagedAccessIsRepaired("");
   }
 
   @Test
@@ -447,6 +500,53 @@ class KeycloakAuthorizationClientTest {
                 .hasMessageContaining("bound to resource server identity")
                 .hasMessageContaining("billing"));
     assertThat(tokenRequests).hasValue(0);
+    server.verify();
+  }
+
+  private void assertOwnerManagedAccessIsRepaired(String ownerManagedAccessField) {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakAuthorizationClient client = client(rest, "clinic");
+    AuthorizationResource resource =
+        new AuthorizationResource(
+            "clinic", "clinic:clinic:123", "clinic:clinic", null, List.of("read"));
+    server
+        .expect(requestTo(org.hamcrest.Matchers.containsString("exactName=true")))
+        .andExpect(method(GET))
+        .andRespond(withSuccess("[\"resource-1\"]", MediaType.APPLICATION_JSON));
+    server
+        .expect(requestTo(org.hamcrest.Matchers.endsWith("/resource_set/resource-1")))
+        .andExpect(method(GET))
+        .andRespond(
+            withSuccess(
+                """
+                {
+                  "_id": "resource-1",
+                  "name": "clinic:clinic:123",
+                  %s
+                  "resource_scopes": [{"name": "read"}]
+                }
+                """
+                    .formatted(ownerManagedAccessField),
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(requestTo(org.hamcrest.Matchers.endsWith("/resource_set/resource-1")))
+        .andExpect(method(PUT))
+        .andExpect(
+            content()
+                .json(
+                    """
+                    {
+                      "name": "clinic:clinic:123",
+                      "type": "clinic:clinic",
+                      "resource_scopes": ["read"],
+                      "ownerManagedAccess": true
+                    }
+                    """))
+        .andRespond(withNoContent());
+
+    assertThat(client.ensureResource(resource).id()).isEqualTo("resource-1");
+
     server.verify();
   }
 

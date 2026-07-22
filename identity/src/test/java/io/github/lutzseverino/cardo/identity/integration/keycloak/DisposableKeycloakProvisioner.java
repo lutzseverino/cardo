@@ -269,23 +269,6 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
     }
   }
 
-  void enableUserManagedAccess(String token, String resourceId) {
-    Map<String, Object> resource =
-        rest.get()
-            .uri("/realms/{realm}/authz/protection/resource_set/{resourceId}", REALM, resourceId)
-            .header(HttpHeaders.AUTHORIZATION, bearer(token))
-            .retrieve()
-            .body(new org.springframework.core.ParameterizedTypeReference<>() {});
-    Map<String, Object> enabled = new LinkedHashMap<>(resource == null ? Map.of() : resource);
-    enabled.put("ownerManagedAccess", true);
-    put(
-        token,
-        "/realms/{realm}/authz/protection/resource_set/{resourceId}",
-        enabled,
-        REALM,
-        resourceId);
-  }
-
   List<String> realmManagementRoles(String token) {
     return resourceRoles(token, "realm-management");
   }
