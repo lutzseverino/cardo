@@ -57,8 +57,6 @@ class KeycloakRealmAdminClientTest {
                       "email": "owner@example.test",
                       "firstName": "Owner",
                       "lastName": "Reference",
-                      "enabled": true,
-                      "emailVerified": true,
                       "attributes": {
                         "provisioning_correlation": ["marker"],
                         "cardo_user_id": ["11111111-1111-1111-1111-111111111111"]

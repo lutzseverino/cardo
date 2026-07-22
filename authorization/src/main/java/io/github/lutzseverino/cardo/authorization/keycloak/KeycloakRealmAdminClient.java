@@ -74,15 +74,13 @@ public class KeycloakRealmAdminClient {
       String email,
       String firstName,
       String lastName,
-      Boolean enabled,
-      Boolean emailVerified,
       Map<String, List<String>> attributes) {
 
     UserProfile withAttribute(String name, String value) {
       Map<String, List<String>> merged =
           new LinkedHashMap<>(attributes == null ? Map.of() : attributes);
       merged.put(name, List.of(value));
-      return new UserProfile(username, email, firstName, lastName, enabled, emailVerified, merged);
+      return new UserProfile(username, email, firstName, lastName, merged);
     }
   }
 }
