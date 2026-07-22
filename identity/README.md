@@ -117,12 +117,16 @@ still need it.
 `PROVIDER_REJECTED` identifies a definite provider rejection, including an
 unattributed pre-existing Keycloak user that conflicts by email but has no exact
 marker. `LOCAL_STATE_CONFLICT` identifies a local user with the same email and a
-different provider subject. `RETRY_EXHAUSTED` means the marker lookup or provider
-call remained unavailable after bounded reconciliation. These terminal rows are
-operator-visible and are not automatically replaced with a new marker: inspect
-the mutation id and marker, compare its `provider_subject` with
-`users.keycloak_subject`, and repair the conflicting provider or local record
-before retrying. Never adopt or delete a Keycloak user solely by email.
+different provider subject. `RETRY_EXHAUSTED` means either the marker lookup or
+provider call remained unavailable, or the local completion transaction kept
+failing, after bounded reconciliation. A completion failure may leave
+`provider_subject` null even though the exact correlation marker owns a Keycloak
+identity. These terminal rows are operator-visible and are not automatically
+replaced with a new marker: inspect the mutation id, query Keycloak by the exact
+correlation marker, require exactly one marker match, and compare any persisted
+`provider_subject` with `users.keycloak_subject` before repairing the provider,
+local user, binding, or grant failure. Never adopt or delete a Keycloak user
+solely by email.
 
 Migration V3 backfills idempotent user-id binding and desired enabled-state
 mutations for every local user. This replaces startup-wide rebinding; mapper
