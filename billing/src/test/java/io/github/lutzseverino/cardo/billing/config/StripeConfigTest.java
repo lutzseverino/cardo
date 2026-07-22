@@ -63,4 +63,24 @@ class StripeConfigTest {
       server.stop(0);
     }
   }
+
+  @Test
+  void rejectsSubMillisecondAndOverflowingStripeTimeouts() {
+    assertThatThrownBy(
+            () ->
+                new StripeProperties(
+                    "sk_test", "whsec_test", List.of(), Duration.ofNanos(1), Duration.ofSeconds(1)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("between 1ms");
+    assertThatThrownBy(
+            () ->
+                new StripeProperties(
+                    "sk_test",
+                    "whsec_test",
+                    List.of(),
+                    Duration.ofSeconds(Long.MAX_VALUE),
+                    Duration.ofSeconds(1)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("between 1ms");
+  }
 }

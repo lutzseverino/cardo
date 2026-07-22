@@ -25,6 +25,10 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   billing:
+    datastore:
+      database-name: ${BILLING_DATABASE_NAME:cardo_billing}
+      owner-role: ${BILLING_DATABASE_OWNER_ROLE:cardo_billing_owner}
+      application-role: ${BILLING_DATABASE_APPLICATION_ROLE:cardo_billing_app}
     runtime:
       mode: ${BILLING_RUNTIME_MODE:local}
       jwk-connect-timeout: ${BILLING_JWK_CONNECT_TIMEOUT:2s}

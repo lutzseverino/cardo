@@ -142,7 +142,35 @@ class IdentityProductAuthAutoConfigurationTest {
             application -> {
               assertThat(application).hasFailed();
               assertThat(application.getStartupFailure())
-                  .hasRootCauseMessage("Token exchange read timeout must be positive.");
+                  .hasRootCauseMessage(
+                      "Token exchange read timeout must be between 1ms and 2147483647ms.");
+            });
+  }
+
+  @Test
+  void rejectsSubMillisecondAndOverflowingProductAuthTimeouts() {
+    context
+        .withPropertyValues("cardo.identity.product-auth.token-exchange.read-timeout=1ns")
+        .run(
+            application -> {
+              assertThat(application).hasFailed();
+              assertThat(application.getStartupFailure())
+                  .hasRootCauseMessage(
+                      "Token exchange read timeout must be between 1ms and 2147483647ms.");
+            });
+    context
+        .withPropertyValues(
+            "cardo.identity.product-auth.active-token-validation.enabled=true",
+            "cardo.identity.product-auth.active-token-validation.introspection-uri=https://id.example/introspect",
+            "cardo.identity.product-auth.active-token-validation.client-id=clinic",
+            "cardo.identity.product-auth.active-token-validation.client-secret=secret",
+            "cardo.identity.product-auth.active-token-validation.connect-timeout=2147483648ms")
+        .run(
+            application -> {
+              assertThat(application).hasFailed();
+              assertThat(application.getStartupFailure())
+                  .hasRootCauseMessage(
+                      "Active token validation connect timeout must be between 1ms and 2147483647ms.");
             });
   }
 

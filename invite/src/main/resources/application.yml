@@ -43,6 +43,10 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   invite:
+    datastore:
+      database-name: ${INVITE_DATABASE_NAME:cardo_invite}
+      owner-role: ${INVITE_DATABASE_OWNER_ROLE:cardo_invite_owner}
+      application-role: ${INVITE_DATABASE_APPLICATION_ROLE:cardo_invite_app}
     runtime:
       mode: ${INVITE_RUNTIME_MODE:local}
       connect-timeout: ${INVITE_PROVIDER_CONNECT_TIMEOUT:2s}

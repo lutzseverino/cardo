@@ -46,11 +46,13 @@ public record IdentityProductAuthProperties(
     }
 
     void validate() {
-      if (connectTimeout.isNegative() || connectTimeout.isZero()) {
-        throw new IllegalStateException("Token exchange connect timeout must be positive.");
+      if (!isMillisecondBound(connectTimeout)) {
+        throw new IllegalStateException(
+            "Token exchange connect timeout must be between 1ms and 2147483647ms.");
       }
-      if (readTimeout.isNegative() || readTimeout.isZero()) {
-        throw new IllegalStateException("Token exchange read timeout must be positive.");
+      if (!isMillisecondBound(readTimeout)) {
+        throw new IllegalStateException(
+            "Token exchange read timeout must be between 1ms and 2147483647ms.");
       }
     }
   }
@@ -103,13 +105,23 @@ public record IdentityProductAuthProperties(
         throw new IllegalStateException(
             "Active token validation cache max entries must be positive.");
       }
-      if (connectTimeout.isNegative() || connectTimeout.isZero()) {
+      if (!isMillisecondBound(connectTimeout)) {
         throw new IllegalStateException(
-            "Active token validation connect timeout must be positive.");
+            "Active token validation connect timeout must be between 1ms and 2147483647ms.");
       }
-      if (readTimeout.isNegative() || readTimeout.isZero()) {
-        throw new IllegalStateException("Active token validation read timeout must be positive.");
+      if (!isMillisecondBound(readTimeout)) {
+        throw new IllegalStateException(
+            "Active token validation read timeout must be between 1ms and 2147483647ms.");
       }
+    }
+  }
+
+  private static boolean isMillisecondBound(Duration value) {
+    try {
+      long milliseconds = value.toMillis();
+      return milliseconds >= 1 && milliseconds <= Integer.MAX_VALUE;
+    } catch (ArithmeticException exception) {
+      return false;
     }
   }
 }

@@ -35,11 +35,20 @@ public record StripeProperties(
 
   private static Duration positiveOrDefault(Duration value, String property) {
     Duration resolved = value == null ? DEFAULT_TIMEOUT : value;
-    if (resolved.isZero() || resolved.isNegative() || resolved.toMillis() > Integer.MAX_VALUE) {
+    if (!isMillisecondBound(resolved)) {
       throw new IllegalArgumentException(
-          "cardo.billing.stripe." + property + " must be a positive millisecond duration.");
+          "cardo.billing.stripe." + property + " must be between 1ms and 2147483647ms.");
     }
     return resolved;
+  }
+
+  private static boolean isMillisecondBound(Duration value) {
+    try {
+      long milliseconds = value.toMillis();
+      return milliseconds >= 1 && milliseconds <= Integer.MAX_VALUE;
+    } catch (ArithmeticException exception) {
+      return false;
+    }
   }
 
   private static boolean blank(String value) {

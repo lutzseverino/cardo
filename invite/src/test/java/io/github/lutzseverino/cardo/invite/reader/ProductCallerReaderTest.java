@@ -8,7 +8,6 @@ import io.github.lutzseverino.cardo.invite.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.invite.config.ProductCallerProperties;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -23,7 +22,7 @@ class ProductCallerReaderTest {
   private final ProductCallerReader reader =
       new ProductCallerReader(
           new KeycloakProperties("https://identity.example.com", "cardo", "cardo-invite", "secret"),
-          new ProductCallerProperties(Set.of("polity", "clinic")));
+          new ProductCallerProperties(List.of("polity", "clinic")));
 
   @AfterEach
   void clearSecurityContext() {

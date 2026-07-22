@@ -23,8 +23,17 @@ public record KeycloakClientCredentialsTokenSettings(
   }
 
   private static void requirePositive(Duration value, String name) {
-    if (value == null || value.isZero() || value.isNegative()) {
-      throw new IllegalArgumentException(name + " must be positive.");
+    if (value == null || !isMillisecondBound(value)) {
+      throw new IllegalArgumentException(name + " must be between 1ms and 2147483647ms.");
+    }
+  }
+
+  private static boolean isMillisecondBound(Duration value) {
+    try {
+      long milliseconds = value.toMillis();
+      return milliseconds >= 1 && milliseconds <= Integer.MAX_VALUE;
+    } catch (ArithmeticException exception) {
+      return false;
     }
   }
 }

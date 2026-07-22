@@ -54,11 +54,56 @@ class IdentityRuntimeConfigurationTest {
   }
 
   @Test
+  void rejectsCanonicalLoopbackKeycloakIssuerRedirectAndDatasourceEndpoints() {
+    assertThatThrownBy(
+            () ->
+                policy(
+                        production(),
+                        productionSession(),
+                        productionKeycloak(
+                            "https://[::1]", URI.create("https://app.example.com/done")),
+                        productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("cardo.identity.keycloak.base-url");
+    assertThatThrownBy(
+            () ->
+                policy(
+                        production(),
+                        productionSession(),
+                        productionKeycloak(
+                            "https://id.example.com", URI.create("https://localhost./done")),
+                        productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("credential-setup-redirect-uri");
+    MockEnvironment issuer = productionEnvironment();
+    issuer.setProperty(
+        "spring.security.oauth2.resourceserver.jwt.issuer-uri", "https://[::1]/realms/cardo");
+    assertThatThrownBy(
+            () ->
+                policy(production(), productionSession(), productionKeycloak(), issuer)
+                    .afterPropertiesSet())
+        .hasMessageContaining("issuer-uri");
+    MockEnvironment datasource = productionEnvironment();
+    datasource.setProperty("spring.datasource.url", "jdbc:postgresql://[::]:5432/cardo_identity");
+    assertThatThrownBy(
+            () ->
+                policy(production(), productionSession(), productionKeycloak(), datasource)
+                    .afterPropertiesSet())
+        .hasMessageContaining("spring.datasource");
+  }
+
+  @Test
   void rejectsNonPositiveWorkflowAndProviderBounds() {
     assertThatThrownBy(
             () -> new IdentityRuntimeProperties(null, Duration.ZERO, Duration.ofSeconds(1)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("connect-timeout");
+    assertThatThrownBy(
+            () ->
+                new IdentityRuntimeProperties(
+                    null, Duration.ofNanos(1), Duration.ofSeconds(Long.MAX_VALUE)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("between 1ms");
     assertThatThrownBy(
             () ->
                 new IdentityProviderMutationProperties(
@@ -160,13 +205,18 @@ class IdentityRuntimeConfigurationTest {
   }
 
   private KeycloakProperties productionKeycloak() {
+    return productionKeycloak(
+        "https://id.example.com", URI.create("https://app.example.com/invitations/completed"));
+  }
+
+  private KeycloakProperties productionKeycloak(String baseUrl, URI redirectUri) {
     return new KeycloakProperties(
-        "https://id.example.com",
+        baseUrl,
         "cardo",
         "cardo-identity",
         "identity-secret",
         "cardo-web",
-        URI.create("https://app.example.com/invitations/completed"),
+        redirectUri,
         List.of("cardo-identity", "identity", "billing"));
   }
 

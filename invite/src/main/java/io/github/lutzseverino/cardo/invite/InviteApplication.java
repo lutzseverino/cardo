@@ -3,6 +3,7 @@ package io.github.lutzseverino.cardo.invite;
 import io.github.lutzseverino.cardo.invite.config.InvitationCompletionProperties;
 import io.github.lutzseverino.cardo.invite.config.InvitationDeliveryProperties;
 import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
+import io.github.lutzseverino.cardo.invite.config.InviteDatastoreProperties;
 import io.github.lutzseverino.cardo.invite.config.InviteRuntimeProperties;
 import io.github.lutzseverino.cardo.invite.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.invite.config.ProductCallerProperties;
@@ -21,6 +22,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
   InvitationCompletionProperties.class,
   InvitationDeliveryProperties.class,
   InvitationProperties.class,
+  InviteDatastoreProperties.class,
   InviteRuntimeProperties.class,
   KeycloakProperties.class,
   ProductCallerProperties.class,

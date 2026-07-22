@@ -1,9 +1,8 @@
 package io.github.lutzseverino.cardo.invite.config;
 
+import io.github.lutzseverino.cardo.common.runtime.NetworkEndpointSafety;
 import java.net.URI;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Properties;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -41,9 +40,6 @@ class InviteRuntimeConfiguration {
             "cardo.invite.product-callers.allowed-client-ids",
             "must contain at least one product client");
       }
-      requireNoRawDuplicates(
-          "cardo.invite.product-callers.allowed-client-ids",
-          environment.getProperty("cardo.invite.product-callers.allowed-client-ids"));
       String expectedIssuer =
           stripSlash(keycloak.baseUrl()) + "/realms/" + keycloak.realm().strip();
       String issuer =
@@ -106,7 +102,7 @@ class InviteRuntimeConfiguration {
   private static void validateSmtp(Environment environment) {
     String host = environment.getProperty("spring.mail.host");
     requireText("spring.mail.host", host);
-    if ("localhost".equalsIgnoreCase(host) || host.startsWith("127.")) {
+    if (NetworkEndpointSafety.isLocalOrUnspecified(host)) {
       throw invalid("spring.mail.host", "must be remote in production");
     }
     Integer port = environment.getProperty("spring.mail.port", Integer.class);
@@ -133,22 +129,11 @@ class InviteRuntimeConfiguration {
     requireSecret(
         "spring.datasource.password", environment.getProperty("spring.datasource.password"));
     String normalizedUrl = url.toLowerCase(java.util.Locale.ROOT);
-    if (normalizedUrl.contains("localhost")
+    if (unsafeDatasourceHost(url)
         || normalizedUrl.matches(".*[/]cardo(?:\\?.*)?$")
         || "cardo".equals(username)) {
       throw invalid(
           "spring.datasource", "must use a non-local Invite-owned database and a dedicated role");
-    }
-  }
-
-  private static void requireNoRawDuplicates(String property, String raw) {
-    if (raw == null) {
-      return;
-    }
-    var values = Arrays.stream(raw.split(",", -1)).map(String::strip).toList();
-    if (values.stream().anyMatch(String::isBlank)
-        || new HashSet<>(values).size() != values.size()) {
-      throw invalid(property, "must contain distinct non-blank values");
     }
   }
 
@@ -170,10 +155,7 @@ class InviteRuntimeConfiguration {
               ? "https".equalsIgnoreCase(uri.getScheme())
               : "https".equalsIgnoreCase(uri.getScheme())
                   || "http".equalsIgnoreCase(uri.getScheme());
-      if (!validScheme
-          || host == null
-          || "localhost".equalsIgnoreCase(host)
-          || host.startsWith("127.")) {
+      if (!validScheme || host == null || NetworkEndpointSafety.isLocalOrUnspecified(host)) {
         throw invalid(
             property,
             "must be a remote " + (httpsOnly ? "HTTPS" : "HTTP(S)") + " URI in production");
@@ -184,6 +166,15 @@ class InviteRuntimeConfiguration {
         throw exception;
       }
       throw invalid(property, "must be a valid remote URI in production");
+    }
+  }
+
+  private static boolean unsafeDatasourceHost(String value) {
+    try {
+      URI uri = URI.create(value.substring("jdbc:".length()));
+      return NetworkEndpointSafety.isLocalOrUnspecified(uri.getHost());
+    } catch (IllegalArgumentException | IndexOutOfBoundsException exception) {
+      return true;
     }
   }
 

@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.identity.config;
 
+import io.github.lutzseverino.cardo.common.runtime.NetworkEndpointSafety;
 import java.net.URI;
 import java.time.Duration;
 import java.util.HashSet;
@@ -82,7 +83,7 @@ class IdentityRuntimeConfiguration {
     requireText("spring.datasource.username", username);
     requireSecret("spring.datasource.password", password);
     String normalizedUrl = url.toLowerCase(java.util.Locale.ROOT);
-    if (normalizedUrl.contains("localhost")
+    if (unsafeDatasourceHost(url)
         || normalizedUrl.matches(".*[/]cardo(?:\\?.*)?$")
         || "cardo".equals(username)) {
       throw invalid(
@@ -107,8 +108,7 @@ class IdentityRuntimeConfiguration {
       String host = uri.getHost();
       if (!"https".equalsIgnoreCase(uri.getScheme())
           || host == null
-          || "localhost".equalsIgnoreCase(host)
-          || host.startsWith("127.")) {
+          || NetworkEndpointSafety.isLocalOrUnspecified(host)) {
         throw invalid(property, "must be a remote HTTPS URI in production");
       }
     } catch (IllegalArgumentException exception) {
@@ -117,6 +117,15 @@ class IdentityRuntimeConfiguration {
         throw exception;
       }
       throw invalid(property, "must be a valid remote HTTPS URI in production");
+    }
+  }
+
+  private static boolean unsafeDatasourceHost(String value) {
+    try {
+      URI uri = URI.create(value.substring("jdbc:".length()));
+      return NetworkEndpointSafety.isLocalOrUnspecified(uri.getHost());
+    } catch (IllegalArgumentException | IndexOutOfBoundsException exception) {
+      return true;
     }
   }
 

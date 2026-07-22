@@ -23,10 +23,19 @@ record IdentityClientProperties(
 
   private static Duration timeoutOrDefault(Duration timeout, String property) {
     Duration resolved = timeout == null ? DEFAULT_TIMEOUT : timeout;
-    if (resolved.isZero() || resolved.isNegative()) {
+    if (!isMillisecondBound(resolved)) {
       throw new IllegalArgumentException(
-          "cardo.identity.client." + property + " must be positive.");
+          "cardo.identity.client." + property + " must be between 1ms and 2147483647ms.");
     }
     return resolved;
+  }
+
+  private static boolean isMillisecondBound(Duration value) {
+    try {
+      long milliseconds = value.toMillis();
+      return milliseconds >= 1 && milliseconds <= Integer.MAX_VALUE;
+    } catch (ArithmeticException exception) {
+      return false;
+    }
   }
 }

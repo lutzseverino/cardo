@@ -34,6 +34,25 @@ class BillingRuntimeConfigurationTest {
   }
 
   @Test
+  void rejectsCanonicalLoopbackKeycloakAndDatasourceEndpoints() {
+    assertThatThrownBy(
+            () ->
+                new BillingRuntimeConfiguration()
+                    .billingProductionConfigurationPolicy(
+                        production(),
+                        new KeycloakProperties("https://localhost.", "cardo"),
+                        productionStripe(),
+                        productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("cardo.billing.keycloak.base-url");
+    MockEnvironment datasource = productionEnvironment();
+    datasource.setProperty("spring.datasource.url", "jdbc:postgresql://0.0.0.0:5432/cardo_billing");
+    assertThatThrownBy(
+            () -> policy(production(), productionStripe(), datasource).afterPropertiesSet())
+        .hasMessageContaining("spring.datasource");
+  }
+
+  @Test
   void rejectsDuplicateCatalogAndNonPositiveBounds() {
     assertThatThrownBy(
             () ->
@@ -53,6 +72,14 @@ class BillingRuntimeConfigurationTest {
                     BillingRuntimeProperties.Mode.LOCAL, Duration.ZERO, Duration.ofSeconds(1)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("jwk-connect-timeout");
+    assertThatThrownBy(
+            () ->
+                new BillingRuntimeProperties(
+                    BillingRuntimeProperties.Mode.LOCAL,
+                    Duration.ofNanos(1),
+                    Duration.ofSeconds(Long.MAX_VALUE)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("between 1ms");
   }
 
   @Test

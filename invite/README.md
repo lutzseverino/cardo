@@ -111,7 +111,8 @@ which remains readable after invitation revocation.
 
 Set `INVITE_RUNTIME_MODE=production` with the remote Keycloak/issuer and Identity client, an
 authenticated STARTTLS SMTP service, at least one product caller, and an Invite-owned PostgreSQL
-database and role. See the indexed
+database with distinct no-login owner and login application roles. Startup verifies the effective
+database and roles after Flyway completes. See the indexed
 [runtime property reference](../docs/reference/runtime-properties.md) for the full contract.
 
 Start with the [Invite documentation index](docs/README.md). Cross-project
