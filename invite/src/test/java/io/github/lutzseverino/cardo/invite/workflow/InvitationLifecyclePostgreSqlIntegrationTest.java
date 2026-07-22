@@ -12,8 +12,6 @@ import io.github.lutzseverino.cardo.authorization.grant.GrantReceiptStatus;
 import io.github.lutzseverino.cardo.authorization.grant.Grants;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.invite.authorization.InvitationGrantPlanner;
-import io.github.lutzseverino.cardo.invite.config.InvitationCompletionProperties;
-import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
 import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapperImpl;
 import io.github.lutzseverino.cardo.invite.model.Invitation;
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionOperation;
@@ -28,7 +26,6 @@ import io.github.lutzseverino.cardo.invite.service.InvitationCompletionService;
 import io.github.lutzseverino.cardo.invite.service.InvitationGrantConvergenceService;
 import io.github.lutzseverino.cardo.invite.service.InvitationService;
 import java.net.URI;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -423,22 +420,6 @@ class InvitationLifecyclePostgreSqlIntegrationTest {
     @Bean
     InvitationApplicationMapperImpl invitationApplicationMapper() {
       return new InvitationApplicationMapperImpl();
-    }
-
-    @Bean
-    InvitationProperties invitationProperties() {
-      return new InvitationProperties(Duration.ofDays(3), Duration.ofMinutes(5));
-    }
-
-    @Bean
-    InvitationCompletionProperties invitationCompletionProperties() {
-      return new InvitationCompletionProperties(
-          Duration.ZERO,
-          Duration.ofSeconds(1),
-          Duration.ofSeconds(1),
-          Duration.ofSeconds(30),
-          3,
-          10);
     }
 
     @Bean
