@@ -83,20 +83,26 @@ class ReferenceKeycloakActionsTest {
     URI origin = URI.create("http://127.0.0.1:" + provider.getAddress().getPort());
     URI expectedRedirect = origin.resolve("/invitations/completed");
     List<String> requests = new ArrayList<>();
+    List<String> cookies = new ArrayList<>();
     provider.createContext(
         "/",
         exchange -> {
           requests.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+          cookies.add(exchange.getRequestHeaders().getFirst("Cookie"));
           switch (requests.size()) {
-            case 1 ->
-                respond(
-                    exchange,
-                    200,
-                    """
+            case 1 -> {
+              exchange
+                  .getResponseHeaders()
+                  .add("Set-Cookie", "AUTH_SESSION_ID=session; Version=1; Path=/");
+              respond(
+                  exchange,
+                  200,
+                  """
                     <div id="kc-info-message">
                       <p><a href="/realms/reference/login-actions/action-token?key=confirmed">Proceed</a></p>
                     </div>
                     """);
+            }
             case 2 -> redirect(exchange, "/password");
             case 3 ->
                 respond(
@@ -151,6 +157,7 @@ class ReferenceKeycloakActionsTest {
               "POST /password",
               "GET /profile",
               "POST /profile");
+      assertThat(cookies.subList(1, cookies.size())).containsOnly("AUTH_SESSION_ID=session");
     } finally {
       provider.stop(0);
     }

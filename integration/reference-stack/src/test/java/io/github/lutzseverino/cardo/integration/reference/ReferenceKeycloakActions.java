@@ -27,9 +27,10 @@ final class ReferenceKeycloakActions {
   private static final Pattern ERROR =
       Pattern.compile("(?is)<div\\b[^>]+id=[\"']kc-error-message[\"'][^>]*>(.*?)</div>");
   private static final Pattern ELEMENT = Pattern.compile("(?is)<[^>]+>");
+  private final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
   private final HttpClient browser =
       HttpClient.newBuilder()
-          .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
+          .cookieHandler(cookies)
           .connectTimeout(Duration.ofSeconds(2))
           .followRedirects(HttpClient.Redirect.NEVER)
           .build();
@@ -184,6 +185,7 @@ final class ReferenceKeycloakActions {
   private Page send(HttpRequest request) {
     try {
       HttpResponse<String> response = browser.send(request, HttpResponse.BodyHandlers.ofString());
+      cookies.getCookieStore().getCookies().forEach(cookie -> cookie.setVersion(0));
       return new Page(
           response.uri(),
           response.statusCode(),
