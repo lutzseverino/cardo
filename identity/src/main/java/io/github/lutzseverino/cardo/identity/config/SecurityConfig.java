@@ -5,6 +5,7 @@ import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesCo
 import io.github.lutzseverino.cardo.authorization.spring.RequiredExpirationValidator;
 import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvaluator;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -102,6 +103,8 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             requests ->
                 requests
+                    .dispatcherTypeMatchers(DispatcherType.ERROR)
+                    .permitAll()
                     .requestMatchers(
                         "/actuator/health",
                         "/actuator/health/liveness",
