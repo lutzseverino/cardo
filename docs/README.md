@@ -48,3 +48,4 @@ documentation index. Repository-wide architecture and conventions remain here.
 | [Billing](../billing/README.md) | Billing service | [Docs](../billing/docs/README.md) |
 | [Billing Client API](../billing/client/README.md) | Stable Billing client contract | [Docs](../billing/client/docs/README.md) |
 | [Billing HTTP Client](../billing/client-http/README.md) | Billing HTTP implementation | [Docs](../billing/client-http/docs/README.md) |
+| [Reference Stack](../integration/reference-stack/README.md) | Unpublished executable product fixture | [Docs](../integration/reference-stack/docs/README.md) |

@@ -112,5 +112,9 @@ required by its startup contract. The stub returns `403` for mapper and role
 definition writes and `404` for unexpected requests, proving that artifact
 startup does not rely on provider mutation. It is not a Keycloak emulator; the
 Identity integration suite separately exercises the contract against a
-digest-pinned disposable Keycloak. Full product integration still belongs to
-the portable full-stack reference environment.
+digest-pinned disposable Keycloak. The unpublished
+`integration/reference-stack` module supplies the full product integration
+environment and starts only checkout-built executable JARs. Its smoke first
+installs one fresh `identity,invite,billing,integration/reference-stack` reactor
+with upstream modules, preserving the same fresh-reactor invariant used by
+release image construction.

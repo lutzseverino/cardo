@@ -18,7 +18,8 @@
     {"path": "invite", "type": "project", "title": "Invite"},
     {"path": "billing", "type": "project", "title": "Billing"},
     {"path": "billing/client", "type": "project", "title": "Billing Client API"},
-    {"path": "billing/client-http", "type": "project", "title": "Billing HTTP Client"}
+    {"path": "billing/client-http", "type": "project", "title": "Billing HTTP Client"},
+    {"path": "integration/reference-stack", "type": "project", "title": "Reference Stack"}
   ],
   "local-fragments": {
     ".gitignore": [".repository-standards/gitignore.local"]

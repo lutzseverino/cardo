@@ -32,8 +32,7 @@ import org.testcontainers.utility.DockerImageName;
 
 final class DisposableKeycloakProvisioner implements AutoCloseable {
 
-  static final String IMAGE =
-      "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9";
+  static final String IMAGE = System.getProperty("cardo.test.keycloak.image");
 
   private static final String REALM = "cardo-contract";
   private static final String ADMIN_USERNAME = "cardo-test-admin";
@@ -268,23 +267,6 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
       }
       throw exception;
     }
-  }
-
-  void enableUserManagedAccess(String token, String resourceId) {
-    Map<String, Object> resource =
-        rest.get()
-            .uri("/realms/{realm}/authz/protection/resource_set/{resourceId}", REALM, resourceId)
-            .header(HttpHeaders.AUTHORIZATION, bearer(token))
-            .retrieve()
-            .body(new org.springframework.core.ParameterizedTypeReference<>() {});
-    Map<String, Object> enabled = new LinkedHashMap<>(resource == null ? Map.of() : resource);
-    enabled.put("ownerManagedAccess", true);
-    put(
-        token,
-        "/realms/{realm}/authz/protection/resource_set/{resourceId}",
-        enabled,
-        REALM,
-        resourceId);
   }
 
   List<String> realmManagementRoles(String token) {

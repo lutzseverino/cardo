@@ -67,7 +67,8 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
         resource.resourceScopes().stream()
             .map(ResourceScopeResponse::name)
             .collect(Collectors.toCollection(LinkedHashSet::new));
-    if (actions.addAll(authorizationResource.actions())) {
+    if (actions.addAll(authorizationResource.actions())
+        || !Boolean.TRUE.equals(resource.ownerManagedAccess())) {
       updateResource(resource.id(), authorizationResource, List.copyOf(actions));
     }
     return new CreatedAuthorizationResource(resource.id(), resource.name());
@@ -83,7 +84,8 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
                     authorizationResource.name(),
                     authorizationResource.type(),
                     authorizationResource.ownerSubject(),
-                    authorizationResource.actions()))
+                    authorizationResource.actions(),
+                    true))
             .retrieve()
             .body(ResourceSetResponse.class);
     if (resource == null || resource.id() == null) {
@@ -135,7 +137,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
         .header(HttpHeaders.AUTHORIZATION, authorization())
         .body(
             new ResourceSetCreateRequest(
-                resource.name(), resource.type(), resource.ownerSubject(), actions))
+                resource.name(), resource.type(), resource.ownerSubject(), actions, true))
         .retrieve()
         .toBodilessEntity();
   }
@@ -353,12 +355,14 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
       String name,
       String type,
       String owner,
-      @JsonProperty("resource_scopes") List<String> resourceScopes) {}
+      @JsonProperty("resource_scopes") List<String> resourceScopes,
+      boolean ownerManagedAccess) {}
 
   private record ResourceSetResponse(
       @JsonProperty("_id") String id,
       String name,
-      @JsonProperty("resource_scopes") List<ResourceScopeResponse> resourceScopes) {
+      @JsonProperty("resource_scopes") List<ResourceScopeResponse> resourceScopes,
+      Boolean ownerManagedAccess) {
 
     private ResourceSetResponse {
       resourceScopes = resourceScopes == null ? List.of() : List.copyOf(resourceScopes);

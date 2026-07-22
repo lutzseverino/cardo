@@ -61,12 +61,14 @@
     <module>billing/client</module>
     <module>billing/client-http</module>
     <module>billing</module>
+    <module>integration/reference-stack</module>
   </modules>
 
   <properties>
     <revision>0.1.0-SNAPSHOT</revision>
     <java.version>21</java.version>
     <google-java-format.version>1.35.0</google-java-format.version>
+    <jackson-databind-nullable.version>0.2.10</jackson-databind-nullable.version>
     <lombok.version>1.18.42</lombok.version>
     <mapstruct.version>1.6.3</mapstruct.version>
     <maven-enforcer.version>3.6.2</maven-enforcer.version>
@@ -77,6 +79,10 @@
     <cardo.image.launch-cache>cardo-${project.artifactId}-launch-cache</cardo.image.launch-cache>
     <cardo.image.name>cardo/${project.artifactId}:${project.version}</cardo.image.name>
     <cardo.source-date-epoch>315532802</cardo.source-date-epoch>
+    <cardo.test.keycloak.image>quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9</cardo.test.keycloak.image>
+    <cardo.test.postgres.image>postgres@sha256:6567bca8d7bc8c82c5922425a0baee57be8402df92bae5eacad5f01ae9544daa</cardo.test.postgres.image>
+    <cardo.test.mailpit.image>axllent/mailpit@sha256:fb84cfb1c3a33007cfdee8ba5a77b8c6c894de5b1a368372ddc5c965cf5c0b6d</cardo.test.mailpit.image>
+    <cardo.test.caddy.image>caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d</cardo.test.caddy.image>
     <buildnumber-maven-plugin.version>3.3.0</buildnumber-maven-plugin.version>
     <cyclonedx-maven-plugin.version>2.9.2</cyclonedx-maven-plugin.version>
     <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
@@ -346,6 +352,9 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+          <systemPropertyVariables>
+            <cardo.test.keycloak.image>${cardo.test.keycloak.image}</cardo.test.keycloak.image>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
     </plugins>

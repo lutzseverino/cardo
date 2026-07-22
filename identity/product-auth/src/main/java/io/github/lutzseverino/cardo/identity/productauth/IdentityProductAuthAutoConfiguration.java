@@ -8,6 +8,7 @@ import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvalu
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.identity.productauth.IdentityProductAuthProperties.ActiveTokenValidation;
 import io.github.lutzseverino.cardo.identity.productauth.IdentityProductAuthProperties.TokenExchange;
+import jakarta.servlet.DispatcherType;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.beans.factory.ObjectProvider;
@@ -223,6 +224,8 @@ public class IdentityProductAuthAutoConfiguration {
         .authorizeHttpRequests(
             requests -> {
               requests
+                  .dispatcherTypeMatchers(DispatcherType.ERROR)
+                  .permitAll()
                   .requestMatchers("/actuator/health", "/actuator/info")
                   .permitAll()
                   .requestMatchers("/openapi.json", "/docs/**", "/swagger-ui/**", "/v3/api-docs/**")

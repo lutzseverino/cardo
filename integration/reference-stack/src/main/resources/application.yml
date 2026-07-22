@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: cardo-reference-product
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  flyway:
+    table: flyway_schema_history_reference
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration,classpath:db/authorization/publications
+    placeholders:
+      authorizationSchema: reference_events
+  modulith:
+    events:
+      jdbc:
+        schema: reference_events
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+
+cardo:
+  identity:
+    product-auth:
+      session-cookie-name: __Host-cardo.session
+      csrf-cookie-name: __Host-cardo.csrf
+      identity-session-audience: identity
+      product-audience: reference-product
+      active-token-validation:
+        enabled: true
+        introspection-uri: ${KEYCLOAK_INTROSPECTION_URI}
+        client-id: reference-product
+        client-secret: ${REFERENCE_PRODUCT_CLIENT_SECRET}
+        cache-ttl: 1s
+        cache-max-entries: 128
+        connect-timeout: 2s
+        read-timeout: 2s
+  invite:
+    client:
+      base-url: ${INVITE_BASE_URL}
+      service-token-scope: cardo-invite
+  billing:
+    client:
+      base-url: ${BILLING_BASE_URL}
+      service-token-scope: billing
+
+reference:
+  accept-url: ${REFERENCE_ACCEPT_URL}
+  control-secret: ${REFERENCE_CONTROL_SECRET}
+  keycloak:
+    base-url: ${KEYCLOAK_BASE_URL}
+    realm: ${KEYCLOAK_REALM}
+    outbound-client-id: reference-product-outbound
+    outbound-client-secret: ${REFERENCE_PRODUCT_OUTBOUND_CLIENT_SECRET}
+    catalog-client-id: reference-product
+    catalog-client-secret: ${REFERENCE_PRODUCT_CLIENT_SECRET}
+
+server:
+  address: 127.0.0.1
+  port: ${REFERENCE_PRODUCT_PORT:8087}
+  shutdown: graceful
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info

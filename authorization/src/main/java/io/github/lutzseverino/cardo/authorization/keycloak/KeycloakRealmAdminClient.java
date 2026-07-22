@@ -1,7 +1,7 @@
 package io.github.lutzseverino.cardo.authorization.keycloak;
 
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -69,12 +69,18 @@ public class KeycloakRealmAdminClient {
 
   private record ClientRepresentation(String id, String clientId) {}
 
-  private record UserProfile(Map<String, List<String>> attributes) {
+  private record UserProfile(
+      String username,
+      String email,
+      String firstName,
+      String lastName,
+      Map<String, List<String>> attributes) {
 
     UserProfile withAttribute(String name, String value) {
-      Map<String, List<String>> merged = new HashMap<>(attributes == null ? Map.of() : attributes);
+      Map<String, List<String>> merged =
+          new LinkedHashMap<>(attributes == null ? Map.of() : attributes);
       merged.put(name, List.of(value));
-      return new UserProfile(merged);
+      return new UserProfile(username, email, firstName, lastName, merged);
     }
   }
 }

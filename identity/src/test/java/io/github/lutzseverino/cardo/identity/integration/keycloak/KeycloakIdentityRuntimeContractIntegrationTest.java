@@ -127,7 +127,6 @@ class KeycloakIdentityRuntimeContractIntegrationTest {
               new AuthorizationResource(
                   "identity", "identity:resource:1", "identity:resource", null, List.of("read")));
       assertThat(resource.id()).isNotBlank();
-      keycloak.enableUserManagedAccess(catalogTokens.clientCredentialsToken(), resource.id());
       authorization.grantResourceActions(
           new ResourceActionAssignment("identity", resource.id(), userId, List.of("read")));
       var grants =
@@ -327,9 +326,6 @@ class KeycloakIdentityRuntimeContractIntegrationTest {
     assertThat(grants.find(pending.id())).contains(pending);
     assertThat(publications).hasSize(1);
 
-    var created = authorization.ensureResource(resource);
-    keycloak.enableUserManagedAccess(
-        keycloak.catalogTokens(RestClient.builder()).clientCredentialsToken(), created.id());
     new GrantProcessor(authorization).apply(plan);
     Method markApplied = storeType.getDeclaredMethod("markApplied", UUID.class);
     markApplied.setAccessible(true);

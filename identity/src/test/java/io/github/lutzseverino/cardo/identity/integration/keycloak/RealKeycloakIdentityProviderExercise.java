@@ -65,8 +65,8 @@ final class RealKeycloakIdentityProviderExercise {
     assertThat(storedUser.get("requiredActions")).as(storedUser.toString()).isEqualTo(List.of());
 
     IdentityProvider.IssuedSession session =
-        provider.issuePasswordSession("session-user@example.test", "S3cure-cardo-password!");
-    assertThat(session.subject()).isNotBlank();
+        provider.issuePasswordSession("password-user@example.test", "S3cure-cardo-password!");
+    assertThat(session.subject()).isEqualTo(passwordIdentity.subject());
     IdentityProvider.IssuedSession refreshed = provider.refreshSession(session.refreshToken());
     assertThat(refreshed.subject()).isEqualTo(session.subject());
     assertThatCode(() -> provider.revokeSession(refreshed.refreshToken()))

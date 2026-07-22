@@ -13,6 +13,17 @@ Cardo validates those definitions at startup but does not normally create or
 repair them. Product repositories own their product resource catalogs, scopes,
 policies, and grants.
 
+The unpublished reference product demonstrates a least-privilege split that a
+product may need with Keycloak Authorization Services: `reference-product`
+owns the UMA resource server, PAT, and introspection credential, while
+`reference-product-outbound` has no realm or Authorization Services roles and
+receives only the optional Invite `product-service` and Billing
+`entitlement:read` scopes. The separate Identity client scope permits Invite's
+`user:provision` token without giving the product an Identity service token.
+This prevents the automatic `uma_protection` role from appearing in scoped
+outbound tokens. These client names are fixture-local, not public Cardo
+configuration.
+
 The clients have distinct responsibilities:
 
 - `cardo-identity` is the confidential runtime OAuth client and service account.
