@@ -20,8 +20,11 @@
   <description>Shared application services and integration libraries for product repositories.</description>
 
   <modules>
+    <module>common-api</module>
     <module>common</module>
     <module>openapi</module>
+    <module>authorization-keycloak-client</module>
+    <module>authorization-security</module>
     <module>authorization</module>
     <module>identity/client</module>
     <module>identity/client-http</module>
@@ -40,11 +43,13 @@
     <google-java-format.version>1.35.0</google-java-format.version>
     <lombok.version>1.18.42</lombok.version>
     <mapstruct.version>1.6.3</mapstruct.version>
+    <maven-enforcer.version>3.6.2</maven-enforcer.version>
     <openapi-generator.version>7.22.0</openapi-generator.version>
     <springdoc.version>3.0.3</springdoc.version>
     <spring-modulith.version>2.0.6</spring-modulith.version>
     <spotless.version>3.4.0</spotless.version>
     <stripe-java.version>31.0.0</stripe-java.version>
+    <cardo.consumer-dependency-enforcement.skip>true</cardo.consumer-dependency-enforcement.skip>
   </properties>
 
   <dependencyManagement>
@@ -77,6 +82,61 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>${maven-enforcer.version}</version>
+        <executions>
+          <execution>
+            <id>enforce-narrow-consumer-dependencies</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <skip>${cardo.consumer-dependency-enforcement.skip}</skip>
+              <rules>
+                <bannedDependencies>
+                  <searchTransitive>true</searchTransitive>
+                  <excludes>
+                    <exclude>io.github.lutzseverino.cardo:common</exclude>
+                    <exclude>io.github.lutzseverino.cardo:authorization</exclude>
+                    <exclude>jakarta.persistence:*</exclude>
+                    <exclude>org.hibernate.orm:*</exclude>
+                    <exclude>org.eclipse.persistence:*</exclude>
+                    <exclude>org.springframework.data:*</exclude>
+                    <exclude>org.flywaydb:*</exclude>
+                    <exclude>org.liquibase:*</exclude>
+                    <exclude>org.springframework.modulith:*</exclude>
+                    <exclude>org.springframework:spring-jdbc</exclude>
+                    <exclude>org.springframework:spring-orm</exclude>
+                    <exclude>org.springframework:spring-r2dbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-jdbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-jdbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-data-jpa</exclude>
+                    <exclude>org.springframework.boot:spring-boot-flyway</exclude>
+                    <exclude>org.springframework.boot:spring-boot-liquibase</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-liquibase</exclude>
+                    <exclude>org.springframework.boot:spring-boot-r2dbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-data-r2dbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-data-r2dbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-jooq</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-jooq</exclude>
+                    <exclude>io.r2dbc:*</exclude>
+                    <exclude>org.jooq:*</exclude>
+                    <exclude>org.mybatis:*</exclude>
+                    <exclude>org.mybatis.spring.boot:*</exclude>
+                    <exclude>org.jdbi:*</exclude>
+                    <exclude>com.zaxxer:HikariCP</exclude>
+                    <exclude>org.apache.tomcat:tomcat-jdbc</exclude>
+                    <exclude>org.apache.commons:commons-dbcp2</exclude>
+                  </excludes>
+                </bannedDependencies>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>

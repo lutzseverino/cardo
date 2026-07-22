@@ -1,11 +1,15 @@
 # Common
 
-Common owns small shared Java contracts that are not product behavior: API error
-types, personal-data markers, shared value objects, and validation helpers.
+Common is the compatibility aggregate for small shared Java contracts that are
+not product behavior: API error types, personal-data markers, shared value
+objects, server error handling, and validation helpers.
 
 ## Product Integration
 
-Products import `common` directly when they need these low-level contracts.
+Products import `common` directly when they need the complete low-level surface.
+Outbound clients that need only API errors use `common-api`; its existing
+`io.github.lutzseverino.cardo.common.api` types remain available transitively
+from `common`.
 There is no service owner, HTTP client, or product integration module.
 
 Keep product-specific validation, lifecycle decisions, and domain vocabulary in
