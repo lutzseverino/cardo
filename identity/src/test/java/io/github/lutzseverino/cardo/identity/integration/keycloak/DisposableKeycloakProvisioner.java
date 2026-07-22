@@ -32,8 +32,7 @@ import org.testcontainers.utility.DockerImageName;
 
 final class DisposableKeycloakProvisioner implements AutoCloseable {
 
-  static final String IMAGE =
-      "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9";
+  static final String IMAGE = System.getProperty("cardo.test.keycloak.image");
 
   private static final String REALM = "cardo-contract";
   private static final String ADMIN_USERNAME = "cardo-test-admin";
