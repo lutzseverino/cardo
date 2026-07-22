@@ -90,7 +90,9 @@ final class ReferenceKeycloakActions {
       URI continuation = continuation(page.body(), page.uri());
       if (continuation != null) {
         if (confirmationCompleted) {
-          throw new IllegalStateException("Keycloak action confirmation was repeated.");
+          throw new IllegalStateException(
+              "Keycloak action confirmation was repeated: "
+                  + browserState(page.uri(), continuation));
         }
         confirmationCompleted = true;
         page = get(continuation);
@@ -271,6 +273,60 @@ final class ReferenceKeycloakActions {
               return cookie.substring(0, separator + 1) + value;
             })
         .collect(java.util.stream.Collectors.joining("; "));
+  }
+
+  private String browserState(URI page, URI target) {
+    String stored =
+        cookies.getCookieStore().getCookies().stream()
+            .map(
+                cookie ->
+                    cookie.getName()
+                        + "[path="
+                        + cookie.getPath()
+                        + ",secure="
+                        + cookie.getSecure()
+                        + ",version="
+                        + cookie.getVersion()
+                        + "]")
+            .sorted()
+            .collect(java.util.stream.Collectors.joining(","));
+    String selected;
+    try {
+      selected =
+          cookies.get(target, Map.of()).getOrDefault("Cookie", java.util.List.of()).stream()
+              .flatMap(header -> java.util.Arrays.stream(header.split(";\\s*")))
+              .filter(attribute -> !attribute.startsWith("$"))
+              .filter(attribute -> attribute.contains("="))
+              .map(attribute -> attribute.substring(0, attribute.indexOf('=')))
+              .sorted()
+              .collect(java.util.stream.Collectors.joining(","));
+    } catch (IOException failure) {
+      selected = "unavailable";
+    }
+    return "stored="
+        + stored
+        + ", selected="
+        + selected
+        + ", pageQuery="
+        + queryNames(page)
+        + ", targetQuery="
+        + queryNames(target)
+        + ", sameOrigin="
+        + (Objects.equals(page.getScheme(), target.getScheme())
+            && Objects.equals(page.getAuthority(), target.getAuthority()))
+        + ", samePath="
+        + Objects.equals(page.getPath(), target.getPath());
+  }
+
+  private static String queryNames(URI uri) {
+    if (uri.getRawQuery() == null) {
+      return "";
+    }
+    return java.util.Arrays.stream(uri.getRawQuery().split("&"))
+        .filter(parameter -> parameter.contains("="))
+        .map(parameter -> parameter.substring(0, parameter.indexOf('=')))
+        .sorted()
+        .collect(java.util.stream.Collectors.joining(","));
   }
 
   record Result(boolean passwordCompleted, boolean profileCompleted, URI redirect) {}
