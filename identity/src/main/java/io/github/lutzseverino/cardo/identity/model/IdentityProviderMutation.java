@@ -86,6 +86,16 @@ public class IdentityProviderMutation extends AuditedEntity {
     return mutation;
   }
 
+  public static IdentityProviderMutation provisionalProvision(
+      UUID id, String email, String correlationMarker, OffsetDateTime now) {
+    IdentityProviderMutation mutation =
+        new IdentityProviderMutation(
+            id, IdentityProviderMutationType.PROVISION_PROVISIONAL_USER, now);
+    mutation.email = email;
+    mutation.correlationMarker = correlationMarker;
+    return mutation;
+  }
+
   public static IdentityProviderMutation bindUser(
       UUID id, UUID userId, String providerSubject, OffsetDateTime now) {
     IdentityProviderMutation mutation =

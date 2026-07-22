@@ -13,6 +13,7 @@ import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutation;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationStatus;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationTerminalReason;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationType;
+import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationWork;
 import io.github.lutzseverino.cardo.identity.model.PasswordProvisioningIntent;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.repository.IdentityProviderMutationRepository;
@@ -25,6 +26,81 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class IdentityProviderMutationServiceTest {
+
+  @Test
+  void createsAndClaimsDurableProvisionalWorkWithARandomMarker() {
+    IdentityProviderMutationRepository mutations = mock(IdentityProviderMutationRepository.class);
+    when(mutations.findFirstEntityByEmailAndTypeOrderByCreatedAtDesc(
+            "user@example.com", IdentityProviderMutationType.PROVISION_PROVISIONAL_USER))
+        .thenReturn(Optional.empty());
+
+    IdentityProviderMutationWork work =
+        service(mutations).requestProvisionalProvision("user@example.com");
+
+    assertThat(work.type()).isEqualTo(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER);
+    assertThat(work.email()).isEqualTo("user@example.com");
+    assertThat(work.correlationMarker()).isNotBlank();
+    assertThat(work.leaseToken()).isNotNull();
+    verify(mutations)
+        .saveAndFlush(
+            org.mockito.ArgumentMatchers.argThat(
+                mutation ->
+                    mutation.getId().equals(work.id())
+                        && mutation.getCorrelationMarker().equals(work.correlationMarker())));
+  }
+
+  @Test
+  void activeProvisionalLeasePreventsACompetingProviderCreate() {
+    IdentityProviderMutationRepository mutations = mock(IdentityProviderMutationRepository.class);
+    OffsetDateTime now = OffsetDateTime.now();
+    IdentityProviderMutation mutation = provisionalProvision(now);
+    mutation.claim(now.plusHours(1));
+    when(mutations.findFirstEntityByEmailAndTypeOrderByCreatedAtDesc(
+            "user@example.com", IdentityProviderMutationType.PROVISION_PROVISIONAL_USER))
+        .thenReturn(Optional.of(mutation));
+
+    assertThatThrownBy(() -> service(mutations).requestProvisionalProvision("user@example.com"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> assertThat(failure.code()).isEqualTo("user_provisioning_in_progress"));
+
+    verify(mutations, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void completingProvisionalWorkDurablyQueuesUserIdBinding() {
+    IdentityProviderMutationRepository mutations = mock(IdentityProviderMutationRepository.class);
+    OffsetDateTime now = OffsetDateTime.now();
+    IdentityProviderMutation mutation = provisionalProvision(now);
+    UUID lease = mutation.claim(now.plusMinutes(1));
+    UUID userId = UUID.randomUUID();
+    IdentityProviderMutationWork work =
+        new IdentityProviderMutationWork(
+            mutation.getId(),
+            lease,
+            mutation.getType(),
+            null,
+            null,
+            mutation.getEmail(),
+            null,
+            mutation.getCorrelationMarker(),
+            null,
+            0);
+    when(mutations.findEntityByIdForUpdate(mutation.getId())).thenReturn(Optional.of(mutation));
+
+    service(mutations).completeProvisionalProvision(work, "subject-1", userId);
+
+    assertThat(mutation.getStatus()).isEqualTo(IdentityProviderMutationStatus.COMPLETED);
+    assertThat(mutation.getProviderSubject()).isEqualTo("subject-1");
+    assertThat(mutation.getUserId()).isEqualTo(userId);
+    verify(mutations)
+        .save(
+            org.mockito.ArgumentMatchers.argThat(
+                binding ->
+                    binding.getType() == IdentityProviderMutationType.BIND_USER_ID
+                        && userId.equals(binding.getUserId())
+                        && "subject-1".equals(binding.getProviderSubject())));
+  }
 
   @Test
   void freshCredentialsResumeBackingOffWorkWithTheSameCorrelationMarker() {
@@ -182,7 +258,7 @@ class IdentityProviderMutationServiceTest {
     assertThat(mutation.getTerminalReason()).isNull();
     IdentityProvider provider = mock(IdentityProvider.class);
     UserService users = mock(UserService.class);
-    when(provider.findPasswordIdentityByCorrelationMarker("marker-1"))
+    when(provider.findIdentityByCorrelationMarker("marker-1"))
         .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("subject-1")));
 
     new ReconcileIdentityProviderMutationsWorkflow(service, users, provider).reconcile();
@@ -277,5 +353,10 @@ class IdentityProviderMutationServiceTest {
   private IdentityProviderMutation passwordProvision(OffsetDateTime now) {
     return IdentityProviderMutation.passwordProvision(
         UUID.randomUUID(), "user@example.com", "User", "marker-1", now);
+  }
+
+  private IdentityProviderMutation provisionalProvision(OffsetDateTime now) {
+    return IdentityProviderMutation.provisionalProvision(
+        UUID.randomUUID(), "user@example.com", "marker-1", now);
   }
 }

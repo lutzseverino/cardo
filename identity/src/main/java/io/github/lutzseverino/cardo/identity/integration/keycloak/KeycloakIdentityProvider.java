@@ -67,8 +67,7 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   }
 
   @Override
-  public Optional<ProvisionedIdentity> findPasswordIdentityByCorrelationMarker(
-      String correlationMarker) {
+  public Optional<ProvisionedIdentity> findIdentityByCorrelationMarker(String correlationMarker) {
     try {
       List<KeycloakUserDetails> matches =
           rest.get()
@@ -113,8 +112,15 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   }
 
   @Override
-  public ProvisionedIdentity provisionProvisionalIdentity(String email) {
-    return createUser(new KeycloakUser(email, email, null, true, List.of(), Map.of()));
+  public ProvisionedIdentity provisionProvisionalIdentity(String email, String correlationMarker) {
+    return createUser(
+        new KeycloakUser(
+            email,
+            email,
+            null,
+            true,
+            List.of(),
+            Map.of(PROVISIONING_CORRELATION_ATTRIBUTE, List.of(correlationMarker))));
   }
 
   @Override

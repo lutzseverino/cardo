@@ -16,6 +16,9 @@ import java.sql.Statement;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -127,6 +130,53 @@ class IdentityProviderMutationPostgreSqlIntegrationTest {
   }
 
   @Test
+  void onlyOneActiveProvisionalIntentCanOwnAnEmail() {
+    OffsetDateTime now = OffsetDateTime.now();
+    mutations.saveAndFlush(
+        IdentityProviderMutation.provisionalProvision(
+            UUID.randomUUID(), "user@example.com", "marker-1", now));
+
+    assertThatThrownBy(
+            () ->
+                mutations.saveAndFlush(
+                    IdentityProviderMutation.provisionalProvision(
+                        UUID.randomUUID(), "user@example.com", "marker-2", now)))
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  @Test
+  void concurrentEquivalentProvisionalRequestsShareOneDurableIntent() throws Exception {
+    CountDownLatch start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      java.util.concurrent.Callable<String> request =
+          () -> {
+            start.await();
+            try {
+              return service.requestProvisionalProvision("user@example.com").correlationMarker();
+            } catch (io.github.lutzseverino.cardo.common.api.ApiException failure) {
+              return failure.code();
+            }
+          };
+      Future<String> first = executor.submit(request);
+      Future<String> second = executor.submit(request);
+      start.countDown();
+
+      assertThat(List.of(first.get(), second.get()))
+          .anySatisfy(value -> assertThat(value).isEqualTo("user_provisioning_in_progress"))
+          .anySatisfy(value -> assertThat(value).isNotEqualTo("user_provisioning_in_progress"));
+    }
+
+    assertThat(mutations.findAll())
+        .singleElement()
+        .satisfies(
+            mutation -> {
+              assertThat(mutation.getType())
+                  .isEqualTo(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER);
+              assertThat(mutation.getCorrelationMarker()).isNotBlank();
+            });
+  }
+
+  @Test
   void v3BackfillsBindingsAndDesiredStateForPreexistingUsers() throws Exception {
     String schema = "mutation_backfill_" + UUID.randomUUID().toString().replace("-", "");
     migrate(schema, "2");
@@ -167,6 +217,38 @@ class IdentityProviderMutationPostgreSqlIntegrationTest {
               "BIND_USER_ID:subject-disabled:null",
               "SET_IDENTITY_ENABLED:subject-active:true",
               "SET_IDENTITY_ENABLED:subject-disabled:false");
+    }
+  }
+
+  @Test
+  void v4ChangesOnlyConstraintsAndIndexesWithoutBackfillingWork() throws Exception {
+    String schema = "provisional_constraints_" + UUID.randomUUID().toString().replace("-", "");
+    migrate(schema, "3");
+    int before;
+    try (Connection connection = connection(schema);
+        Statement statement = connection.createStatement();
+        ResultSet rows =
+            statement.executeQuery("select count(*) from identity_provider_mutations")) {
+      rows.next();
+      before = rows.getInt(1);
+    }
+
+    migrate(schema, "4");
+
+    try (Connection connection = connection(schema);
+        Statement statement = connection.createStatement()) {
+      try (ResultSet rows =
+          statement.executeQuery("select count(*) from identity_provider_mutations")) {
+        rows.next();
+        assertThat(rows.getInt(1)).isEqualTo(before);
+      }
+      statement.executeUpdate(
+          "insert into identity_provider_mutations "
+              + "(id, mutation_type, status, normalized_email, correlation_marker, next_attempt_at) "
+              + "values ('"
+              + UUID.randomUUID()
+              + "', 'PROVISION_PROVISIONAL_USER', 'REQUESTED', "
+              + "'new@example.com', 'marker-v4', now())");
     }
   }
 

@@ -103,13 +103,37 @@ starts a new attempt on the same correlation marker. Other terminal reasons
 require operator repair. Worker logs carry the mutation id, exact type, target
 version, and retry/terminal outcome for operator correlation.
 
+Provisional-user creation uses that same durable lifecycle under
+`PROVISION_PROVISIONAL_USER`. Identity commits the normalized email and a random
+Keycloak correlation marker before attempting provider creation. A synchronous
+lost response and the background worker both recover only when exactly one
+Keycloak user carries that exact marker; an email match is never ownership
+evidence. Local invited-user creation, mutation completion, durable
+`BIND_USER_ID` staging, and creation-grant staging then commit together. Provider
+creation and user-id binding never run inside that transaction, and rollback
+does not delete the marker-owned provider identity because reconciliation may
+still need it.
+
+`PROVIDER_REJECTED` identifies a definite provider rejection, including an
+unattributed pre-existing Keycloak user that conflicts by email but has no exact
+marker. `LOCAL_STATE_CONFLICT` identifies a local user with the same email and a
+different provider subject. `RETRY_EXHAUSTED` means the marker lookup or provider
+call remained unavailable after bounded reconciliation. These terminal rows are
+operator-visible and are not automatically replaced with a new marker: inspect
+the mutation id and marker, compare its `provider_subject` with
+`users.keycloak_subject`, and repair the conflicting provider or local record
+before retrying. Never adopt or delete a Keycloak user solely by email.
+
 Migration V3 backfills idempotent user-id binding and desired enabled-state
 mutations for every local user. This replaces startup-wide rebinding; mapper
 installation still runs at startup, while the mutation worker drains and
 repairs the backfill. Provider identities orphaned before V3 have no trustworthy
 correlation marker and are deliberately not auto-deleted. Operators must audit
 Keycloak users without `identity_user_id` against local `users.keycloak_subject`
-and resolve those historical records manually.
+and resolve those historical records manually. Migration V4 only extends
+mutation constraints and the active-provisioning index for provisional work; it
+does not backfill historical provider-only identities because those rows have no
+trustworthy Cardo correlation marker.
 
 The Identity integration tests use Testcontainers with PostgreSQL 17.5 to
 exercise Flyway migrations, partial indexes, and row-lock behavior. Running

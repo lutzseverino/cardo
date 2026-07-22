@@ -47,7 +47,7 @@ class ReconcileIdentityProviderMutationsWorkflowTest {
     IdentityProviderMutationWork work =
         work(IdentityProviderMutationType.PROVISION_PASSWORD_USER, null);
     when(mutations.claim(MUTATION_ID)).thenReturn(Optional.of(work));
-    when(provider.findPasswordIdentityByCorrelationMarker("marker-1")).thenReturn(Optional.empty());
+    when(provider.findIdentityByCorrelationMarker("marker-1")).thenReturn(Optional.empty());
 
     new ReconcileIdentityProviderMutationsWorkflow(mutations, users, provider)
         .reconcile(MUTATION_ID);
@@ -89,13 +89,121 @@ class ReconcileIdentityProviderMutationsWorkflowTest {
     IdentityProviderMutationWork work =
         work(IdentityProviderMutationType.PROVISION_PASSWORD_USER, null);
     when(mutations.claim(MUTATION_ID)).thenReturn(Optional.of(work));
-    when(provider.findPasswordIdentityByCorrelationMarker("marker-1"))
+    when(provider.findIdentityByCorrelationMarker("marker-1"))
         .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("subject-1")));
 
     new ReconcileIdentityProviderMutationsWorkflow(mutations, users, provider)
         .reconcile(MUTATION_ID);
 
     verify(users).recoverPasswordProvision(work, "subject-1");
+  }
+
+  @Test
+  void restartRecoversProvisionalIdentityAlreadyOwnedByTheMarker() {
+    IdentityProviderMutationService mutations = mock(IdentityProviderMutationService.class);
+    IdentityProvider provider = mock(IdentityProvider.class);
+    UserService users = mock(UserService.class);
+    IdentityProviderMutationWork work =
+        work(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER, null);
+    when(mutations.claim(MUTATION_ID)).thenReturn(Optional.of(work));
+    when(provider.findIdentityByCorrelationMarker("marker-1"))
+        .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("subject-1")));
+
+    new ReconcileIdentityProviderMutationsWorkflow(mutations, users, provider)
+        .reconcile(MUTATION_ID);
+
+    verify(users).recoverProvisionalProvision(work, "subject-1");
+    verify(provider, never()).provisionProvisionalIdentity("user@example.com", "marker-1");
+  }
+
+  @Test
+  void restartDispatchesPersistedProvisionalIntentWhenNoProviderEffectExists() {
+    IdentityProviderMutationService mutations = mock(IdentityProviderMutationService.class);
+    IdentityProvider provider = mock(IdentityProvider.class);
+    UserService users = mock(UserService.class);
+    IdentityProviderMutationWork work =
+        work(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER, null);
+    when(mutations.claim(MUTATION_ID)).thenReturn(Optional.of(work));
+    when(provider.findIdentityByCorrelationMarker("marker-1")).thenReturn(Optional.empty());
+    when(provider.provisionProvisionalIdentity("user@example.com", "marker-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("subject-1"));
+
+    new ReconcileIdentityProviderMutationsWorkflow(mutations, users, provider)
+        .reconcile(MUTATION_ID);
+
+    verify(provider).provisionProvisionalIdentity("user@example.com", "marker-1");
+    verify(users).recoverProvisionalProvision(work, "subject-1");
+  }
+
+  @Test
+  void restartConvergesALostProvisionalCreateResponseByMarker() {
+    IdentityProviderMutationService mutations = mock(IdentityProviderMutationService.class);
+    IdentityProvider provider = mock(IdentityProvider.class);
+    UserService users = mock(UserService.class);
+    IdentityProviderMutationWork work =
+        work(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER, null);
+    when(mutations.claim(MUTATION_ID)).thenReturn(Optional.of(work));
+    when(provider.findIdentityByCorrelationMarker("marker-1"))
+        .thenReturn(
+            Optional.empty(), Optional.of(new IdentityProvider.ProvisionedIdentity("subject-1")));
+    when(provider.provisionProvisionalIdentity("user@example.com", "marker-1"))
+        .thenThrow(new RuntimeException("response lost"));
+
+    new ReconcileIdentityProviderMutationsWorkflow(mutations, users, provider)
+        .reconcile(MUTATION_ID);
+
+    verify(users).recoverProvisionalProvision(work, "subject-1");
+    verify(mutations, never())
+        .recordFailure(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void unrelatedSameEmailProviderIdentityIsTerminalAndNeverAdopted() {
+    IdentityProviderMutationService mutations = mock(IdentityProviderMutationService.class);
+    IdentityProvider provider = mock(IdentityProvider.class);
+    UserService users = mock(UserService.class);
+    IdentityProviderMutationWork work =
+        work(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER, null);
+    ApiException conflict = ApiException.conflict("user_exists", "User already exists.");
+    when(mutations.claim(MUTATION_ID)).thenReturn(Optional.of(work));
+    when(provider.findIdentityByCorrelationMarker("marker-1")).thenReturn(Optional.empty());
+    when(provider.provisionProvisionalIdentity("user@example.com", "marker-1")).thenThrow(conflict);
+
+    new ReconcileIdentityProviderMutationsWorkflow(mutations, users, provider)
+        .reconcile(MUTATION_ID);
+
+    verify(mutations)
+        .recordTerminalFailure(
+            work, conflict, IdentityProviderMutationTerminalReason.PROVIDER_REJECTED);
+    verify(users, never()).recoverProvisionalProvision(work, "subject-1");
+    verify(provider, never()).deleteIdentity(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void recoveredProvisionalLocalConflictIsOperatorVisible() {
+    IdentityProviderMutationService mutations = mock(IdentityProviderMutationService.class);
+    IdentityProvider provider = mock(IdentityProvider.class);
+    UserService users = mock(UserService.class);
+    IdentityProviderMutationWork work =
+        work(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER, null);
+    ApiException conflict =
+        ApiException.conflict(
+            "user_provisioning_conflict", "Provider subject conflicts with local user.");
+    when(mutations.claim(MUTATION_ID)).thenReturn(Optional.of(work));
+    when(provider.findIdentityByCorrelationMarker("marker-1"))
+        .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("subject-1")));
+    when(users.recoverProvisionalProvision(work, "subject-1")).thenThrow(conflict);
+
+    new ReconcileIdentityProviderMutationsWorkflow(mutations, users, provider)
+        .reconcile(MUTATION_ID);
+
+    verify(mutations)
+        .recordTerminalFailure(
+            work, conflict, IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT);
+    verify(provider, never()).deleteIdentity(org.mockito.ArgumentMatchers.any());
   }
 
   private IdentityProviderMutationWork work(

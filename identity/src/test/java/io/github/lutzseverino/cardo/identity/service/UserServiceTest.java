@@ -20,6 +20,8 @@ import io.github.lutzseverino.cardo.identity.mapper.UserApplicationMapperImpl;
 import io.github.lutzseverino.cardo.identity.model.CreateProvisionalUserInput;
 import io.github.lutzseverino.cardo.identity.model.CreateUserInput;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationTerminalReason;
+import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationType;
+import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationWork;
 import io.github.lutzseverino.cardo.identity.model.PasswordProvisioningIntent;
 import io.github.lutzseverino.cardo.identity.model.UpdateCurrentUserInput;
 import io.github.lutzseverino.cardo.identity.model.UpdateUserInput;
@@ -40,6 +42,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,7 +97,7 @@ class UserServiceTest {
     when(identityProvider.provisionPasswordIdentity(
             "owner@example.com", "password-1", "Owner", "correlation-1"))
         .thenThrow(new RuntimeException("response lost"));
-    when(identityProvider.findPasswordIdentityByCorrelationMarker("correlation-1"))
+    when(identityProvider.findIdentityByCorrelationMarker("correlation-1"))
         .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("kc-user-1")));
     when(users.saveAndFlush(any(User.class)))
         .thenAnswer(invocation -> persisted(invocation, userId));
@@ -102,7 +105,7 @@ class UserServiceTest {
 
     service.create(new CreateUserInput("owner@example.com", "password-1", "Owner"));
 
-    verify(identityProvider).findPasswordIdentityByCorrelationMarker("correlation-1");
+    verify(identityProvider).findIdentityByCorrelationMarker("correlation-1");
     verify(providerMutations).completePasswordProvision(intent, "kc-user-1", userId);
   }
 
@@ -147,7 +150,7 @@ class UserServiceTest {
     when(identityProvider.provisionPasswordIdentity(
             "owner@example.com", "invalid-password", "Owner", "correlation-1"))
         .thenThrow(rejected);
-    when(identityProvider.findPasswordIdentityByCorrelationMarker("correlation-1"))
+    when(identityProvider.findIdentityByCorrelationMarker("correlation-1"))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(
@@ -174,7 +177,7 @@ class UserServiceTest {
     when(identityProvider.provisionPasswordIdentity(
             "owner@example.com", "password-2", "Owner", "correlation-1"))
         .thenThrow(conflict);
-    when(identityProvider.findPasswordIdentityByCorrelationMarker("correlation-1"))
+    when(identityProvider.findIdentityByCorrelationMarker("correlation-1"))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(
@@ -199,7 +202,165 @@ class UserServiceTest {
         .extracting(result -> result.id(), result -> result.status())
         .containsExactly(existing.getId(), UserStatus.INVITED);
 
-    verify(identityProvider, never()).provisionProvisionalIdentity(any());
+    verify(identityProvider, never()).provisionProvisionalIdentity(any(), any());
+  }
+
+  @Test
+  void persistsProvisionalIntentBeforeProviderEffectAndStagesBindingAndGrants() {
+    UserService service = service();
+    UUID userId = UUID.randomUUID();
+    IdentityProviderMutationWork work = provisionalWork();
+    when(users.findProjectedByEmail("employee@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestProvisionalProvision("employee@example.com")).thenReturn(work);
+    when(identityProvider.provisionProvisionalIdentity("employee@example.com", "marker-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("subject-1"));
+    when(users.saveAndFlush(any(User.class)))
+        .thenAnswer(invocation -> persisted(invocation, userId));
+    when(users.findProjectedById(userId))
+        .thenReturn(
+            Optional.of(
+                projection(userId, "subject-1", "employee@example.com", UserStatus.INVITED)));
+
+    assertThat(service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
+        .extracting(UserResult::id, UserResult::status)
+        .containsExactly(userId, UserStatus.INVITED);
+
+    InOrder order = inOrder(providerMutations, identityProvider, users);
+    order.verify(providerMutations).requestProvisionalProvision("employee@example.com");
+    order.verify(identityProvider).provisionProvisionalIdentity("employee@example.com", "marker-1");
+    order.verify(users).saveAndFlush(any(User.class));
+    order.verify(providerMutations).completeProvisionalProvision(work, "subject-1", userId);
+    verify(grants).stage(any());
+    verify(identityProvider, never()).bindUserId(any(), any());
+    verify(identityProvider, never()).deleteIdentity(any());
+  }
+
+  @Test
+  void recoversLostProvisionalCreateResponseOnlyByExactMarker() {
+    UserService service = service();
+    UUID userId = UUID.randomUUID();
+    IdentityProviderMutationWork work = provisionalWork();
+    when(users.findProjectedByEmail("employee@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestProvisionalProvision("employee@example.com")).thenReturn(work);
+    when(identityProvider.provisionProvisionalIdentity("employee@example.com", "marker-1"))
+        .thenThrow(new RuntimeException("response lost"));
+    when(identityProvider.findIdentityByCorrelationMarker("marker-1"))
+        .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("subject-1")));
+    when(users.saveAndFlush(any(User.class)))
+        .thenAnswer(invocation -> persisted(invocation, userId));
+    when(users.findProjectedById(userId))
+        .thenReturn(
+            Optional.of(
+                projection(userId, "subject-1", "employee@example.com", UserStatus.INVITED)));
+
+    service.createProvisional(new CreateProvisionalUserInput("employee@example.com"));
+
+    verify(identityProvider).findIdentityByCorrelationMarker("marker-1");
+    verify(providerMutations).completeProvisionalProvision(work, "subject-1", userId);
+    verify(identityProvider, never()).deleteIdentity(any());
+  }
+
+  @Test
+  void doesNotAdoptOrDeleteAnUnattributedSameEmailProviderIdentity() {
+    UserService service = service();
+    IdentityProviderMutationWork work = provisionalWork();
+    ApiException conflict = ApiException.conflict("user_exists", "User already exists.");
+    when(users.findProjectedByEmail("employee@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestProvisionalProvision("employee@example.com")).thenReturn(work);
+    when(identityProvider.provisionProvisionalIdentity("employee@example.com", "marker-1"))
+        .thenThrow(conflict);
+    when(identityProvider.findIdentityByCorrelationMarker("marker-1")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
+        .isSameAs(conflict);
+
+    verify(providerMutations)
+        .recordTerminalFailure(
+            work, conflict, IdentityProviderMutationTerminalReason.PROVIDER_REJECTED);
+    verify(users, never()).saveAndFlush(any());
+    verify(identityProvider, never()).deleteIdentity(any());
+  }
+
+  @Test
+  void terminalsALocalConflictWithoutDeletingTheMarkerOwnedIdentity() {
+    UserService service = service();
+    IdentityProviderMutationWork work = provisionalWork();
+    UserProjection conflicting =
+        projection(
+            UUID.randomUUID(), "unrelated-subject", "employee@example.com", UserStatus.ACTIVE);
+    when(users.findProjectedByEmail("employee@example.com"))
+        .thenReturn(Optional.empty(), Optional.of(conflicting));
+    when(providerMutations.requestProvisionalProvision("employee@example.com")).thenReturn(work);
+    when(identityProvider.provisionProvisionalIdentity("employee@example.com", "marker-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("subject-1"));
+
+    assertThatThrownBy(
+            () -> service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> {
+              assertThat(failure.status()).isEqualTo(409);
+              assertThat(failure.code()).isEqualTo("user_exists");
+            });
+
+    verify(providerMutations)
+        .recordTerminalFailure(
+            eq(work),
+            any(ApiException.class),
+            eq(IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT));
+    verify(identityProvider, never()).deleteIdentity(any());
+    verify(identityProvider, never()).bindUserId(any(), any());
+  }
+
+  @Test
+  void convergesAConcurrentLocalInsertOwnedByTheSameMarkerIdentity() {
+    UserService service = service();
+    UUID userId = UUID.randomUUID();
+    IdentityProviderMutationWork work = provisionalWork();
+    UserProjection existing =
+        projection(userId, "subject-1", "employee@example.com", UserStatus.INVITED);
+    User owned = User.invited("subject-1", "employee@example.com");
+    ReflectionTestUtils.setField(owned, "id", userId);
+    when(users.findProjectedByEmail("employee@example.com"))
+        .thenReturn(
+            Optional.empty(), Optional.empty(), Optional.of(existing), Optional.of(existing));
+    when(providerMutations.requestProvisionalProvision("employee@example.com")).thenReturn(work);
+    when(identityProvider.provisionProvisionalIdentity("employee@example.com", "marker-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("subject-1"));
+    when(users.saveAndFlush(any(User.class)))
+        .thenThrow(new DataIntegrityViolationException("concurrent insert"));
+    when(users.findById(userId)).thenReturn(Optional.of(owned));
+    when(users.findProjectedById(userId)).thenReturn(Optional.of(existing));
+
+    assertThat(service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
+        .extracting(UserResult::id, UserResult::status)
+        .containsExactly(userId, UserStatus.INVITED);
+
+    verify(identityProvider).provisionProvisionalIdentity("employee@example.com", "marker-1");
+    verify(providerMutations).completeProvisionalProvision(work, "subject-1", userId);
+    verify(grants).stage(any());
+    verify(identityProvider, never()).deleteIdentity(any());
+  }
+
+  @Test
+  void preservesMarkerOwnedIdentityWhenLocalCompletionRollsBack() {
+    UserService service = service();
+    IdentityProviderMutationWork work = provisionalWork();
+    RuntimeException rollback = new RuntimeException("commit failed");
+    when(users.findProjectedByEmail("employee@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestProvisionalProvision("employee@example.com")).thenReturn(work);
+    when(identityProvider.provisionProvisionalIdentity("employee@example.com", "marker-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("subject-1"));
+    when(transactions.execute(any(TransactionCallback.class))).thenThrow(rollback);
+
+    assertThatThrownBy(
+            () -> service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
+        .isSameAs(rollback);
+
+    verify(providerMutations)
+        .recordFailure(work, rollback, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
+    verify(identityProvider, never()).deleteIdentity(any());
   }
 
   @Test
@@ -301,13 +462,18 @@ class UserServiceTest {
         UserService.class.getMethod("updateCurrent", String.class, UpdateCurrentUserInput.class);
     Method createProvisional =
         UserService.class.getMethod("createProvisional", CreateProvisionalUserInput.class);
+    Method recoverProvisional =
+        UserService.class.getMethod(
+            "recoverProvisionalProvision", IdentityProviderMutationWork.class, String.class);
 
     assertThat(update.isAnnotationPresent(Transactional.class)).isTrue();
     assertThat(update.isAnnotationPresent(PreAuthorize.class)).isTrue();
     assertThat(updateCurrent.isAnnotationPresent(Transactional.class)).isTrue();
     assertThat(updateCurrent.isAnnotationPresent(PreAuthorize.class)).isTrue();
+    assertThat(createProvisional.isAnnotationPresent(Transactional.class)).isFalse();
     assertThat(createProvisional.getAnnotation(PreAuthorize.class).value())
         .contains(IdentityPermissions.USER_PROVISION_AUTHORITY);
+    assertThat(recoverProvisional.isAnnotationPresent(Transactional.class)).isTrue();
   }
 
   private UserService service() {
@@ -330,6 +496,20 @@ class UserServiceTest {
         UUID.randomUUID(), UUID.randomUUID(), "owner@example.com", "Owner", "correlation-1");
   }
 
+  private IdentityProviderMutationWork provisionalWork() {
+    return new IdentityProviderMutationWork(
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        IdentityProviderMutationType.PROVISION_PROVISIONAL_USER,
+        null,
+        null,
+        "employee@example.com",
+        null,
+        "marker-1",
+        null,
+        0);
+  }
+
   private User persisted(InvocationOnMock invocation, UUID id) {
     User user = invocation.getArgument(0);
     ReflectionTestUtils.setField(user, "id", id);
@@ -337,10 +517,16 @@ class UserServiceTest {
   }
 
   private UserProjection projection(UserStatus status) {
-    return new TestUserProjection(UUID.randomUUID(), status);
+    return projection(UUID.randomUUID(), "kc-user-1", "employee@example.com", status);
   }
 
-  private record TestUserProjection(UUID id, UserStatus status) implements UserProjection {
+  private UserProjection projection(
+      UUID id, String keycloakSubject, String email, UserStatus status) {
+    return new TestUserProjection(id, keycloakSubject, email, status);
+  }
+
+  private record TestUserProjection(
+      UUID id, String keycloakSubject, String email, UserStatus status) implements UserProjection {
 
     @Override
     public UUID getId() {
@@ -349,12 +535,12 @@ class UserServiceTest {
 
     @Override
     public String getKeycloakSubject() {
-      return "kc-user-1";
+      return keycloakSubject;
     }
 
     @Override
     public String getEmail() {
-      return "employee@example.com";
+      return email;
     }
 
     @Override
