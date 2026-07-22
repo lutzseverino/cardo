@@ -39,10 +39,30 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.revision }}
+      - name: Restore preserved release anchor
+        id: release-anchor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-anchor"
+          if draft=$(gh release view "v$RELEASE_VERSION" --json isDraft --jq .isDraft 2>/dev/null); then
+            [[ $draft == true ]] || { echo "v$RELEASE_VERSION is already published" >&2; exit 1; }
+            gh release download "v$RELEASE_VERSION" \
+              --pattern release-manifest.json --pattern central-bundle.zip \
+              --dir "$RUNNER_TEMP/release-anchor"
+            echo 'restored=true' >>"$GITHUB_OUTPUT"
+          else
+            echo 'restored=false' >>"$GITHUB_OUTPUT"
+          fi
       - name: Validate immutable release request
         run: |
           [[ -n "${RELEASE_NOTES//[[:space:]]/}" ]] || { echo 'release notes are required' >&2; exit 1; }
-          scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION"
+          anchor=()
+          if [[ '${{ steps.release-anchor.outputs.restored }}' == true ]]; then
+            anchor+=("$RUNNER_TEMP/release-anchor/release-manifest.json")
+            anchor+=("$RUNNER_TEMP/release-anchor/central-bundle.zip")
+          fi
+          scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION" "${anchor[@]}"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -76,6 +96,13 @@ jobs:
           scripts/release/test-compatibility-fixtures.sh
       - name: Stage allowlisted Maven candidate
         run: scripts/release/stage-maven.sh "$RELEASE_VERSION" "$RELEASE_REVISION" "$RUNNER_TEMP/candidate"
+      - name: Match candidate to preserved release anchor
+        if: steps.release-anchor.outputs.restored == 'true'
+        run: |
+          scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION" \
+            "$RUNNER_TEMP/release-anchor/release-manifest.json" \
+            "$RUNNER_TEMP/release-anchor/central-bundle.zip" \
+            "$RUNNER_TEMP/candidate/central-bundle.zip"
       - name: Prove fresh standalone consumer
         run: scripts/release/verify-consumer.sh "$RELEASE_VERSION" "$RUNNER_TEMP/candidate/maven-repository"
       - name: Bundle release OpenAPI contracts
@@ -155,8 +182,6 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.revision }}
-      - name: Validate immutable release request again
-        run: scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION"
       - name: Set up Java
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
@@ -178,6 +203,9 @@ jobs:
             --pattern central-bundle.zip \
             --dir "$RUNNER_TEMP/prior-central" 2>/dev/null; then
             gh release download "v$RELEASE_VERSION" \
+              --pattern release-manifest.json \
+              --dir "$RUNNER_TEMP/prior-central"
+            gh release download "v$RELEASE_VERSION" \
               --pattern central-deployment-id.txt \
               --dir "$RUNNER_TEMP/prior-central" 2>/dev/null || true
             mkdir -p "$RUNNER_TEMP/signed/maven-repository"
@@ -190,6 +218,17 @@ jobs:
           else
             echo 'restored=false' >>"$GITHUB_OUTPUT"
           fi
+      - name: Validate immutable release request again
+        run: |
+          if [[ '${{ steps.prior-central.outputs.restored }}' == true ]]; then
+            manifest="$RUNNER_TEMP/prior-central/release-manifest.json"
+            bundle="$RUNNER_TEMP/prior-central/central-bundle.zip"
+          else
+            manifest="$RUNNER_TEMP/candidate/release-manifest.json"
+            bundle="$RUNNER_TEMP/candidate/central-bundle.zip"
+          fi
+          scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION" \
+            "$manifest" "$bundle" "$RUNNER_TEMP/candidate/central-bundle.zip"
       - name: Import release signing key
         if: steps.prior-central.outputs.restored == 'false'
         env:
@@ -206,6 +245,10 @@ jobs:
           scripts/release/stage-maven.sh \
             "$RELEASE_VERSION" "$RELEASE_REVISION" "$RUNNER_TEMP/signed" --signed
           scripts/release/verify-consumer.sh "$RELEASE_VERSION" "$RUNNER_TEMP/signed/maven-repository"
+          scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION" \
+            "$RUNNER_TEMP/candidate/release-manifest.json" \
+            "$RUNNER_TEMP/candidate/central-bundle.zip" \
+            "$RUNNER_TEMP/signed/central-bundle.zip"
       - name: Check immutable Central state
         id: central
         run: |

@@ -2,7 +2,9 @@
 
 Only repository maintainers should run the protected manual `Release` workflow.
 The workflow accepts an exact SemVer and full commit SHA, and rejects anything
-other than the current `origin/main` revision.
+other than the current `origin/main` revision on the first dispatch. A later
+dispatch may use that older revision only when a draft release preserves a
+manifest and signed Central bundle for the exact same version and revision.
 
 ## Steps
 
@@ -34,7 +36,8 @@ first release pass.
    in a draft release so an interrupted upload cannot be retried blindly.
    Review Central validation and publish that deployment manually.
 5. Rerun the same version and revision. The workflow proves Central's anonymous
-   bytes, rebuilds exact images, publishes or verifies the three GHCR tags,
+   bytes after matching the preserved signed bundle's core payload to a fresh
+   candidate, rebuilds exact images, publishes or verifies the three GHCR tags,
    verifies anonymous digest pulls, creates attestations, pushes the immutable
    tag, and publishes the GitHub release.
 

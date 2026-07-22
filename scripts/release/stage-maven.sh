@@ -100,6 +100,11 @@ for artifact, packaging in components:
         if signed:
             copy_required(source_dir / f"{filename}.asc", destination_dir / f"{filename}.asc")
 
+    pom = ET.parse(destination_dir / f"{base}.pom")
+    scm_tag = pom.find("m:scm/m:tag", namespace)
+    if scm_tag is None or scm_tag.text != revision:
+        raise SystemExit(f"{artifact} staged POM lacks exact full source revision")
+
 for jar in clean.glob(f"{group_path}/*/{version}/*-{version}.jar"):
     if jar.name.endswith(("-sources.jar", "-javadoc.jar")):
         continue

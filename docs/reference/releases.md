@@ -55,6 +55,8 @@ A product imports the BOM and omits versions from individual Cardo dependencies:
 Every library release includes its POM, binary JAR, source JAR, Javadoc JAR,
 CycloneDX dependency inventory, signatures, and Central checksums. Binary JAR
 manifests identify `Implementation-Version` and the full `Build-Revision`.
+Every staged POM, including `cardo` and `cardo-bom`, records that same full
+revision in its SCM tag.
 
 Service images use only these public names:
 
@@ -111,7 +113,10 @@ for byte.
 The workflow stages Central with `USER_MANAGED`; automatic publication is
 disabled. It never overwrites a Maven version or an image tag. A rerun can
 resume only when Central bytes and any existing registry digests equal the
-recorded release. Mixed or different state fails and requires a new version.
+recorded release. The draft manifest must identify the requested version and
+revision, its digest must identify the preserved signed bundle, and that
+bundle's unsigned payload must equal a fresh candidate even if `main` has since
+advanced. Mixed or different state fails and requires a new version.
 The signed Central bundle is preserved in a draft release before the first
 Publisher API call. If the call succeeds but recording its deployment ID does
 not, a rerun stops for portal inspection instead of creating another
