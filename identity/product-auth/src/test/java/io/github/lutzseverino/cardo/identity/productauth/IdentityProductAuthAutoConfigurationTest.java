@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesConverter;
 import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
+import jakarta.servlet.DispatcherType;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -310,6 +311,15 @@ class IdentityProductAuthAutoConfigurationTest {
               mvc.perform(get("/product/public")).andExpect(status().isOk());
               mvc.perform(get("/product/authenticated")).andExpect(status().isUnauthorized());
               mvc.perform(get("/product/unmatched")).andExpect(status().isUnauthorized());
+              mvc.perform(get("/error")).andExpect(status().isUnauthorized());
+              mvc.perform(
+                      get("/error")
+                          .with(
+                              request -> {
+                                request.setDispatcherType(DispatcherType.ERROR);
+                                return request;
+                              }))
+                  .andExpect(status().isOk());
               mvc.perform(
                       post("/product/mutation")
                           .cookie(
@@ -383,7 +393,7 @@ class IdentityProductAuthAutoConfigurationTest {
   @RestController
   static class TestProductController {
 
-    @GetMapping({"/product/public", "/product/authenticated", "/product/unmatched"})
+    @GetMapping({"/product/public", "/product/authenticated", "/product/unmatched", "/error"})
     String getRoute() {
       return "ok";
     }
