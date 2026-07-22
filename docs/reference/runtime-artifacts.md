@@ -21,8 +21,9 @@ Build all executable JARs with the canonical reactor command:
 ```
 
 Images use Cloud Native Buildpacks rather than repository-specific Dockerfiles.
-The builder is pinned by digest in the root POM. From a clean checkout, install
-the reactor artifacts locally and build the desired service image:
+The builder and run image are pinned by multi-architecture digest in the root
+POM. From a clean checkout, install the reactor artifacts locally and build the
+desired service image:
 
 ```bash
 ./mvnw --batch-mode --no-transfer-progress -DskipTests install
@@ -80,6 +81,12 @@ The revision label and `/actuator/info` source revision are the full Git commit
 used by Maven. The version is the Maven project version. No deployment endpoint,
 credential, topology, or secret is included in this metadata.
 
+Maven archives and OCI creation timestamps use a fixed source epoch. The smoke
+rebuilds every service JAR and rebuilds one representative image with fresh
+caches, requiring byte-identical JAR hashes and an identical image content ID.
+This catches timestamps or mutable build inputs that would make the same commit
+produce different artifacts.
+
 ## Repository Smoke Validation
 
 Run the complete portable-artifact smoke from a clean checkout with a
@@ -91,8 +98,9 @@ Docker-compatible daemon:
 
 The smoke installs the reactor locally, starts an isolated disposable PostgreSQL
 for each artifact, packages and starts every JAR, builds and starts every image,
-and verifies metadata, non-root image ownership, health, information, readiness
-withdrawal, bounded termination, and cleanup. Identity uses a local protocol
+and verifies reproducibility, metadata, non-root image ownership, exact public
+probe paths, information, readiness withdrawal, bounded termination, and
+cleanup. Identity uses a local protocol
 stub for provider discovery and its existing startup contract; the smoke does
 not provision or validate a Keycloak deployment. Full provider and product
 integration belongs to the portable full-stack reference environment.

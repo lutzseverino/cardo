@@ -44,6 +44,14 @@ fail() {
   exit 1
 }
 
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
 free_port() {
   python3 - <<'PY'
 import socket
@@ -129,6 +137,25 @@ RSA_MODULUS = (
 
 
 class Handler(BaseHTTPRequestHandler):
+    def read_request_body(self):
+        if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
+            chunks = []
+            while True:
+                size_line = self.rfile.readline()
+                if not size_line:
+                    raise ConnectionError("request ended before the terminal chunk")
+                size = int(size_line.split(b";", 1)[0].strip(), 16)
+                if size == 0:
+                    while self.rfile.readline() not in (b"\r\n", b"\n", b""):
+                        pass
+                    break
+                chunk = self.rfile.read(size)
+                if len(chunk) != size or self.rfile.read(2) != b"\r\n":
+                    raise ConnectionError("request ended inside a chunk")
+                chunks.append(chunk)
+            return b"".join(chunks)
+        return self.rfile.read(int(self.headers.get("Content-Length", "0")))
+
     def send_json(self, status, body):
         payload = json.dumps(body).encode()
         self.send_response(status)
@@ -176,15 +203,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(404, {"error": "not_found"})
 
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", "0")))
-        if self.path.endswith("/protocol/openid-connect/token"):
+        body = self.read_request_body()
+        if self.path == "/__cardo_smoke__/chunked-body":
+            self.send_json(200, {"length": len(body)})
+        elif self.path.endswith("/protocol/openid-connect/token"):
             self.send_json(200, {"access_token": "cardo-smoke", "expires_in": 3600})
         else:
             self.send_response(204)
             self.end_headers()
 
     def do_PUT(self):
-        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        self.read_request_body()
         self.send_response(204)
         self.end_headers()
 
@@ -198,6 +227,26 @@ PY
   processes+=("$provider_pid")
   wait_for_url "http://127.0.0.1:$provider_port/realms/cardo/.well-known/openid-configuration" 20 \
     || fail "provider stub did not start"
+  python3 - "$provider_port" <<'PY' \
+    || fail "provider stub did not consume a chunked request body"
+import http.client
+import json
+import sys
+
+chunks = [b"cardo-", b"chunked-", b"request"]
+connection = http.client.HTTPConnection("127.0.0.1", int(sys.argv[1]), timeout=5)
+connection.request(
+    "POST",
+    "/__cardo_smoke__/chunked-body",
+    body=iter(chunks),
+    encode_chunked=True,
+)
+response = connection.getresponse()
+payload = json.loads(response.read())
+connection.close()
+assert response.status == 200
+assert payload == {"length": sum(map(len, chunks))}
+PY
 }
 
 start_postgresql() {
@@ -265,6 +314,12 @@ assert_runtime_contract() {
   unexposed_status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/actuator/env")
   [[ "$unexposed_status" == "401" || "$unexposed_status" == "404" ]] \
     || fail "$service unexpectedly permits the Actuator env endpoint ($unexposed_status)"
+
+  local component_status
+  component_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    "$base_url/actuator/health/db")
+  [[ "$component_status" == "401" ]] \
+    || fail "$service unexpectedly permits an Actuator health component path ($component_status)"
 }
 
 wait_for_process_exit_by() {
@@ -331,6 +386,7 @@ smoke_jar() {
     SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$postgres_port/cardo" \
     SPRING_DATASOURCE_USERNAME=cardo \
     SPRING_DATASOURCE_PASSWORD=cardo-smoke \
+    MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS=always \
     KEYCLOAK_BASE_URL="http://127.0.0.1:$provider_port" \
     KEYCLOAK_ISSUER_URI="http://127.0.0.1:$provider_port/realms/cardo" \
     KEYCLOAK_CLIENT_SECRET=cardo-smoke \
@@ -380,9 +436,35 @@ assert_image_metadata() {
     || fail "$service image revision label is missing"
   [[ "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.source"}}' "$image")" == "https://github.com/lutzseverino/cardo" ]] \
     || fail "$service image source label is missing"
+  [[ "$(docker image inspect --format '{{.Created}}' "$image")" == "1980-01-01T00:00:02Z" ]] \
+    || fail "$service image creation timestamp is not deterministic"
   embedded_environment=$(docker image inspect --format '{{json .Config.Env}}' "$image")
   [[ "$embedded_environment" != *"cardo-smoke"* ]] \
     || fail "$service image contains smoke credentials"
+}
+
+assert_repeatable_image() {
+  local service=$1
+  local first_image=$2
+  local repeated_image="cardo-runtime-smoke/$service:${run_id}-repeat"
+  local build_cache="cardo-runtime-smoke-${service}-repeat-build-${run_id}"
+  local launch_cache="cardo-runtime-smoke-${service}-repeat-launch-${run_id}"
+  local first_id repeated_id
+  images+=("$repeated_image")
+  volumes+=("$build_cache" "$launch_cache")
+
+  ./mvnw --batch-mode --no-transfer-progress -pl "$service" \
+    -DskipTests \
+    -Dcardo.image.build-cache="$build_cache" \
+    -Dcardo.image.launch-cache="$launch_cache" \
+    -Dcardo.image.name="$repeated_image" \
+    clean package spring-boot:build-image-no-fork
+  assert_image_metadata "$service repeat" "$repeated_image"
+  first_id=$(docker image inspect --format '{{.Id}}' "$first_image")
+  repeated_id=$(docker image inspect --format '{{.Id}}' "$repeated_image")
+  [[ "$first_id" == "$repeated_id" ]] \
+    || fail "$service image is not reproducible ($first_id != $repeated_id)"
+  echo "reproduced $service image content $first_id"
 }
 
 wait_for_container_exit_by() {
@@ -412,8 +494,14 @@ smoke_image() {
     -Dcardo.image.build-cache="$build_cache" \
     -Dcardo.image.launch-cache="$launch_cache" \
     -Dcardo.image.name="$image" \
-    package spring-boot:build-image-no-fork
+    clean package spring-boot:build-image-no-fork
+  [[ "$(sha256_file "$service/target/$service-$project_version.jar")" \
+      == "$(cat "$temporary_directory/$service-jar.sha256")" ]] \
+    || fail "$service JAR is not reproducible"
   assert_image_metadata "$service" "$image"
+  if [[ "$service" == "identity" ]]; then
+    assert_repeatable_image "$service" "$image"
+  fi
   start_postgresql "$service-image"
 
   docker run --detach \
@@ -425,6 +513,7 @@ smoke_image() {
     --env SPRING_DATASOURCE_URL="jdbc:postgresql://$postgres_container:5432/cardo" \
     --env SPRING_DATASOURCE_USERNAME=cardo \
     --env SPRING_DATASOURCE_PASSWORD=cardo-smoke \
+    --env MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS=always \
     --env KEYCLOAK_BASE_URL="http://host.docker.internal:$provider_port" \
     --env KEYCLOAK_ISSUER_URI="http://host.docker.internal:$provider_port/realms/cardo" \
     --env KEYCLOAK_CLIENT_SECRET=cardo-smoke \
@@ -470,6 +559,12 @@ source_revision=$(git rev-parse HEAD)
 start_provider_stub
 
 ./mvnw --batch-mode --no-transfer-progress -DskipTests install
+
+for service in identity invite billing; do
+  ./mvnw --batch-mode --no-transfer-progress -pl "$service" -DskipTests clean package
+  sha256_file "$service/target/$service-$project_version.jar" \
+    >"$temporary_directory/$service-jar.sha256"
+done
 
 for service in identity invite billing; do
   smoke_jar "$service"
