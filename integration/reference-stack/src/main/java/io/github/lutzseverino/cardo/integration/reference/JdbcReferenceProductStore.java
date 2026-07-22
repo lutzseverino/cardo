@@ -55,15 +55,19 @@ class JdbcReferenceProductStore implements ReferenceProductStore {
 
   @Override
   @Transactional
-  public void recordCreated(UUID invitationId, UUID remoteInvitationId) {
+  public void recordCreated(UUID invitationId, UUID remoteInvitationId, UUID invitedUserId) {
     int updated =
         jdbc.update(
             "update reference_invitation set remote_invitation_id = coalesce(remote_invitation_id, ?), "
+                + "invited_user_id = coalesce(invited_user_id, ?), "
                 + "updated_at = current_timestamp where id = ? "
-                + "and (remote_invitation_id is null or remote_invitation_id = ?)",
+                + "and (remote_invitation_id is null or remote_invitation_id = ?) "
+                + "and (invited_user_id is null or invited_user_id = ?)",
             remoteInvitationId,
+            invitedUserId,
             invitationId,
-            remoteInvitationId);
+            remoteInvitationId,
+            invitedUserId);
     if (updated != 1) {
       throw new IllegalStateException("Remote invitation identifier changed.");
     }
@@ -93,12 +97,17 @@ class JdbcReferenceProductStore implements ReferenceProductStore {
         "insert into reference_membership(tenant_id, subject) values (?, ?) on conflict do nothing",
         ReferenceContract.TENANT_ID,
         subject);
-    jdbc.update(
-        "update reference_invitation set receipt_id = coalesce(receipt_id, ?), "
-            + "accepted_at = coalesce(accepted_at, current_timestamp), updated_at = current_timestamp "
-            + "where id = ?",
-        receiptId,
-        invitationId);
+    int updated =
+        jdbc.update(
+            "update reference_invitation set receipt_id = coalesce(receipt_id, ?), "
+                + "accepted_at = coalesce(accepted_at, current_timestamp), updated_at = current_timestamp "
+                + "where id = ? and accepted_subject = ?",
+            receiptId,
+            invitationId,
+            subject);
+    if (updated != 1) {
+      throw new IllegalStateException("Invitation acceptance subject changed.");
+    }
   }
 
   @Override
@@ -112,7 +121,7 @@ class JdbcReferenceProductStore implements ReferenceProductStore {
   public InvitationState invitation(UUID invitationId) {
     return jdbc
         .query(
-            "select id, request_id, email, invited_by, remote_invitation_id, "
+            "select id, request_id, email, invited_by, remote_invitation_id, invited_user_id, "
                 + "accepted_subject, receipt_id from reference_invitation where id = ?",
             this::mapInvitation,
             invitationId)
@@ -125,7 +134,7 @@ class JdbcReferenceProductStore implements ReferenceProductStore {
   public InvitationState lockInvitation(UUID invitationId) {
     return jdbc
         .query(
-            "select id, request_id, email, invited_by, remote_invitation_id, "
+            "select id, request_id, email, invited_by, remote_invitation_id, invited_user_id, "
                 + "accepted_subject, receipt_id from reference_invitation where id = ? for update",
             this::mapInvitation,
             invitationId)
@@ -191,6 +200,7 @@ class JdbcReferenceProductStore implements ReferenceProductStore {
         row.getString("email"),
         row.getObject("invited_by", UUID.class),
         row.getObject("remote_invitation_id", UUID.class),
+        row.getObject("invited_user_id", UUID.class),
         row.getString("accepted_subject"),
         row.getObject("receipt_id", UUID.class));
   }

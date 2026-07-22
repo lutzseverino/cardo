@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 class ReferenceProductController {
 
   private final ReferenceWorkflow workflow;
-  private final ReferenceProductStore store;
   private final Grants grants;
   private final AuthenticatedUserReader users;
   private final BillingEntitlementsClient billing;
@@ -36,7 +35,6 @@ class ReferenceProductController {
 
   ReferenceProductController(
       ReferenceWorkflow workflow,
-      ReferenceProductStore store,
       Grants grants,
       AuthenticatedUserReader users,
       BillingEntitlementsClient billing,
@@ -44,7 +42,6 @@ class ReferenceProductController {
       ReferenceOwnerSetup ownerSetup,
       @Value("${reference.control-secret}") String controlSecret) {
     this.workflow = workflow;
-    this.store = store;
     this.grants = grants;
     this.users = users;
     this.billing = billing;
@@ -87,14 +84,13 @@ class ReferenceProductController {
 
   @PostMapping("/api/reference/invitations/{id}/accept")
   ResponseEntity<Void> accept(@PathVariable UUID id) {
-    workflow.accept(
-        id, users.currentUser().authorizationSubject(), OffsetDateTime.now(ZoneOffset.UTC));
+    workflow.accept(id, users.currentUser(), OffsetDateTime.now(ZoneOffset.UTC));
     return ResponseEntity.accepted().build();
   }
 
   @GetMapping("/api/reference/convergence/{id}")
   ConvergenceResponse convergence(@PathVariable UUID id) {
-    UUID receiptId = store.invitation(id).receiptId();
+    UUID receiptId = workflow.requireOwnedInvitation(id, users.currentUser()).receiptId();
     if (receiptId == null) {
       return new ConvergenceResponse(null, "NOT_STAGED", null);
     }

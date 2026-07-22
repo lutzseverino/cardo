@@ -37,6 +37,7 @@ final class ReferenceDatabaseCluster implements AutoCloseable {
                 + "'");
         sql.execute("create database " + database.name() + " owner " + database.owner());
         sql.execute("revoke connect on database " + database.name() + " from public");
+        sql.execute("revoke create on database " + database.name() + " from public");
         sql.execute(
             "grant connect on database " + database.name() + " to " + database.application());
       }
@@ -47,6 +48,7 @@ final class ReferenceDatabaseCluster implements AutoCloseable {
       try (Connection connection =
               DriverManager.getConnection(jdbcUrl(database.name()), ADMIN_USER, ADMIN_PASSWORD);
           Statement sql = connection.createStatement()) {
+        sql.execute("create extension if not exists pgcrypto");
         sql.execute("grant usage, create on schema public to " + database.application());
       } catch (SQLException failure) {
         throw new IllegalStateException(

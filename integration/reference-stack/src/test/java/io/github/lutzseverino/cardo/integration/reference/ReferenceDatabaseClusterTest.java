@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ReferenceDatabaseClusterTest {
@@ -13,23 +14,33 @@ class ReferenceDatabaseClusterTest {
   void givesEachApplicationOnlyItsOwnDatabase() throws Exception {
     try (ReferenceDatabaseCluster cluster = new ReferenceDatabaseCluster()) {
       cluster.start();
-      ReferenceDatabaseCluster.Database identity = cluster.database("identity");
-      try (var connection =
-          DriverManager.getConnection(
-              cluster.jdbcUrl(identity.name()), identity.application(), identity.password())) {
-        try (var query = connection.createStatement().executeQuery("select current_user")) {
-          assertThat(query.next()).isTrue();
-          assertThat(query.getString(1)).isEqualTo(identity.application());
-        }
-        try (var query =
-            connection
-                .createStatement()
-                .executeQuery(
-                    "select pg_catalog.pg_get_userbyid(datdba) from pg_database where datname = current_database()")) {
-          assertThat(query.next()).isTrue();
-          assertThat(query.getString(1)).isEqualTo(identity.owner());
+      for (String service : List.of("identity", "invite", "billing", "product")) {
+        ReferenceDatabaseCluster.Database database = cluster.database(service);
+        try (var connection =
+            DriverManager.getConnection(
+                cluster.jdbcUrl(database.name()), database.application(), database.password())) {
+          try (var query = connection.createStatement().executeQuery("select current_user")) {
+            assertThat(query.next()).isTrue();
+            assertThat(query.getString(1)).isEqualTo(database.application());
+          }
+          try (var query =
+              connection
+                  .createStatement()
+                  .executeQuery(
+                      "select pg_catalog.pg_get_userbyid(datdba), "
+                          + "has_database_privilege(current_user, current_database(), 'CREATE'), "
+                          + "exists(select 1 from pg_extension where extname = 'pgcrypto') "
+                          + "from pg_database where datname = current_database()")) {
+            assertThat(query.next()).isTrue();
+            assertThat(query.getString(1)).isEqualTo(database.owner());
+            assertThat(query.getBoolean(2)).isFalse();
+            assertThat(query.getBoolean(3)).isTrue();
+          }
+          assertThatThrownBy(() -> connection.createStatement().execute("create extension hstore"))
+              .isInstanceOf(SQLException.class);
         }
       }
+      ReferenceDatabaseCluster.Database identity = cluster.database("identity");
       assertThatThrownBy(
               () ->
                   DriverManager.getConnection(

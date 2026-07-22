@@ -66,7 +66,7 @@ class ReferenceProductConfiguration {
             .permitAll(HttpMethod.GET, "/")
             .permitAll("/invitations/**")
             .permitAll("/internal/reference/**")
-            .authenticated("/api/reference/invitations/**", "/api/reference/convergence/**")
+            .authenticated(HttpMethod.POST, "/api/reference/invitations")
             .hasAuthority(
                 ReferenceContract.TENANT_AUTHORITY, HttpMethod.GET, "/api/reference/tenants/*")
             .authenticated("/api/reference/billing/**");

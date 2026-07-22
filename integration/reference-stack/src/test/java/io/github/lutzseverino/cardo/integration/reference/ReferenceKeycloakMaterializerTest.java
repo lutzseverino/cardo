@@ -59,6 +59,11 @@ class ReferenceKeycloakMaterializerTest {
           "billing",
           "billing",
           "entitlement:read");
+      assertToken(
+          materializer.clientToken(ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "identity"),
+          "identity",
+          "identity",
+          "profile:read");
 
       String runtime = materializer.clientToken("cardo-identity", null);
       String inviteRuntime = materializer.clientToken("cardo-invite", null);

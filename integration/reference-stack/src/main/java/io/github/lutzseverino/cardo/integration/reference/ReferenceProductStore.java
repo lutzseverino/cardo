@@ -10,7 +10,7 @@ interface ReferenceProductStore {
 
   Optional<ReferenceCommand> nextCommand();
 
-  void recordCreated(UUID invitationId, UUID remoteInvitationId);
+  void recordCreated(UUID invitationId, UUID remoteInvitationId, UUID invitedUserId);
 
   void recordAcceptanceIntent(UUID invitationId, String subject, OffsetDateTime acceptedAt);
 
@@ -39,6 +39,7 @@ interface ReferenceProductStore {
       String email,
       UUID invitedBy,
       UUID remoteInvitationId,
+      UUID invitedUserId,
       String acceptedSubject,
       UUID receiptId) {}
 

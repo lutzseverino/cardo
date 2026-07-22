@@ -4,6 +4,7 @@ create table reference_invitation (
   email varchar(320) not null,
   invited_by uuid not null,
   remote_invitation_id uuid unique,
+  invited_user_id uuid,
   acceptance_intent_at timestamp with time zone,
   accepted_subject varchar(255),
   accepted_at timestamp with time zone,

@@ -24,8 +24,10 @@ class ReferenceStackIT {
   private static final Duration JOURNEY_TIMEOUT = Duration.ofSeconds(30);
   private static final String OWNER_EMAIL = "owner@reference.test";
   private static final String INVITED_EMAIL = "invited@reference.test";
+  private static final String OTHER_EMAIL = "other@reference.test";
   private static final String OWNER_PASSWORD = "Owner-reference-password-34";
   private static final String INVITED_PASSWORD = "Invited-reference-password-34";
+  private static final String OTHER_PASSWORD = "Other-reference-password-34";
 
   @Test
   void runsThePortableReferenceJourney() throws Exception {
@@ -178,9 +180,38 @@ class ReferenceStackIT {
           .isInstanceOf(RuntimeException.class);
       assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(401);
 
+      URI accept = stack.origin().resolve("/api/reference/invitations/" + invitationId + "/accept");
+      createUser(internal, stack, OTHER_EMAIL, OTHER_PASSWORD, "Other");
+      Browser otherBrowser = login(stack, OTHER_EMAIL, OTHER_PASSWORD);
+      assertThat(otherBrowser.request("POST", accept, null).status()).isEqualTo(403);
+      assertThat(
+              otherBrowser
+                  .http()
+                  .request(
+                      "GET",
+                      stack.origin().resolve("/api/reference/convergence/" + invitationId),
+                      null,
+                      Map.of())
+                  .status())
+          .isEqualTo(403);
+      assertThat(
+              invitationBrowser
+                  .request("POST", accept, null, bearer(invitedIdentityToken))
+                  .status())
+          .isEqualTo(401);
+      assertThat(invitedBrowser.http().request("POST", accept, null, Map.of()).status())
+          .isEqualTo(403);
+      assertThat(
+              invitedBrowser
+                  .http()
+                  .request("POST", accept, null, Map.of("X-CSRF-TOKEN", "mismatched-token"))
+                  .status())
+          .isEqualTo(403);
+      assertThat(convergence(invitedBrowser, stack, invitationId).get("status"))
+          .isEqualTo("NOT_STAGED");
+
       control(internal, stack, "/internal/reference/grants/pause");
       control(internal, stack, "/internal/reference/fail-after-invite-accept");
-      URI accept = stack.origin().resolve("/api/reference/invitations/" + invitationId + "/accept");
       CompletableFuture<ReferenceHttp.Response> first =
           CompletableFuture.supplyAsync(() -> invitedBrowser.request("POST", accept, null));
       CompletableFuture<ReferenceHttp.Response> second =

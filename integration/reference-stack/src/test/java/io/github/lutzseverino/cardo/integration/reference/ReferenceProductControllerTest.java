@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.lutzseverino.cardo.authorization.grant.GrantReceipt;
 import io.github.lutzseverino.cardo.authorization.grant.GrantReceiptStatus;
 import io.github.lutzseverino.cardo.authorization.grant.Grants;
+import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUser;
 import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;
 import java.util.Optional;
@@ -60,11 +61,17 @@ class ReferenceProductControllerTest {
   }
 
   private ReferenceProductController controller(ReferenceProductStore store, Grants grants) {
+    ReferenceWorkflow workflow = mock(ReferenceWorkflow.class);
+    AuthenticatedUserReader users = mock(AuthenticatedUserReader.class);
+    AuthenticatedUser user =
+        new AuthenticatedUser(UUID.randomUUID(), "reference-subject", "Reference User");
+    when(users.currentUser()).thenReturn(user);
+    when(workflow.requireOwnedInvitation(INVITATION, user))
+        .thenAnswer(ignored -> store.invitation(INVITATION));
     return new ReferenceProductController(
-        mock(ReferenceWorkflow.class),
-        store,
+        workflow,
         grants,
-        mock(AuthenticatedUserReader.class),
+        users,
         mock(BillingEntitlementsClient.class),
         new ReferenceGrantGate(),
         mock(ReferenceOwnerSetup.class),
@@ -76,6 +83,7 @@ class ReferenceProductControllerTest {
         INVITATION,
         INVITATION,
         "invited@example.test",
+        UUID.randomUUID(),
         UUID.randomUUID(),
         UUID.randomUUID(),
         "subject",

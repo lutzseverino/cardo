@@ -20,7 +20,7 @@ class ReferenceProductConfigurationTest {
     verify(rules).permitAll(HttpMethod.GET, "/");
     verify(rules).permitAll("/invitations/**");
     verify(rules).permitAll("/internal/reference/**");
-    verify(rules).authenticated("/api/reference/invitations/**", "/api/reference/convergence/**");
+    verify(rules).authenticated(HttpMethod.POST, "/api/reference/invitations");
     verify(rules)
         .hasAuthority(
             ReferenceContract.TENANT_AUTHORITY, HttpMethod.GET, "/api/reference/tenants/*");

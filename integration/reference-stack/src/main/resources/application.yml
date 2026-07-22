@@ -12,9 +12,6 @@ spring:
     locations: classpath:db/migration,classpath:db/authorization/publications
     placeholders:
       authorizationSchema: reference_events
-  jpa:
-    hibernate:
-      ddl-auto: none
   modulith:
     events:
       jdbc:

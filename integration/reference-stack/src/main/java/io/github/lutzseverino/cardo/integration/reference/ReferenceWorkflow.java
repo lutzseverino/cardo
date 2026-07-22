@@ -1,5 +1,7 @@
 package io.github.lutzseverino.cardo.integration.reference;
 
+import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUser;
+import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
 import io.github.lutzseverino.cardo.invite.client.CreateInvitation;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletion;
 import io.github.lutzseverino.cardo.invite.client.InvitationToken;
@@ -10,6 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -17,6 +20,7 @@ class ReferenceWorkflow {
 
   private final ReferenceProductStore store;
   private final InvitationsClient invitations;
+  private final IdentityUsersClient identityUsers;
   private final ReferenceAcceptanceCommitter acceptanceCommitter;
   private final URI acceptUrl;
   private final AtomicBoolean failAfterRemoteAccept = new AtomicBoolean();
@@ -24,10 +28,12 @@ class ReferenceWorkflow {
   ReferenceWorkflow(
       ReferenceProductStore store,
       InvitationsClient invitations,
+      IdentityUsersClient identityUsers,
       ReferenceAcceptanceCommitter acceptanceCommitter,
       @Value("${reference.accept-url}") URI acceptUrl) {
     this.store = store;
     this.invitations = invitations;
+    this.identityUsers = identityUsers;
     this.acceptanceCommitter = acceptanceCommitter;
     this.acceptUrl = acceptUrl;
   }
@@ -36,8 +42,31 @@ class ReferenceWorkflow {
     return store.createInvitation(requestId, email, invitedBy);
   }
 
-  void accept(UUID invitationId, String subject, OffsetDateTime acceptedAt) {
-    store.recordAcceptanceIntent(invitationId, subject, acceptedAt);
+  void accept(UUID invitationId, AuthenticatedUser user, OffsetDateTime acceptedAt) {
+    requireOwnedInvitation(invitationId, user);
+    store.recordAcceptanceIntent(invitationId, user.authorizationSubject(), acceptedAt);
+  }
+
+  ReferenceProductStore.InvitationState requireOwnedInvitation(
+      UUID invitationId, AuthenticatedUser user) {
+    ReferenceProductStore.InvitationState state = store.invitation(invitationId);
+    if (state.acceptedSubject() != null) {
+      if (!state.acceptedSubject().equals(user.authorizationSubject())) {
+        throw new AccessDeniedException("Invitation belongs to another Cardo user.");
+      }
+      return state;
+    }
+    var remote = invitations.get(state.remoteInvitationId());
+    if (state.invitedUserId() == null || !state.invitedUserId().equals(remote.invitedUserId())) {
+      throw new IllegalStateException("Remote invitation user identifier changed.");
+    }
+    var identity = identityUsers.get(state.invitedUserId());
+    if (!state.invitedUserId().equals(user.id())
+        || !identity.id().equals(user.id())
+        || !identity.authorizationSubject().equals(user.authorizationSubject())) {
+      throw new AccessDeniedException("Invitation belongs to another Cardo user.");
+    }
+    return state;
   }
 
   void failNextAfterRemoteAccept() {
@@ -79,7 +108,8 @@ class ReferenceWorkflow {
                 state.email(),
                 state.invitedBy(),
                 acceptUrl));
-    store.recordCreated(command.invitationId(), created.invitation().id());
+    store.recordCreated(
+        command.invitationId(), created.invitation().id(), created.invitation().invitedUserId());
     store.completeCommand(command.id());
   }
 
