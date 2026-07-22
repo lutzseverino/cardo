@@ -56,7 +56,17 @@ class ReferenceStackIT {
       assertProductionCookies(ownerBrowser.lastLogin());
       String ownerIdentityToken = ownerBrowser.cookie("__Host-cardo.session");
       String ownerRpt = rpt(stack, ownerIdentityToken);
-      assertProductRpt(ownerRpt);
+      assertProductRpt(ownerRpt, ownerId);
+      assertThat(
+              internal
+                  .request(
+                      "GET",
+                      stack.productInternal(
+                          "/api/reference/tenants/" + ReferenceContract.TENANT_ID),
+                      null,
+                      bearer(ownerRpt))
+                  .status())
+          .isEqualTo(200);
       assertThat(
               ownerBrowser
                   .http()
@@ -146,6 +156,7 @@ class ReferenceStackIT {
       String invitedIdentityToken = invitedBrowser.cookie("__Host-cardo.session");
       assertThatThrownBy(() -> rpt(stack, invitedIdentityToken))
           .isInstanceOf(RuntimeException.class);
+      assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(401);
 
       control(internal, stack, "/internal/reference/grants/pause");
       control(internal, stack, "/internal/reference/fail-after-invite-accept");
@@ -169,6 +180,8 @@ class ReferenceStackIT {
                       bearer(inviteToken)),
                   200,
                   internal));
+      assertThat(convergence(invitedBrowser, stack, invitationId).get("status"))
+          .isEqualTo("NOT_STAGED");
       Map<String, Object> pending =
           await(
               "durable PENDING grant receipt",
@@ -177,6 +190,7 @@ class ReferenceStackIT {
       UUID receiptId = UUID.fromString(string(pending, "receiptId"));
       assertThat(stack.databases().referenceReceiptCount(invitationId)).isOne();
       assertThat(stack.databases().referenceMembershipCount(invitedSubject)).isOne();
+      assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(401);
       control(internal, stack, "/internal/reference/grants/release");
       Map<String, Object> applied =
           await(
@@ -189,7 +203,8 @@ class ReferenceStackIT {
       stack.record("remote-success-local-gap-retried-to-single-applied-receipt");
 
       String invitedRpt = rpt(stack, invitedIdentityToken);
-      assertProductRpt(invitedRpt);
+      assertProductRpt(invitedRpt, invitedUserId);
+      assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(200);
       assertThat(
               internal
                   .request(
@@ -251,16 +266,20 @@ class ReferenceStackIT {
           .isEqualTo(401);
       stack.record("active-rpt-introspection-failed-closed-after-provider-revocation");
 
+      String accessBeforeRefresh = invitedBrowser.cookie("__Host-cardo.session");
+      String refreshBeforeRefresh = invitedBrowser.cookie("__Secure-cardo.refresh");
       ReferenceHttp.Response refreshed =
           invitedBrowser.request(
               "POST", stack.origin().resolve("/api/v1/identity/sessions/current/refresh"), null);
       assertThat(refreshed.status()).isEqualTo(200);
-      assertThat(
-              invitedBrowser
-                  .request(
-                      "DELETE", stack.origin().resolve("/api/v1/identity/sessions/current"), null)
-                  .status())
-          .isEqualTo(204);
+      assertThat(invitedBrowser.cookie("__Host-cardo.session")).isNotEqualTo(accessBeforeRefresh);
+      assertThat(invitedBrowser.cookie("__Secure-cardo.refresh"))
+          .isNotEqualTo(refreshBeforeRefresh);
+      ReferenceHttp.Response logout =
+          invitedBrowser.request(
+              "DELETE", stack.origin().resolve("/api/v1/identity/sessions/current"), null);
+      assertThat(logout.status()).isEqualTo(204);
+      assertExpiredCookies(logout);
       assertThat(
               invitedBrowser
                   .http()
@@ -350,12 +369,29 @@ class ReferenceStackIT {
             .request(
                 "GET", stack.origin().resolve("/api/v1/identity/sessions/csrf"), null, Map.of());
     assertThat(csrf.status()).isEqualTo(204);
-    ReferenceHttp.Response login =
-        browser.request(
-            "POST",
-            stack.origin().resolve("/api/v1/identity/sessions"),
-            Map.of("email", email, "password", password));
+    URI loginUri = stack.origin().resolve("/api/v1/identity/sessions");
+    Map<String, String> credentials = Map.of("email", email, "password", password);
+    assertThat(browser.http().request("POST", loginUri, credentials, Map.of()).status())
+        .isEqualTo(403);
+    assertThat(
+            browser
+                .http()
+                .request("POST", loginUri, credentials, Map.of("X-CSRF-TOKEN", "mismatched-token"))
+                .status())
+        .isEqualTo(403);
+    ReferenceHttp.Response login = browser.request("POST", loginUri, credentials);
     return new Browser(browser.http(), browser.cookies(), login);
+  }
+
+  private int protectedTenantStatus(Browser browser, ReferenceStackHarness stack) {
+    return browser
+        .http()
+        .request(
+            "GET",
+            stack.origin().resolve("/api/reference/tenants/" + ReferenceContract.TENANT_ID),
+            null,
+            Map.of())
+        .status();
   }
 
   private String rpt(ReferenceStackHarness stack, String identityToken) {
@@ -368,9 +404,10 @@ class ReferenceStackIT {
   }
 
   @SuppressWarnings("unchecked")
-  private void assertProductRpt(String token) throws Exception {
+  private void assertProductRpt(String token, UUID userId) throws Exception {
     var claims = JWTParser.parse(token).getJWTClaimsSet();
     assertThat(claims.getAudience()).containsExactly(ReferenceContract.PRODUCT_CLIENT);
+    assertThat(claims.getStringClaim("cardo_user_id")).isEqualTo(userId.toString());
     Map<String, Object> authorization = (Map<String, Object>) claims.getClaim("authorization");
     Collection<Map<String, Object>> permissions =
         (Collection<Map<String, Object>>) authorization.get("permissions");
@@ -388,6 +425,27 @@ class ReferenceStackIT {
     assertThat(cookies).anyMatch(value -> value.startsWith("__Host-cardo.session="));
     assertThat(cookies).anyMatch(value -> value.startsWith("__Secure-cardo.refresh="));
     assertThat(cookies).allMatch(value -> value.contains("Secure") && value.contains("HttpOnly"));
+  }
+
+  private void assertExpiredCookies(ReferenceHttp.Response logout) {
+    List<String> cookies = logout.headers().getOrDefault("set-cookie", List.of());
+    assertExpired(cookies, "__Host-cardo.session", "/", true);
+    assertExpired(cookies, "__Secure-cardo.refresh", "/api/v1/identity/sessions/current", true);
+    assertExpired(cookies, "__Host-cardo.csrf", "/", false);
+  }
+
+  private void assertExpired(List<String> cookies, String name, String path, boolean httpOnly) {
+    String cookie =
+        cookies.stream()
+            .filter(value -> value.startsWith(name + "="))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Missing expired cookie " + name));
+    assertThat(cookie).contains("Max-Age=0", "Path=" + path, "Secure", "SameSite=Lax");
+    if (httpOnly) {
+      assertThat(cookie).contains("HttpOnly");
+    } else {
+      assertThat(cookie).doesNotContain("HttpOnly");
+    }
   }
 
   private static Map<String, String> bearer(String token) {

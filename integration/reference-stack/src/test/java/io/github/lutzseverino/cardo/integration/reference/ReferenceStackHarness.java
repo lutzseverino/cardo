@@ -214,7 +214,7 @@ final class ReferenceStackHarness implements AutoCloseable {
                     Map.entry("IDENTITY_BASE_URL", "http://127.0.0.1:" + identityPort + "/api/v1"),
                     Map.entry("INVITE_BASE_URL", "http://127.0.0.1:" + invitePort + "/api/v1"),
                     Map.entry("BILLING_BASE_URL", "http://127.0.0.1:" + billingPort + "/api/v1"),
-                    Map.entry("REFERENCE_COMMANDS_DISPATCH_DELAY", "100ms"))));
+                    Map.entry("REFERENCE_COMMANDS_DISPATCH_DELAY", "1s"))));
     product.awaitReady(local(productPort, "/actuator/health/readiness"), STARTUP_TIMEOUT);
     record("product-ready");
   }

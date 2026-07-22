@@ -8,7 +8,6 @@ import java.util.Collection;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
@@ -16,29 +15,17 @@ class ReferenceKeycloakMaterializerTest {
 
   @Test
   void materializesAnIdempotentLeastPrivilegeContractWithExactAudiences() throws Exception {
-    try (Network network = Network.newNetwork();
-        GenericContainer<?> mailpit =
-            new GenericContainer<>(
-                    DockerImageName.parse(System.getProperty("cardo.test.mailpit.image")))
-                .withNetwork(network)
-                .withNetworkAliases("mailpit")
-                .withExposedPorts(8025)
-                .waitingFor(Wait.forHttp("/api/v1/info").forStatusCode(200));
-        GenericContainer<?> keycloak =
-            new GenericContainer<>(
-                    DockerImageName.parse(System.getProperty("cardo.test.keycloak.image")))
-                .withNetwork(network)
-                .withEnv(
-                    "KC_BOOTSTRAP_ADMIN_USERNAME", ReferenceKeycloakMaterializer.ADMIN_USERNAME)
-                .withEnv(
-                    "KC_BOOTSTRAP_ADMIN_PASSWORD", ReferenceKeycloakMaterializer.ADMIN_PASSWORD)
-                .withCommand("start-dev", "--http-enabled=true", "--hostname-strict=false")
-                .withExposedPorts(8080)
-                .waitingFor(
-                    Wait.forHttp("/realms/master")
-                        .forStatusCode(200)
-                        .withStartupTimeout(Duration.ofMinutes(2)))) {
-      mailpit.start();
+    try (GenericContainer<?> keycloak =
+        new GenericContainer<>(
+                DockerImageName.parse(System.getProperty("cardo.test.keycloak.image")))
+            .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", ReferenceKeycloakMaterializer.ADMIN_USERNAME)
+            .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", ReferenceKeycloakMaterializer.ADMIN_PASSWORD)
+            .withCommand("start-dev", "--http-enabled=true", "--hostname-strict=false")
+            .withExposedPorts(8080)
+            .waitingFor(
+                Wait.forHttp("/realms/master")
+                    .forStatusCode(200)
+                    .withStartupTimeout(Duration.ofMinutes(2)))) {
       keycloak.start();
       ReferenceKeycloakMaterializer materializer =
           new ReferenceKeycloakMaterializer(

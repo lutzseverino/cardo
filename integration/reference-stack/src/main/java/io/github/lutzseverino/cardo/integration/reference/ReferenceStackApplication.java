@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableScheduling
 @Import({AuthorizationPlanConfiguration.class, AuthorizationSchemaConfiguration.class})
-public class ReferenceStackApplication {
+class ReferenceStackApplication {
 
   public static void main(String[] args) {
     SpringApplication.run(ReferenceStackApplication.class, args);

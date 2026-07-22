@@ -127,6 +127,13 @@
             </goals>
             <configuration>
               <skipITs>${reference-stack.skip}</skipITs>
+              <includes>
+                <include>**/*IT.java</include>
+                <include>**/ReferenceAcceptancePostgreSqlIntegrationTest.java</include>
+                <include>**/ReferenceDatabaseClusterTest.java</include>
+                <include>**/ReferenceHttpsOriginTest.java</include>
+                <include>**/ReferenceKeycloakMaterializerTest.java</include>
+              </includes>
               <systemPropertyVariables>
                 <cardo.test.keycloak.image>${cardo.test.keycloak.image}</cardo.test.keycloak.image>
                 <cardo.test.postgres.image>${cardo.test.postgres.image}</cardo.test.postgres.image>
@@ -138,6 +145,18 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>**/ReferenceAcceptancePostgreSqlIntegrationTest.java</exclude>
+            <exclude>**/ReferenceDatabaseClusterTest.java</exclude>
+            <exclude>**/ReferenceHttpsOriginTest.java</exclude>
+            <exclude>**/ReferenceKeycloakMaterializerTest.java</exclude>
+          </excludes>
+        </configuration>
       </plugin>
     </plugins>
   </build>

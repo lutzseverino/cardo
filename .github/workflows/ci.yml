@@ -89,3 +89,32 @@ jobs:
           ./scripts/release/test-maven-release.sh 0.1.0-rc.0.ci
       - name: Smoke runtime artifacts
         run: ./scripts/smoke-runtime-artifacts.sh
+
+  reference-stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Set up Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Exercise clean-start and clean-teardown twice
+        run: |
+          ./scripts/smoke-reference-stack.sh
+          ./scripts/smoke-reference-stack.sh
+      - name: Upload sanitized reference diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reference-stack-diagnostics
+          if-no-files-found: warn
+          path: |
+            integration/reference-stack/target/reference-stack/
+            integration/reference-stack/target/surefire-reports/
+            integration/reference-stack/target/failsafe-reports/

@@ -353,9 +353,6 @@
           <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
           <systemPropertyVariables>
             <cardo.test.keycloak.image>${cardo.test.keycloak.image}</cardo.test.keycloak.image>
-            <cardo.test.postgres.image>${cardo.test.postgres.image}</cardo.test.postgres.image>
-            <cardo.test.mailpit.image>${cardo.test.mailpit.image}</cardo.test.mailpit.image>
-            <cardo.test.caddy.image>${cardo.test.caddy.image}</cardo.test.caddy.image>
           </systemPropertyVariables>
         </configuration>
       </plugin>
