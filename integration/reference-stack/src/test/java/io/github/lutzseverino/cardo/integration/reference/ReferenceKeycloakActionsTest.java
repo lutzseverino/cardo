@@ -37,6 +37,45 @@ class ReferenceKeycloakActionsTest {
   }
 
   @Test
+  void followsPinnedProviderActionConfirmation() {
+    URI page =
+        URI.create("http://provider.test/realms/reference/login-actions/action-token?key=initial");
+
+    URI continuation =
+        ReferenceKeycloakActions.continuation(
+            """
+            <div id="kc-info-message">
+              <p class="instruction">Confirm execution of actions: <b>Update password</b></p>
+              <p><a href="/realms/reference/login-actions/action-token?key=confirmed&amp;client_id=browser">
+                Proceed
+              </a></p>
+            </div>
+            """,
+            page);
+
+    assertThat(continuation)
+        .isEqualTo(
+            URI.create(
+                "http://provider.test/realms/reference/login-actions/action-token?key=confirmed&client_id=browser"));
+  }
+
+  @Test
+  void doesNotTreatAnUnrelatedInfoLinkAsActionConfirmation() {
+    assertThat(
+            ReferenceKeycloakActions.continuation(
+                """
+                <div id="kc-info-message">
+                  <p><a href="https://attacker.test/realms/reference/login-actions/action-token?key=stolen">
+                    Proceed
+                  </a></p>
+                </div>
+                """,
+                URI.create(
+                    "http://provider.test/realms/reference/login-actions/action-token?key=initial")))
+        .isNull();
+  }
+
+  @Test
   void reportsFormlessProviderResponseWithoutItsTokenQuery() throws IOException {
     HttpServer provider = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     provider.createContext(

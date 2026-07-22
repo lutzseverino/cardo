@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,8 +21,11 @@ final class ReferenceKeycloakActions {
 
   private static final Pattern FORM = Pattern.compile("(?is)<form\\b[^>]*>.*?</form>");
   private static final Pattern INPUT = Pattern.compile("(?is)<input\\b[^>]*>");
+  private static final Pattern LINK = Pattern.compile("(?is)<a\\b[^>]*>");
+  private static final Pattern INFO =
+      Pattern.compile("(?is)<div\\b[^>]+id=[\"']kc-info-message[\"'][^>]*>(.*?)</div>");
   private static final Pattern ERROR =
-      Pattern.compile("(?is)<[^>]+id=[\"']kc-error-message[\"'][^>]*>(.*?)</[^>]+>");
+      Pattern.compile("(?is)<div\\b[^>]+id=[\"']kc-error-message[\"'][^>]*>(.*?)</div>");
   private static final Pattern ELEMENT = Pattern.compile("(?is)<[^>]+>");
   private final HttpClient browser =
       HttpClient.newBuilder()
@@ -41,6 +45,11 @@ final class ReferenceKeycloakActions {
           return new Result(true, true, redirect);
         }
         page = get(redirect);
+        continue;
+      }
+      URI continuation = continuation(page.body(), page.uri());
+      if (continuation != null) {
+        page = get(continuation);
         continue;
       }
       Form form;
@@ -86,6 +95,28 @@ final class ReferenceKeycloakActions {
       }
     }
     return new Form(id, page.resolve(action), Map.copyOf(values));
+  }
+
+  static URI continuation(String html, URI page) {
+    Matcher info = INFO.matcher(html);
+    if (!info.find()) {
+      return null;
+    }
+    Matcher link = LINK.matcher(info.group(1));
+    if (!link.find()) {
+      return null;
+    }
+    String href = optionalAttribute(link.group(), "href");
+    if (href == null) {
+      return null;
+    }
+    URI target = page.resolve(htmlDecode(href));
+    return Objects.equals(target.getScheme(), page.getScheme())
+            && Objects.equals(target.getAuthority(), page.getAuthority())
+            && target.getPath().equals(page.getPath())
+            && target.getPath().endsWith("/action-token")
+        ? target
+        : null;
   }
 
   private static String describe(Page page) {
