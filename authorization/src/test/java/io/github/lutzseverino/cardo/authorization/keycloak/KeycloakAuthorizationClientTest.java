@@ -1,6 +1,7 @@
 package io.github.lutzseverino.cardo.authorization.keycloak;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
@@ -87,7 +88,7 @@ class KeycloakAuthorizationClientTest {
   }
 
   @Test
-  void continuesAssigningRoleAfterConcurrentCreation() {
+  void assignsAnExistingClientRole() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
     KeycloakAuthorizationClient client =
@@ -102,15 +103,6 @@ class KeycloakAuthorizationClientTest {
                 [{"id":"client-uuid","clientId":"identity"}]
                 """,
                 MediaType.APPLICATION_JSON));
-    server
-        .expect(
-            requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles/profile%3Aread")))
-        .andExpect(method(GET))
-        .andRespond(withStatus(HttpStatus.NOT_FOUND));
-    server
-        .expect(requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles")))
-        .andExpect(method(POST))
-        .andRespond(withStatus(HttpStatus.CONFLICT));
     server
         .expect(
             requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles/profile%3Aread")))
@@ -137,6 +129,39 @@ class KeycloakAuthorizationClientTest {
 
     client.ensureClientRolesAssigned(
         new ClientRoleAssignment("identity", "subject-1", List.of("profile:read")));
+
+    server.verify();
+  }
+
+  @Test
+  void rejectsAMissingClientRoleWithoutTryingToCreateIt() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakAuthorizationClient client =
+        new KeycloakAuthorizationClient(
+            "https://keycloak.example", "cardo", rest, () -> "admin-token");
+    server
+        .expect(requestTo(org.hamcrest.Matchers.containsString("clientId=identity")))
+        .andExpect(method(GET))
+        .andRespond(
+            withSuccess(
+                """
+                [{"id":"client-uuid","clientId":"identity"}]
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(
+            requestTo(org.hamcrest.Matchers.endsWith("/clients/client-uuid/roles/profile%3Aread")))
+        .andExpect(method(GET))
+        .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+    assertThatThrownBy(
+            () ->
+                client.ensureClientRolesAssigned(
+                    new ClientRoleAssignment("identity", "subject-1", List.of("profile:read"))))
+        .isInstanceOf(KeycloakAuthorizationException.class)
+        .hasMessageContaining("Required Keycloak client role is missing")
+        .hasMessageContaining("profile:read");
 
     server.verify();
   }

@@ -34,6 +34,7 @@ fails startup before traffic is served, and errors name the property without ech
 | Identity | `cardo.identity.keycloak.credential-setup-client-id` | string | `cardo-web` | required | no | Non-blank browser client. |
 | Identity | `cardo.identity.keycloak.credential-setup-redirect-uri` | URI | `http://localhost:3000/invitations/completed` | required | no | Remote HTTPS; canonical local endpoints rejected. |
 | Identity | `cardo.identity.keycloak.user-id-claim-client-ids` | list | `cardo-identity`, `identity`, `billing` | required | no | Non-empty, distinct, non-blank entries. |
+| Identity | `cardo.identity.keycloak.legacy-startup-mutation-enabled` | boolean | `false` | `false` | no | Temporary migration seam. `false` validates read-only; `true` warns, repairs only canonical Identity mappers and roles, then validates. |
 | Identity | `cardo.identity.operations.dispatch-delay` | duration | `5s` | optional | no | Positive scheduler delay. |
 | Identity | `cardo.identity.operations.poll-delay` | duration | `15s` | optional | no | Positive completion poll delay. |
 | Identity | `cardo.identity.operations.credential-setup-timeout` | duration | `24h` | optional | no | Positive provider action lifespan. |

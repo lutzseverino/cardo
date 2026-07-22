@@ -58,6 +58,7 @@ cardo:
         - ${cardo.identity.keycloak.client-id}
         - identity
         - billing
+      legacy-startup-mutation-enabled: ${IDENTITY_KEYCLOAK_LEGACY_STARTUP_MUTATION_ENABLED:false}
     operations:
       dispatch-delay: ${IDENTITY_OPERATION_DISPATCH_DELAY:5s}
       poll-delay: ${IDENTITY_OPERATION_POLL_DELAY:15s}

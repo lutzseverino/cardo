@@ -258,26 +258,11 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
           .body(RoleRepresentation.class);
     } catch (RestClientResponseException exception) {
       if (exception.getStatusCode().value() == 404) {
-        try {
-          createRole(clientUuid, roleName);
-        } catch (RestClientResponseException creationFailure) {
-          if (!isConflict(creationFailure)) {
-            throw creationFailure;
-          }
-        }
-        return role(clientUuid, roleName);
+        throw new KeycloakAuthorizationException(
+            "Required Keycloak client role is missing: " + roleName);
       }
       throw exception;
     }
-  }
-
-  private void createRole(String clientUuid, String roleName) {
-    rest.post()
-        .uri("/admin/realms/{realm}/clients/{clientUuid}/roles", realm, clientUuid)
-        .header(HttpHeaders.AUTHORIZATION, authorization())
-        .body(new RoleCreateRequest(roleName))
-        .retrieve()
-        .toBodilessEntity();
   }
 
   private boolean isConflict(RestClientResponseException exception) {
@@ -307,8 +292,6 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
   }
 
   private record RoleRepresentation(String id, String name) {}
-
-  private record RoleCreateRequest(String name) {}
 
   private record PermissionTicketCreateRequest(
       String resource, String requester, String scopeName) {

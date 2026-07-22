@@ -36,6 +36,7 @@ Use the [reference template](../_templates/reference.template.md) for new refere
 - [Browser Sessions And Product Tokens](browser-sessions.md)
 - [Data Protection Contracts](data-protection-contracts.md)
 - [Generated Client Code](generated-client-code.md)
+- [Keycloak Provider Contract](keycloak-provider-contract.md)
 - [Method Naming](method-naming.md)
 - [OpenAPI Contract Changes](openapi-contract-changes.md)
 - [Product Integration](product-integration.md)

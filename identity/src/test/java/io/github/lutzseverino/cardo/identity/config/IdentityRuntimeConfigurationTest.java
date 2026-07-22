@@ -42,7 +42,8 @@ class IdentityRuntimeConfigurationTest {
             "",
             "cardo-web",
             URI.create("https://app.example.com/invitations/completed"),
-            List.of("identity", "billing"));
+            List.of("identity", "billing"),
+            false);
 
     assertThatThrownBy(
             () ->
@@ -131,7 +132,8 @@ class IdentityRuntimeConfigurationTest {
                 .readAllBytes());
     assertThat(metadata)
         .contains("cardo.identity.runtime.connect-timeout")
-        .contains("cardo.identity.provider-mutations.max-attempts");
+        .contains("cardo.identity.provider-mutations.max-attempts")
+        .contains("cardo.identity.keycloak.legacy-startup-mutation-enabled");
   }
 
   @Test
@@ -211,7 +213,8 @@ class IdentityRuntimeConfigurationTest {
         "",
         "cardo-web",
         URI.create("http://localhost:3000/invitations/completed"),
-        List.of("identity"));
+        List.of("identity"),
+        false);
   }
 
   private KeycloakProperties productionKeycloak() {
@@ -227,7 +230,8 @@ class IdentityRuntimeConfigurationTest {
         "identity-secret",
         "cardo-web",
         redirectUri,
-        List.of("cardo-identity", "identity", "billing"));
+        List.of("cardo-identity", "identity", "billing"),
+        false);
   }
 
   private MockEnvironment productionEnvironment() {

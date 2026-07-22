@@ -12,4 +12,5 @@ public record KeycloakProperties(
     String clientSecret,
     String credentialSetupClientId,
     URI credentialSetupRedirectUri,
-    List<String> userIdClaimClientIds) {}
+    List<String> userIdClaimClientIds,
+    boolean legacyStartupMutationEnabled) {}

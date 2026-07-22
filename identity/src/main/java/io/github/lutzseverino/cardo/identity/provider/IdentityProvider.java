@@ -2,7 +2,6 @@ package io.github.lutzseverino.cardo.identity.provider;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,8 +23,6 @@ public interface IdentityProvider {
   void bindUserId(String subject, UUID userId);
 
   void setIdentityEnabled(String subject, boolean enabled);
-
-  void ensureUserIdClaimMapped(List<String> clientIds);
 
   IssuedSession issuePasswordSession(String email, String password);
 

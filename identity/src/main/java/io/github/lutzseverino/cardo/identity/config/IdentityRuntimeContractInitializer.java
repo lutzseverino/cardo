@@ -1,24 +1,38 @@
 package io.github.lutzseverino.cardo.identity.config;
 
-import io.github.lutzseverino.cardo.identity.workflow.InitializeIdentityRuntimeWorkflow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 @Component
-public class IdentityRuntimeContractInitializer implements ApplicationRunner {
+public final class IdentityRuntimeContractInitializer implements ApplicationRunner {
 
-  private final InitializeIdentityRuntimeWorkflow initializeIdentityRuntime;
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(IdentityRuntimeContractInitializer.class);
+
+  private final IdentityKeycloakProviderContractValidator validator;
+  private final IdentityKeycloakLegacyStartupRepair legacyRepair;
   private final KeycloakProperties keycloak;
 
   IdentityRuntimeContractInitializer(
-      InitializeIdentityRuntimeWorkflow initializeIdentityRuntime, KeycloakProperties keycloak) {
-    this.initializeIdentityRuntime = initializeIdentityRuntime;
+      IdentityKeycloakProviderContractValidator validator,
+      IdentityKeycloakLegacyStartupRepair legacyRepair,
+      KeycloakProperties keycloak) {
+    this.validator = validator;
+    this.legacyRepair = legacyRepair;
     this.keycloak = keycloak;
   }
 
   @Override
   public void run(ApplicationArguments args) {
-    initializeIdentityRuntime.initialize(keycloak.userIdClaimClientIds());
+    if (keycloak.legacyStartupMutationEnabled()) {
+      LOGGER.warn(
+          "Legacy Keycloak startup mutation is enabled; this temporary compatibility mode "
+              + "requires broad provider authority and should be disabled after migration");
+      legacyRepair.repair();
+    }
+    validator.validate();
   }
 }
