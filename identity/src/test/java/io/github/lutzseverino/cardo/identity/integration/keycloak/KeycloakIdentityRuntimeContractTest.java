@@ -44,6 +44,41 @@ class KeycloakIdentityRuntimeContractTest {
   }
 
   @Test
+  void rejectsAForeignCatalogResourceAccessEntry() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityRuntimeContract validator =
+        validator(
+            rest,
+            Map.of(
+                "identity",
+                Map.of("roles", List.of("uma_protection")),
+                "billing",
+                Map.of("roles", List.of("entitlement:read"))));
+    expectValidProviderContract(server);
+
+    assertThatThrownBy(validator::validate)
+        .hasMessageContaining("resource_access must contain exactly identity:uma_protection");
+
+    server.verify();
+  }
+
+  @Test
+  void rejectsAnExtraIdentityCatalogRole() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityRuntimeContract validator =
+        validator(
+            rest, Map.of("identity", Map.of("roles", List.of("uma_protection", "profile:read"))));
+    expectValidProviderContract(server);
+
+    assertThatThrownBy(validator::validate)
+        .hasMessageContaining("resource_access must contain exactly identity:uma_protection");
+
+    server.verify();
+  }
+
+  @Test
   void aggregatesIndependentDriftWithoutDisclosingProviderResponsesOrCredentials() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
@@ -143,18 +178,31 @@ class KeycloakIdentityRuntimeContractTest {
   }
 
   private KeycloakIdentityRuntimeContract validator(RestClient.Builder rest) {
+    return validator(rest, Map.of("identity", Map.of("roles", List.of("uma_protection"))));
+  }
+
+  private KeycloakIdentityRuntimeContract validator(
+      RestClient.Builder rest, Map<String, Object> catalogResourceAccess) {
     KeycloakClientCredentialsTokenProvider tokens =
         mock(KeycloakClientCredentialsTokenProvider.class);
     when(tokens.clientCredentialsToken()).thenReturn(token("runtime", Map.of()));
     KeycloakClientCredentialsTokenProvider catalogTokens =
         mock(KeycloakClientCredentialsTokenProvider.class);
     when(catalogTokens.clientCredentialsToken())
-        .thenReturn(
-            token("identity", Map.of("identity", Map.of("roles", List.of("uma_protection")))));
+        .thenReturn(token("identity", catalogResourceAccess));
     KeycloakLegacyStartupRepair repair =
         new KeycloakLegacyStartupRepair(properties(false), tokens, rest.clone());
     return new KeycloakIdentityRuntimeContract(
         properties(false), tokens, catalogTokens, repair, rest);
+  }
+
+  private void expectValidProviderContract(MockRestServiceServer server) {
+    expectValidClients(server);
+    expectCanonicalMapper(server, "runtime-uuid");
+    expectCanonicalMapper(server, "identity-uuid");
+    expectCanonicalMapper(server, "billing-uuid");
+    expectRoles(server);
+    expectReadCapabilities(server);
   }
 
   private void expectValidClients(MockRestServiceServer server) {

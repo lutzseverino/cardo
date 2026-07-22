@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
@@ -108,6 +109,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
     MAPPER_CLIENTS.forEach(clientId -> ensureMapper(admin, clientId));
     KeycloakIdentityProviderContract.IDENTITY_ROLES.forEach(role -> ensureRole(admin, role));
     grantRuntimeClientRoles(admin, "realm-management", RUNTIME_REALM_MANAGEMENT_ROLES);
+    removeRealmRoleGrants(admin, RESOURCE_SERVER_CLIENT);
     grantClientRoles(
         admin, RESOURCE_SERVER_CLIENT, RESOURCE_SERVER_CLIENT, List.of("uma_protection"));
     return snapshot(admin);
@@ -452,6 +454,38 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         REALM,
         serviceAccount.id(),
         targetClientUuid);
+  }
+
+  private void removeRealmRoleGrants(String admin, String sourceClientId) {
+    String sourceClientUuid = clientUuid(admin, sourceClientId);
+    UserRepresentation serviceAccount =
+        rest.get()
+            .uri(
+                "/admin/realms/{realm}/clients/{clientUuid}/service-account-user",
+                REALM,
+                sourceClientUuid)
+            .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+            .retrieve()
+            .body(UserRepresentation.class);
+    RoleRepresentation[] roles =
+        rest.get()
+            .uri(
+                "/admin/realms/{realm}/users/{userId}/role-mappings/realm",
+                REALM,
+                serviceAccount.id())
+            .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+            .retrieve()
+            .body(RoleRepresentation[].class);
+    if (roles == null || roles.length == 0) {
+      return;
+    }
+    rest.method(HttpMethod.DELETE)
+        .uri("/admin/realms/{realm}/users/{userId}/role-mappings/realm", REALM, serviceAccount.id())
+        .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(roles)
+        .retrieve()
+        .toBodilessEntity();
   }
 
   private RoleRepresentation clientRole(String admin, String clientUuid, String role) {

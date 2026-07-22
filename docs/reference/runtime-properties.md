@@ -29,7 +29,7 @@ fails startup before traffic is served, and errors name the property without ech
 | Identity | `cardo.identity.session.secure` | boolean | `false` | `true` | no | All production session cookies must be Secure. |
 | Identity | `cardo.identity.keycloak.base-url` | URI | `http://localhost:8080` | required | no | Remote HTTPS; canonical localhost, loopback, and unspecified literals rejected. |
 | Identity | `cardo.identity.keycloak.realm` | string | `cardo` | required | no | Non-blank; forms the expected issuer. |
-| Identity | `cardo.identity.keycloak.client-id` | string | `cardo-identity` | required | no | Non-blank runtime client identity. |
+| Identity | `cardo.identity.keycloak.client-id` | string | `cardo-identity` | required | no | Non-blank runtime client identity; must differ from the fixed `identity` authorization catalog client in every runtime mode. |
 | Identity | `cardo.identity.keycloak.client-secret` | string | blank | required | yes | Non-blank, non-development credential. |
 | Identity authorization | `cardo.identity.keycloak.authorization-client-secret` | string | blank | required | yes | Non-blank, non-development credential for the fixed `identity` catalog client; must differ from `client-secret`. |
 | Identity | `cardo.identity.keycloak.credential-setup-client-id` | string | `cardo-web` | required | no | Non-blank browser client. |

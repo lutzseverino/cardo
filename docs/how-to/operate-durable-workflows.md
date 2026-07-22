@@ -66,6 +66,54 @@ mutation with `CREDENTIAL_RESUBMISSION_REQUIRED` requires a fresh caller-held
 password; Cardo never persists one. Ambiguous marker matches, provider/local
 subject disagreement, or any proposed deletion is an Identity-owner escalation.
 
+### Migrate active provisioning ownership to V6
+
+V6 permits only one active password or provisional provisioning owner for a
+normalized email. Before rollout, run this count-only preflight; do not select,
+log, or attach email values to deployment output:
+
+```sql
+SELECT count(*) AS conflicting_active_provisioning_owners
+FROM (
+  SELECT 1
+  FROM identity_provider_mutations
+  WHERE mutation_type IN ('PROVISION_PASSWORD_USER', 'PROVISION_PROVISIONAL_USER')
+    AND status = 'REQUESTED'
+  GROUP BY normalized_email
+  HAVING count(*) > 1
+) conflicts;
+```
+
+If the count is nonzero, V6 stops before replacing the V5 index and preserves
+all rows. Keep Identity stopped and inspect the conflicting work only in the
+restricted database session. This query emits mutation evidence without email
+values:
+
+```sql
+WITH conflicting_emails AS (
+  SELECT normalized_email
+  FROM identity_provider_mutations
+  WHERE mutation_type IN ('PROVISION_PASSWORD_USER', 'PROVISION_PROVISIONAL_USER')
+    AND status = 'REQUESTED'
+  GROUP BY normalized_email
+  HAVING count(*) > 1
+)
+SELECT mutation.id, mutation.mutation_type, mutation.status,
+       mutation.correlation_marker, mutation.provider_subject,
+       mutation.attempt_count, mutation.created_at, mutation.updated_at
+FROM identity_provider_mutations mutation
+JOIN conflicting_emails conflict USING (normalized_email)
+ORDER BY mutation.created_at;
+```
+
+For each conflict, correlate both mutation IDs with Keycloak by their exact
+markers and determine the valid owner from provider and local evidence. Do not
+delete either row or choose a winner by age. After an explicit Identity-owner
+decision, terminalize only the invalid request with the appropriate existing
+terminal reason and retain it as audit evidence. Back up the database, record
+the decision by mutation ID only, repeat the count-only preflight, and apply V6
+only when it returns zero.
+
 ## Inspect Invite
 
 ```sql
