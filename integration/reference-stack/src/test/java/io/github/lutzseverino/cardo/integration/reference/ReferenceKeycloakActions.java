@@ -36,9 +36,10 @@ final class ReferenceKeycloakActions {
 
   Result complete(URI actionLink, String password, String firstName, String lastName) {
     Page page = get(actionLink);
+    boolean confirmationCompleted = false;
     boolean passwordCompleted = false;
     boolean profileCompleted = false;
-    for (int step = 0; step < 6; step++) {
+    for (int step = 0; step < 7; step++) {
       if (page.status() / 100 == 3) {
         URI redirect = page.uri().resolve(page.location());
         if (passwordCompleted && profileCompleted) {
@@ -49,6 +50,10 @@ final class ReferenceKeycloakActions {
       }
       URI continuation = continuation(page.body(), page.uri());
       if (continuation != null) {
+        if (confirmationCompleted) {
+          throw new IllegalStateException("Keycloak action confirmation was repeated.");
+        }
+        confirmationCompleted = true;
         page = get(continuation);
         continue;
       }
@@ -61,10 +66,16 @@ final class ReferenceKeycloakActions {
       }
       Map<String, String> input = new LinkedHashMap<>(form.values());
       if ("kc-passwd-update-form".equals(form.id())) {
+        if (passwordCompleted) {
+          throw new IllegalStateException("Keycloak password action was repeated.");
+        }
         input.put("password-new", password);
         input.put("password-confirm", password);
         passwordCompleted = true;
       } else if ("kc-update-profile-form".equals(form.id())) {
+        if (profileCompleted) {
+          throw new IllegalStateException("Keycloak profile action was repeated.");
+        }
         input.put("firstName", firstName);
         input.put("lastName", lastName);
         profileCompleted = true;
