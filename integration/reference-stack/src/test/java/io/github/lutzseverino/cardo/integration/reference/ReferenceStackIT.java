@@ -194,6 +194,15 @@ class ReferenceStackIT {
       assertThat(protectedTenantStatus(invitedBrowser, stack)).isEqualTo(403);
 
       URI accept = stack.origin().resolve("/api/reference/invitations/" + invitationId + "/accept");
+      assertThat(
+              internal
+                  .request(
+                      "GET",
+                      stack.productInternal("/api/reference/convergence/" + invitationId),
+                      null,
+                      bearer(unprivilegedRpt))
+                  .status())
+          .isEqualTo(200);
       createUser(internal, stack, OTHER_EMAIL, OTHER_PASSWORD, "Other");
       Browser otherBrowser = login(stack, OTHER_EMAIL, OTHER_PASSWORD);
       assertThat(otherBrowser.request("POST", accept, null).status()).isEqualTo(403);

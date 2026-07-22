@@ -79,6 +79,8 @@ class ReferenceProductConfiguration {
             .permitAll(HttpMethod.GET, "/actuator/health/liveness")
             .permitAll(HttpMethod.GET, "/actuator/health/readiness")
             .authenticated(HttpMethod.POST, "/api/reference/invitations")
+            .authenticated(HttpMethod.POST, "/api/reference/invitations/*/accept")
+            .authenticated(HttpMethod.GET, "/api/reference/convergence/*")
             .hasAuthority(
                 ReferenceContract.TENANT_AUTHORITY, HttpMethod.GET, "/api/reference/tenants/*")
             .authenticated("/api/reference/billing/**");

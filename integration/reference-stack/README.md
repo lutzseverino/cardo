@@ -27,14 +27,14 @@ new public registry or runtime configuration contract.
 ## Pre-grant acceptance
 
 Invitation acceptance must authenticate the invited user before that user's
-first product grant exists. A reference-local, higher-priority security chain
-therefore matches only the acceptance POST and convergence GET. It accepts only
-the Identity session cookie, validates issuer, signature, expiry, the sole
-`identity` audience, and `cardo_user_id`, publishes no product authorities, and
-rejects every request with an `Authorization` header. Acceptance retains the
-same read-only, header-only CSRF check. Tenant, Billing, invitation creation,
-and every other product route stay on `identity-product-auth` and require the
-normal product RPT path.
+first product grant exists. The acceptance POST and convergence GET use the
+standard `identity-product-auth` chain with method-aware `authenticated` rules.
+It validates and exchanges the Identity session cookie for a fresh,
+exact-audience product RPT; an authenticated RPT with no product permission can
+therefore reach the product-owned invitation checks. Direct Identity bearers
+remain invalid at the product boundary, cookie-authenticated acceptance retains
+the standard read-only, header-only CSRF check, and authority-protected routes
+still require their product permission.
 
 Before recording acceptance, the product compares its durable `invitedUserId`
 with the authenticated Cardo user from the signed Identity session, then checks

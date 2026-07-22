@@ -22,6 +22,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -58,6 +59,7 @@ class ReferenceProductConfigurationTest {
               assertThat(application).hasNotFailed();
               assertThat(application).hasSingleBean(RestClient.Builder.class);
               assertThat(application).hasSingleBean(ActiveTokenValidator.class);
+              assertThat(application).hasSingleBean(SecurityFilterChain.class);
               assertThat(application).hasBean("referenceAuthorization");
               var mvc =
                   MockMvcBuilders.webAppContextSetup((WebApplicationContext) application)
@@ -82,6 +84,8 @@ class ReferenceProductConfigurationTest {
     verify(rules).permitAll(HttpMethod.GET, "/actuator/health/liveness");
     verify(rules).permitAll(HttpMethod.GET, "/actuator/health/readiness");
     verify(rules).authenticated(HttpMethod.POST, "/api/reference/invitations");
+    verify(rules).authenticated(HttpMethod.POST, "/api/reference/invitations/*/accept");
+    verify(rules).authenticated(HttpMethod.GET, "/api/reference/convergence/*");
     verify(rules)
         .hasAuthority(
             ReferenceContract.TENANT_AUTHORITY, HttpMethod.GET, "/api/reference/tenants/*");
