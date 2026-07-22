@@ -15,6 +15,33 @@ the same wiring and the packaged shape can stay product-neutral.
 | Common | shared API errors, data markers, value objects, validation, cookie helpers | embedded Java APIs | none | none |
 | OpenAPI Support | generated transport mapping helpers and PATCH presence conversion | embedded Java APIs | none | none |
 
+## Consumer Dependency Surfaces
+
+The integration artifacts depend directly only on the responsibilities they execute:
+
+| Consumers | Direct dependency | Required responsibility |
+| --- | --- | --- |
+| Identity, Invite, and Billing client-http | matching stable client artifact | Cardo-owned client interface and values |
+| Identity, Invite, and Billing client-http | common-api | API error values, exceptions, and remote error translation |
+| Identity, Invite, and Billing client-http | authorization-keycloak-client | scoped client-credentials token acquisition |
+| Identity, Invite, and Billing client-http | Jackson databind | generated transport JSON and error decoding |
+| Identity, Invite, and Billing client-http | Spring Boot autoconfigure | conditional beans and configuration properties |
+| Identity, Invite, and Billing client-http | Spring Web | RestClient transport and bounded request factories |
+| Identity, Invite, and Billing client-http | Swagger annotations, Jakarta Validation, Jakarta Annotation | generated client source signatures |
+| identity-product-auth | authorization-keycloak-client | UMA requesting-party-token exchange contracts and client |
+| identity-product-auth | authorization-security | shared JWT validation, authority conversion, principal reading, and permission evaluation |
+| identity-product-auth | Spring Boot autoconfigure | opt-in host application wiring |
+| identity-product-auth | Spring Security and OAuth2 resource-server starters | filter chain, JWT decoder, bearer authentication, CSRF, and method security |
+| identity-product-auth | Spring Web and Jakarta Servlet | request policy and servlet filter contracts |
+| All modules (optional, inherited) | Lombok | repository-wide compile-time annotation processing; optional and not transitively exposed |
+
+These four consumers opt into a transitive Maven Enforcer rule that rejects the full common and
+authorization aggregates plus JPA, Hibernate, Spring Data, Flyway, Modulith, JDBC, and Hikari.
+Their existing configuration keys and auto-configured beans are unchanged. This split is an
+embedded dependency boundary, not an Authorization HTTP service or client facade.
+The inherited enforcement defaults to skipped; only these consumers set
+`cardo.consumer-dependency-enforcement.skip=false`.
+
 ## Rules
 
 - Keep product resource catalogs, domain rules, tenant semantics, and lifecycle

@@ -35,8 +35,11 @@ documentation index. Repository-wide architecture and conventions remain here.
 | Project | Role | Documentation |
 | --- | --- | --- |
 | [Common](../common/README.md) | Shared Java contracts | [Docs](../common/docs/README.md) |
+| [Common API](../common-api/README.md) | API error contracts and client translation | [Docs](../common-api/docs/README.md) |
 | [OpenAPI Support](../openapi/README.md) | Generated-transport mechanics | [Docs](../openapi/docs/README.md) |
 | [Authorization](../authorization/README.md) | Embedded authorization mechanics | [Docs](../authorization/docs/README.md) |
+| [Authorization Keycloak Client](../authorization-keycloak-client/README.md) | Token acquisition and exchange | [Docs](../authorization-keycloak-client/docs/README.md) |
+| [Authorization Security](../authorization-security/README.md) | Spring Security and JWT mechanics | [Docs](../authorization-security/docs/README.md) |
 | [Identity](../identity/README.md) | Identity service | [Docs](../identity/docs/README.md) |
 | [Identity Client API](../identity/client/README.md) | Stable Identity client contract | [Docs](../identity/client/docs/README.md) |
 | [Identity HTTP Client](../identity/client-http/README.md) | Identity HTTP implementation | [Docs](../identity/client-http/docs/README.md) |

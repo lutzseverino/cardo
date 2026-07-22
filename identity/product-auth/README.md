@@ -1,6 +1,9 @@
 # Identity Product Auth
 
 Spring Security integration for products that accept logged-in Cardo users.
+It uses the `authorization-keycloak-client` and `authorization-security` leaves
+instead of the full Authorization aggregate, keeping persistence, migrations,
+durable grants, and provider administration outside product runtimes.
 
 The module provides auto-configuration for the shared product auth mechanics:
 JWT authority conversion, resource permission evaluation, authenticated-user

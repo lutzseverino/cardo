@@ -17,10 +17,19 @@
   <name>Cardo Identity Product Auth</name>
   <description>Spring Security integration for products that accept Cardo users.</description>
 
+  <properties>
+    <cardo.consumer-dependency-enforcement.skip>false</cardo.consumer-dependency-enforcement.skip>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.github.lutzseverino.cardo</groupId>
-      <artifactId>authorization</artifactId>
+      <artifactId>authorization-keycloak-client</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.lutzseverino.cardo</groupId>
+      <artifactId>authorization-security</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

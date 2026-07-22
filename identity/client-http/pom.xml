@@ -17,6 +17,10 @@
   <name>Cardo Identity HTTP Client</name>
   <description>HTTP implementation of the stable Cardo Identity client contract.</description>
 
+  <properties>
+    <cardo.consumer-dependency-enforcement.skip>false</cardo.consumer-dependency-enforcement.skip>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.github.lutzseverino.cardo</groupId>
@@ -25,12 +29,12 @@
     </dependency>
     <dependency>
       <groupId>io.github.lutzseverino.cardo</groupId>
-      <artifactId>common</artifactId>
+      <artifactId>common-api</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>io.github.lutzseverino.cardo</groupId>
-      <artifactId>authorization</artifactId>
+      <artifactId>authorization-keycloak-client</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

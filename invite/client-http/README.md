@@ -3,6 +3,8 @@
 Invite HTTP Client implements the stable `invite-client` contract over HTTP.
 It contains generated transport integration and Spring Boot auto-configuration
 while keeping those mechanics out of product code.
+Its runtime uses only `common-api` and `authorization-keycloak-client`, so it
+does not bring Cardo persistence, migrations, JDBC, or Modulith into products.
 
 ## Product Integration
 

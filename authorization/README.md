@@ -1,6 +1,8 @@
 # Authorization
 
 `authorization` provides reusable authorization primitives for applications.
+It remains the compatibility aggregate for Cardo services that embed the full
+owner.
 
 The module provides:
 
@@ -36,6 +38,12 @@ own product policy.
 There is no HTTP client module because Authorization does not own an HTTP
 runtime. Keep using the embedded Java APIs unless Authorization is deliberately
 extracted into a service.
+
+Consumers that need only outbound Keycloak token acquisition use
+`authorization-keycloak-client`. Consumers that need only shared Spring Security
+and JWT mechanics use `authorization-security`. These are embedded responsibility
+leaves, not an Authorization HTTP facade; their existing Java packages and
+constructors are unchanged.
 
 `AccessProfileService` exposes access-profile queries through `AccessProfileResult`; persistence
 projections remain internal to the embedded application boundary.
