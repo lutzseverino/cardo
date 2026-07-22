@@ -171,9 +171,27 @@ final class ReferenceKeycloakMaterializer {
     }
   }
 
+  int definitionUpdateStatus(String token, String path, Object body) {
+    try {
+      put(token, path, body);
+      return 204;
+    } catch (RestClientResponseException failure) {
+      return failure.getStatusCode().value();
+    }
+  }
+
   int adminReadStatus(String token) {
     try {
       maps(token, "/admin/realms/" + REALM + "/clients?first=0&max=1");
+      return 200;
+    } catch (RestClientResponseException failure) {
+      return failure.getStatusCode().value();
+    }
+  }
+
+  int userDirectoryReadStatus(String token) {
+    try {
+      maps(token, "/admin/realms/" + REALM + "/users?first=0&max=1");
       return 200;
     } catch (RestClientResponseException failure) {
       return failure.getStatusCode().value();

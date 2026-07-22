@@ -71,7 +71,9 @@ class ReferenceKeycloakMaterializerTest {
       assertCatalogToken(catalog, "identity");
       assertCatalogToken(product, ReferenceContract.PRODUCT_CLIENT);
       assertThat(materializer.adminReadStatus(runtime)).isEqualTo(200);
+      assertThat(materializer.userDirectoryReadStatus(runtime)).isEqualTo(200);
       assertThat(materializer.adminReadStatus(catalog)).isEqualTo(403);
+      assertThat(materializer.userDirectoryReadStatus(catalog)).isEqualTo(403);
       assertThat(materializer.protectionReadStatus(catalog)).isEqualTo(200);
       assertThat(materializer.protectionReadStatus(product)).isEqualTo(200);
       assertThat(materializer.protectionReadStatus(inviteRuntime)).isEqualTo(403);
@@ -83,6 +85,41 @@ class ReferenceKeycloakMaterializerTest {
               + "/clients/"
               + materializer.clientUuidFor("identity")
               + "/roles";
+      String runtimeClient =
+          "/admin/realms/"
+              + ReferenceKeycloakMaterializer.REALM
+              + "/clients/"
+              + materializer.clientUuidFor("cardo-identity");
+      assertThat(
+              materializer.definitionUpdateStatus(
+                  runtime, runtimeClient, Map.of("clientId", "cardo-identity", "enabled", true)))
+          .isEqualTo(403);
+      assertThat(
+              materializer.definitionWriteStatus(
+                  runtime,
+                  runtimeClient + "/protocol-mappers/models",
+                  Map.of(
+                      "name",
+                      "must-not-exist",
+                      "protocol",
+                      "openid-connect",
+                      "protocolMapper",
+                      "oidc-hardcoded-claim-mapper",
+                      "config",
+                      Map.of(
+                          "claim.name",
+                          "must-not-exist",
+                          "claim.value",
+                          "forbidden",
+                          "jsonType.label",
+                          "String",
+                          "access.token.claim",
+                          "true"))))
+          .isEqualTo(403);
+      assertThat(
+              materializer.definitionWriteStatus(
+                  runtime, identityRoles, Map.of("name", "must-not-exist")))
+          .isEqualTo(403);
       assertThat(
               materializer.definitionWriteStatus(
                   product, identityRoles, Map.of("name", "must-not-exist")))
