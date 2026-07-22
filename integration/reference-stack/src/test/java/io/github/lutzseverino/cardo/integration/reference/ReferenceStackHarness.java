@@ -150,7 +150,8 @@ final class ReferenceStackHarness implements AutoCloseable {
                     Map.entry("IDENTITY_OPERATION_POLL_DELAY", "100ms"),
                     Map.entry("IDENTITY_OPERATION_RETRY_BASE_DELAY", "100ms"),
                     Map.entry("IDENTITY_PROVIDER_MUTATION_DISPATCH_DELAY", "100ms"),
-                    Map.entry("IDENTITY_PROVIDER_MUTATION_RETRY_BASE_DELAY", "100ms"))));
+                    Map.entry("IDENTITY_PROVIDER_MUTATION_RETRY_BASE_DELAY", "100ms"),
+                    Map.entry("SPRING_MVC_LOG_RESOLVED_EXCEPTION", "true"))));
     identity.awaitReady(local(identityPort, "/actuator/health/readiness"), STARTUP_TIMEOUT);
     record("identity-ready");
 
@@ -174,7 +175,8 @@ final class ReferenceStackHarness implements AutoCloseable {
                     Map.entry("SMTP_PORT", Integer.toString(mailpit.getMappedPort(1025))),
                     Map.entry("INVITATION_COMPLETION_DISPATCH_DELAY", "100ms"),
                     Map.entry("INVITATION_COMPLETION_POLL_DELAY", "100ms"),
-                    Map.entry("INVITATION_COMPLETION_RETRY_BASE_DELAY", "100ms"))));
+                    Map.entry("INVITATION_COMPLETION_RETRY_BASE_DELAY", "100ms"),
+                    Map.entry("SPRING_MVC_LOG_RESOLVED_EXCEPTION", "true"))));
     invite.awaitReady(local(invitePort, "/actuator/health/readiness"), STARTUP_TIMEOUT);
     record("invite-ready");
 
