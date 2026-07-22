@@ -182,6 +182,11 @@ Identity does not decide which product grants are required. Invite continues to 
 grant-snapshot staging, while the consuming product owns its membership transition and user-facing
 convergence state.
 
+Invite retains its acceptance receipt internally and exposes the accepted invitation's state through
+its invitation-scoped grant-convergence route and separate client. Receiptless accepted legacy rows
+are `UNKNOWN`; a retained receipt that Authorization cannot resolve is an integrity failure. Pending
+and revoked invitations have no convergence resource.
+
 ## Product-Auth Boundary
 
 Cardo owns the shared Spring Security filter chain and these mechanics:

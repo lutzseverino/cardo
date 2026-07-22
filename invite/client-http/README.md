@@ -19,6 +19,10 @@ scope-specific service token until shortly before Keycloak's reported expiry.
 The calling service account still needs Invite's `product-service` client role
 and an entry in Invite's product-caller allowlist.
 
+Auto-configuration provides both the existing `InvitationsClient` and the
+additive `InvitationGrantConvergenceClient`. The convergence client is separate
+so existing invitation representations and callers remain unchanged.
+
 Outbound Invite calls default to two-second connection and response timeouts.
 Override them with `cardo.invite.client.connect-timeout` and
 `cardo.invite.client.read-timeout` only with positive bounded values.

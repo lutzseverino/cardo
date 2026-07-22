@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.lutzseverino.cardo.authorization.grant.GrantPlan;
+import io.github.lutzseverino.cardo.authorization.grant.GrantReceipt;
+import io.github.lutzseverino.cardo.authorization.grant.GrantReceiptStatus;
 import io.github.lutzseverino.cardo.authorization.grant.Grants;
 import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
 import io.github.lutzseverino.cardo.identity.client.ProvisionalUser;
@@ -19,6 +21,7 @@ import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
 import io.github.lutzseverino.cardo.invite.model.InvitationResult;
 import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.model.PendingInvitation;
+import io.github.lutzseverino.cardo.invite.service.InvitationCompletionService;
 import io.github.lutzseverino.cardo.invite.service.InvitationService;
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -113,17 +116,19 @@ class InvitationWorkflowTest {
             "employee-subject",
             acceptedAt.plusDays(1));
     GrantPlan plan = mock(GrantPlan.class);
+    UUID receiptId = UUID.randomUUID();
     when(invitations.get(INVITATION_ID, "clinic"))
-        .thenReturn(invitationResult(InvitationStatus.PENDING))
         .thenReturn(invitationResult(InvitationStatus.ACCEPTED));
-    when(invitations.requirePending(INVITATION_ID, "clinic", acceptedAt)).thenReturn(invitation);
-    when(invitations.accept(INVITATION_ID, acceptedAt)).thenReturn(true);
+    when(invitations.prepareAcceptance(INVITATION_ID, "clinic", acceptedAt))
+        .thenReturn(Optional.of(invitation));
     when(planner.acceptance(TENANT_ID, "employee-subject", grants())).thenReturn(plan);
+    when(grants.stage(plan))
+        .thenReturn(new GrantReceipt(receiptId, GrantReceiptStatus.PENDING, null));
 
     InvitationResult accepted = workflow.accept(INVITATION_ID, "clinic", acceptedAt);
 
     assertThat(accepted.status()).isEqualTo(InvitationStatus.ACCEPTED);
-    verify(invitations).accept(INVITATION_ID, acceptedAt);
+    verify(invitations).accept(INVITATION_ID, acceptedAt, receiptId);
     verify(grants).stage(plan);
   }
 
@@ -137,13 +142,35 @@ class InvitationWorkflowTest {
         new InvitationAcceptanceApplicator(grants, planner, invitations);
     AcceptInvitationWorkflow workflow = new AcceptInvitationWorkflow(applicator, invitations);
     InvitationResult accepted = invitationResult(InvitationStatus.ACCEPTED);
+    when(invitations.prepareAcceptance(INVITATION_ID, "clinic", acceptedAt))
+        .thenReturn(Optional.empty());
     when(invitations.get(INVITATION_ID, "clinic")).thenReturn(accepted);
 
     assertThat(workflow.accept(INVITATION_ID, "clinic", acceptedAt)).isSameAs(accepted);
 
-    verify(invitations, never()).requirePending(INVITATION_ID, "clinic", acceptedAt);
-    verify(invitations, never()).accept(INVITATION_ID, acceptedAt);
+    verify(invitations).prepareAcceptance(INVITATION_ID, "clinic", acceptedAt);
+    verify(invitations, never())
+        .accept(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
     verify(grants, never()).stage(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void revocationLocksAndTerminalizesInviteOwnedCompletionBeforeReturning() {
+    InvitationCompletionService completions = mock(InvitationCompletionService.class);
+    InvitationService invitations = mock(InvitationService.class);
+    RevokeInvitationWorkflow workflow = new RevokeInvitationWorkflow(completions, invitations);
+    InvitationResult revoked = invitationResult(InvitationStatus.REVOKED);
+    when(invitations.get(INVITATION_ID, "clinic")).thenReturn(revoked);
+
+    assertThat(workflow.revoke(INVITATION_ID, "clinic")).isSameAs(revoked);
+
+    org.mockito.InOrder order = org.mockito.Mockito.inOrder(invitations, completions);
+    order.verify(invitations).revoke(INVITATION_ID, "clinic");
+    order.verify(completions).revoke(INVITATION_ID);
+    order.verify(invitations).get(INVITATION_ID, "clinic");
   }
 
   private CreateInvitationInput input() {

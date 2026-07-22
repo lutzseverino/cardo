@@ -122,6 +122,36 @@ class AuthenticationServiceTest {
   }
 
   @Test
+  void rejectsInvitedPasswordUserAndRevokesTheProviderSession() {
+    when(identityProvider.issuePasswordSession("user@example.com", "password-1"))
+        .thenReturn(providerSession());
+    prepareAuthorization(AuthenticationMethod.PASSWORD, UserStatus.INVITED);
+
+    assertThatThrownBy(() -> service.authenticate("user@example.com", "password-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(403);
+              assertThat(exception.code()).isEqualTo("user_invited");
+            });
+
+    verify(identityProvider).revokeSession("refresh-token");
+  }
+
+  @Test
+  void rejectsInvitedRefreshUserAndRevokesTheRotatedProviderSession() {
+    when(identityProvider.refreshSession("old-refresh-token")).thenReturn(providerSession());
+    prepareAuthorization(AuthenticationMethod.OIDC, UserStatus.INVITED);
+
+    assertThatThrownBy(() -> service.refresh("old-refresh-token"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> assertThat(exception.code()).isEqualTo("user_invited"));
+
+    verify(identityProvider).revokeSession("refresh-token");
+  }
+
+  @Test
   void rejectsAuthorizationTokenForAnotherSubjectAndRevokesTheProviderSession() {
     when(identityProvider.issuePasswordSession("user@example.com", "password-1"))
         .thenReturn(providerSession());
@@ -154,6 +184,20 @@ class AuthenticationServiceTest {
 
     assertThat(result.principal().keycloakSubject()).isEqualTo("subject-1");
     verify(identityProvider, never()).refreshSession("identity-rpt");
+  }
+
+  @Test
+  void rejectsCurrentSessionForInvitedUser() {
+    CurrentAuthentication current =
+        new CurrentAuthentication("subject-1", "session-1", ACCESS_EXPIRES_AT, List.of());
+    when(principals.findByKeycloakSubject(
+            "subject-1", "session-1", AuthenticationMethod.OIDC, ACCESS_EXPIRES_AT))
+        .thenReturn(Optional.of(principal(UserStatus.INVITED, AuthenticationMethod.OIDC)));
+
+    assertThatThrownBy(() -> service.getCurrent(current))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> assertThat(exception.code()).isEqualTo("user_invited"));
   }
 
   @Test

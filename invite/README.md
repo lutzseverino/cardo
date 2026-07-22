@@ -53,7 +53,13 @@ domain transition together with a durable command, then call
 `InvitationsClient.accept(...)`. This keeps a remote Invite call out of the
 product's database transaction and makes failure retryable. Invite acceptance
 atomically marks its own record accepted and stages the captured grant snapshot
-for asynchronous, idempotent authorization application.
+for asynchronous, idempotent authorization application. It retains the grant
+receipt internally and exposes its state through
+`GET /api/v1/invitations/{invitationId}/grant-convergence`. Products use the
+separate `InvitationGrantConvergenceClient` to poll `PENDING`, `APPLIED`,
+`FAILED` (with a stable failure code), or `UNKNOWN` for accepted legacy rows
+that predate receipt retention. Pending and revoked invitations do not have a
+convergence resource.
 
 Pass the timestamp committed with the product-domain acceptance to
 `InvitationsClient.accept(...)`. Invite validates expiry against that durable
@@ -76,7 +82,7 @@ The production adapter sends through SMTP. Configure `SMTP_HOST`, `SMTP_PORT`,
 
 Identity completion intentionally does not accept the invitation. A completion
 request first persists a saga operation and returns `202`; the product polls the
-same completion resource until it is `completed` or `failed`. Invite dispatches
+same completion resource until it is `completed`, `failed`, or `revoked`. Invite dispatches
 the stable operation id to Identity, and Identity asks Keycloak to deliver its
 own password/profile action. Cardo never accepts, persists, logs, or relays the
 invitation password.
@@ -90,6 +96,15 @@ user after the invitation expires. An abandoned setup becomes an inspectable
 failed operation instead of polling forever, and repeating the same completion
 request explicitly restarts it with a fresh Keycloak action. Product acceptance
 remains a separate domain transition after authentication.
+
+Revocation terminates existing queued or polling completion work locally as
+`REVOKED`. Invite serializes revocation and worker claims on the invitation row:
+when revocation commits before claim, Invite does not call Identity; when claim
+commits first, dispatch may proceed and an already-issued Keycloak action link
+may still be completed. Invite does not cancel a provider action, cancel or
+delete the shared provisional Identity user, or undo global Identity
+activation. Later worker callbacks preserve the terminal `REVOKED` completion,
+which remains readable after invitation revocation.
 
 ## Documentation
 

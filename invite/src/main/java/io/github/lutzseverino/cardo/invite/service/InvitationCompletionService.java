@@ -5,6 +5,7 @@ import io.github.lutzseverino.cardo.invite.config.InvitationCompletionProperties
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionOperation;
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionResult;
 import io.github.lutzseverino.cardo.invite.model.InvitationCompletionWork;
+import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.model.PendingInvitation;
 import io.github.lutzseverino.cardo.invite.repository.InvitationCompletionOperationRepository;
 import java.time.Clock;
@@ -16,6 +17,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -63,8 +65,13 @@ public class InvitationCompletionService {
 
   @Transactional
   public Optional<InvitationCompletionWork> claim(UUID operationId) {
+    InvitationStatus invitationStatus = invitations.lockStatus(operationId);
     InvitationCompletionOperation operation = requireLockedOperation(operationId);
     OffsetDateTime now = now();
+    if (InvitationStatus.REVOKED.equals(invitationStatus)) {
+      operation.revoke(now);
+      return Optional.empty();
+    }
     if (!operation.ready(now)) {
       return Optional.empty();
     }
@@ -120,6 +127,14 @@ public class InvitationCompletionService {
     String detail = Objects.requireNonNullElse(identityError, "unknown identity failure");
     requireLockedOperation(operationId)
         .failTerminal(safeMessage("Identity credential setup failed: " + detail), now());
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void revoke(UUID invitationId) {
+    invitations.lockStatus(invitationId);
+    operations
+        .findEntityByIdForUpdate(invitationId)
+        .ifPresent(operation -> operation.revoke(now()));
   }
 
   private InvitationCompletionOperation requireOperation(UUID operationId) {

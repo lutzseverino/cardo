@@ -86,6 +86,9 @@ public class InvitationCompletionOperation extends AuditedEntity {
   }
 
   public void awaitIdentity(OffsetDateTime nextPollAt, OffsetDateTime actionExpiresAt) {
+    if (revoked()) {
+      return;
+    }
     status = InvitationCompletionStatus.AWAITING_IDENTITY;
     attemptCount = 0;
     lastError = null;
@@ -94,6 +97,9 @@ public class InvitationCompletionOperation extends AuditedEntity {
   }
 
   public void reschedule(OffsetDateTime nextPollAt, OffsetDateTime actionExpiresAt) {
+    if (revoked()) {
+      return;
+    }
     nextAttemptAt = nextPollAt;
     if (actionExpiresAt != null) {
       this.actionExpiresAt = actionExpiresAt;
@@ -101,6 +107,9 @@ public class InvitationCompletionOperation extends AuditedEntity {
   }
 
   public void fail(String error, OffsetDateTime now, Duration retryDelay, int maxAttempts) {
+    if (revoked()) {
+      return;
+    }
     attemptCount++;
     lastError = error;
     if (attemptCount >= maxAttempts) {
@@ -123,15 +132,34 @@ public class InvitationCompletionOperation extends AuditedEntity {
   }
 
   public void failTerminal(String error, OffsetDateTime now) {
+    if (revoked()) {
+      return;
+    }
     status = InvitationCompletionStatus.FAILED;
     lastError = error;
     nextAttemptAt = now;
   }
 
   public void complete(OffsetDateTime now) {
+    if (revoked()) {
+      return;
+    }
     status = InvitationCompletionStatus.COMPLETED;
     completedAt = now;
     lastError = null;
     nextAttemptAt = now;
+  }
+
+  public void revoke(OffsetDateTime now) {
+    if (InvitationCompletionStatus.REQUESTED.equals(status)
+        || InvitationCompletionStatus.AWAITING_IDENTITY.equals(status)) {
+      status = InvitationCompletionStatus.REVOKED;
+      nextAttemptAt = now;
+      lastError = null;
+    }
+  }
+
+  private boolean revoked() {
+    return InvitationCompletionStatus.REVOKED.equals(status);
   }
 }

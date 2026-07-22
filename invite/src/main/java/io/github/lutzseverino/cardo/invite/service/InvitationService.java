@@ -174,26 +174,34 @@ public class InvitationService {
     return invitation.getId();
   }
 
-  public PendingInvitation requirePending(
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Optional<PendingInvitation> prepareAcceptance(
       UUID invitationId, @NotBlank String product, OffsetDateTime acceptedAt) {
-    InvitationProjection invitation = getProjection(invitationId);
+    Invitation invitation = getEntityForUpdate(invitationId);
     requireOwner(invitation.getProduct(), product);
+    if (InvitationStatus.ACCEPTED.equals(invitation.getStatus())) {
+      return Optional.empty();
+    }
     requirePlausibleAcceptanceTime(invitation, acceptedAt);
     requirePending(invitation, acceptedAt);
-    return toPending(invitation);
+    return Optional.of(toPending(invitation));
   }
 
   @Transactional(propagation = Propagation.MANDATORY)
-  public boolean accept(UUID invitationId, OffsetDateTime acceptedAt) {
-    return getEntity(invitationId).accept(acceptedAt);
+  public boolean accept(UUID invitationId, OffsetDateTime acceptedAt, UUID grantReceiptId) {
+    return getEntity(invitationId).accept(acceptedAt, grantReceiptId);
   }
 
-  @Transactional
-  public InvitationResult revoke(UUID invitationId, @NotBlank String product) {
-    Invitation invitation = getEntity(invitationId);
+  @Transactional(propagation = Propagation.MANDATORY)
+  public boolean revoke(UUID invitationId, @NotBlank String product) {
+    Invitation invitation = getEntityForUpdate(invitationId);
     requireOwner(invitation.getProduct(), product);
-    invitation.revoke(OffsetDateTime.now(clock));
-    return mapper.toResult(getProjection(invitationId));
+    return invitation.revoke(OffsetDateTime.now(clock));
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public InvitationStatus lockStatus(UUID invitationId) {
+    return getEntityForUpdate(invitationId).getStatus();
   }
 
   private InvitationProjection requirePendingProjection(String token) {
@@ -223,6 +231,12 @@ public class InvitationService {
         .orElseThrow(() -> ApiException.notFound("invitation_not_found", "Invitation not found."));
   }
 
+  private Invitation getEntityForUpdate(UUID id) {
+    return invitations
+        .findEntityByIdForUpdate(id)
+        .orElseThrow(() -> ApiException.notFound("invitation_not_found", "Invitation not found."));
+  }
+
   private PendingInvitation toPending(InvitationProjection invitation) {
     return new PendingInvitation(
         invitation.getId(),
@@ -233,6 +247,19 @@ public class InvitationService {
         invitation.getGrants().stream()
             .map(grant -> new InvitationGrantInput(grant.getResourceType(), grant.getAction()))
             .toList(),
+        invitation.getInvitedUserId(),
+        invitation.getInvitedAuthorizationSubject(),
+        invitation.getExpiresAt());
+  }
+
+  private PendingInvitation toPending(Invitation invitation) {
+    return new PendingInvitation(
+        invitation.getId(),
+        invitation.getProduct(),
+        invitation.getTenantId(),
+        invitation.getTenantResourceType(),
+        invitation.getAccessProfile(),
+        invitation.grantInputs(),
         invitation.getInvitedUserId(),
         invitation.getInvitedAuthorizationSubject(),
         invitation.getExpiresAt());
@@ -257,8 +284,32 @@ public class InvitationService {
     }
   }
 
+  private void requirePending(Invitation invitation, OffsetDateTime effectiveAt) {
+    if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
+      if (InvitationStatus.REVOKED.equals(invitation.getStatus())) {
+        throw ApiException.conflict(
+            "invitation_revoked", "A revoked invitation cannot be accepted.");
+      }
+      throw ApiException.gone("invitation_unavailable", "Invitation is no longer available.");
+    }
+    if (!invitation.getExpiresAt().isAfter(effectiveAt)) {
+      throw ApiException.gone("invitation_expired", "Invitation expired.");
+    }
+  }
+
   private void requirePlausibleAcceptanceTime(
       InvitationProjection invitation, OffsetDateTime acceptedAt) {
+    Duration skew = properties.acceptanceClockSkew();
+    OffsetDateTime now = OffsetDateTime.now(clock);
+    if (acceptedAt.isBefore(invitation.getCreatedAt().minus(skew))
+        || acceptedAt.isAfter(now.plus(skew))) {
+      throw ApiException.badRequest(
+          "invitation_acceptance_time_invalid",
+          "The product acceptance time is outside the allowed clock-skew window.");
+    }
+  }
+
+  private void requirePlausibleAcceptanceTime(Invitation invitation, OffsetDateTime acceptedAt) {
     Duration skew = properties.acceptanceClockSkew();
     OffsetDateTime now = OffsetDateTime.now(clock);
     if (acceptedAt.isBefore(invitation.getCreatedAt().minus(skew))

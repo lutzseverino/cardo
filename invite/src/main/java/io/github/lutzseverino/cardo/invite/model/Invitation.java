@@ -35,6 +35,7 @@ import lombok.NoArgsConstructor;
     name = "invitations",
     uniqueConstraints = {
       @UniqueConstraint(name = "uk_invitations_token", columnNames = "token"),
+      @UniqueConstraint(name = "uk_invitations_grant_receipt_id", columnNames = "grant_receipt_id"),
       @UniqueConstraint(
           name = "uk_invitations_product_request_id",
           columnNames = {"product", "request_id"})
@@ -97,6 +98,9 @@ public class Invitation extends AuditedEntity implements PersonalDataEntity {
   @Column(name = "revoked_at")
   private OffsetDateTime revokedAt;
 
+  @Column(name = "grant_receipt_id")
+  private UUID grantReceiptId;
+
   public Invitation(
       UUID requestId,
       String product,
@@ -131,7 +135,7 @@ public class Invitation extends AuditedEntity implements PersonalDataEntity {
     this.token = token;
   }
 
-  public boolean accept(OffsetDateTime acceptedAt) {
+  public boolean accept(OffsetDateTime acceptedAt, UUID grantReceiptId) {
     if (InvitationStatus.ACCEPTED.equals(status)) {
       return false;
     }
@@ -141,6 +145,7 @@ public class Invitation extends AuditedEntity implements PersonalDataEntity {
     }
     status = InvitationStatus.ACCEPTED;
     this.acceptedAt = acceptedAt;
+    this.grantReceiptId = java.util.Objects.requireNonNull(grantReceiptId, "grantReceiptId");
     return true;
   }
 

@@ -3,8 +3,10 @@ package io.github.lutzseverino.cardo.invite.client.http;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.common.api.ApiClientErrors;
 import io.github.lutzseverino.cardo.common.api.ApiException;
+import io.github.lutzseverino.cardo.invite.client.InvitationGrantConvergenceClient;
 import io.github.lutzseverino.cardo.invite.client.InvitationsClient;
 import io.github.lutzseverino.cardo.invite.client.http.generated.ApiClient;
+import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationGrantConvergenceApi;
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationTokensApi;
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationsApi;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -25,6 +27,25 @@ public class InviteClientAutoConfiguration {
       InviteClientProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
       JsonMapper json) {
+    ApiClient apiClient = apiClient(properties, clientCredentialsTokens, json);
+    return new HttpInvitationsClient(
+        new InvitationsApi(apiClient), new InvitationTokensApi(apiClient));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  InvitationGrantConvergenceClient invitationGrantConvergenceClient(
+      InviteClientProperties properties,
+      KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
+      JsonMapper json) {
+    ApiClient apiClient = apiClient(properties, clientCredentialsTokens, json);
+    return new HttpInvitationGrantConvergenceClient(new InvitationGrantConvergenceApi(apiClient));
+  }
+
+  private ApiClient apiClient(
+      InviteClientProperties properties,
+      KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
+      JsonMapper json) {
     ApiClient apiClient =
         new ApiClient(
                 ApiClient.buildRestClientBuilder(json)
@@ -41,8 +62,7 @@ public class InviteClientAutoConfiguration {
             .setBasePath(properties.baseUrl());
     apiClient.setBearerToken(
         () -> serviceToken(clientCredentialsTokens, properties.serviceTokenScope()));
-    return new HttpInvitationsClient(
-        new InvitationsApi(apiClient), new InvitationTokensApi(apiClient));
+    return apiClient;
   }
 
   private SimpleClientHttpRequestFactory requestFactory(InviteClientProperties properties) {

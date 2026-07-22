@@ -42,6 +42,27 @@ class InviteExceptionHandlerTest {
     }
   }
 
+  @Test
+  void returnsTheDocumentedIntegrityErrorForAMissingGrantReceipt() throws Exception {
+    try (AnnotationConfigWebApplicationContext context =
+        new AnnotationConfigWebApplicationContext()) {
+      context.setServletContext(new MockServletContext());
+      context.register(WebTestConfiguration.class);
+      context.refresh();
+
+      MockMvc mvc = MockMvcBuilders.webAppContextSetup(context).build();
+
+      mvc.perform(get("/grant-convergence"))
+          .andExpect(status().isInternalServerError())
+          .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+          .andExpect(jsonPath("$.error.code").value("invitation_grant_receipt_missing"))
+          .andExpect(
+              jsonPath("$.error.message")
+                  .value("The invitation grant receipt could not be resolved."))
+          .andExpect(jsonPath("$.error.details").isEmpty());
+    }
+  }
+
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @ComponentScan(
@@ -63,6 +84,14 @@ class InviteExceptionHandlerTest {
     @GetMapping("/invitation")
     void getInvitation() {
       throw ApiException.gone("invitation_expired", "Invitation expired.");
+    }
+
+    @GetMapping("/grant-convergence")
+    void getGrantConvergence() {
+      throw ApiException.of(
+          500,
+          "invitation_grant_receipt_missing",
+          "The invitation grant receipt could not be resolved.");
     }
   }
 }

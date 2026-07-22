@@ -14,6 +14,7 @@ import io.github.lutzseverino.cardo.invite.service.InvitationCompletionService;
 import io.github.lutzseverino.cardo.invite.service.InvitationService;
 import io.github.lutzseverino.cardo.invite.workflow.AcceptInvitationWorkflow;
 import io.github.lutzseverino.cardo.invite.workflow.CreateInvitationWorkflow;
+import io.github.lutzseverino.cardo.invite.workflow.RevokeInvitationWorkflow;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class InvitationController implements InvitationsApi, InvitationTokensApi
   private final InvitationCompletionService completions;
   private final AcceptInvitationWorkflow acceptInvitation;
   private final CreateInvitationWorkflow createInvitation;
+  private final RevokeInvitationWorkflow revokeInvitation;
 
   @Override
   public ResponseEntity<CreateInvitationResponse> createInvitation(
@@ -77,6 +79,6 @@ public class InvitationController implements InvitationsApi, InvitationTokensApi
   @Override
   public ResponseEntity<InvitationResponse> revokeInvitation(UUID invitationId) {
     return ResponseEntity.ok(
-        mapper.toResponse(invitations.revoke(invitationId, callers.currentProduct())));
+        mapper.toResponse(revokeInvitation.revoke(invitationId, callers.currentProduct())));
   }
 }
