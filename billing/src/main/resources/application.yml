@@ -59,6 +59,7 @@ management:
       group:
         readiness:
           include: readinessState,db
+          show-components: always
       probes:
         enabled: true
   endpoints:

@@ -8,8 +8,9 @@ import static org.mockito.Mockito.when;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcOperations;
 
 class BillingWorkflowMetricsTest {
@@ -53,12 +54,19 @@ class BillingWorkflowMetricsTest {
   }
 
   @Test
-  void metricsDoNotWidenTheManagementRouteSurface() throws IOException {
-    try (var input = getClass().getResourceAsStream("/application.yml")) {
-      assertThat(input).isNotNull();
-      String configuration = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-      assertThat(configuration).contains("include: health,info");
-      assertThat(configuration).doesNotContain("include: health,info,metrics");
-    }
+  void managementConfigurationExposesReadinessDatabaseWithoutWideningRoutes() throws IOException {
+    var source =
+        new YamlPropertySourceLoader()
+            .load("billing-application", new ClassPathResource("application.yml"))
+            .getFirst();
+
+    assertThat(source.getProperty("management.endpoints.web.exposure.include"))
+        .isEqualTo("health,info");
+    assertThat(source.getProperty("management.endpoint.health.group.readiness.include"))
+        .isEqualTo("readinessState,db");
+    assertThat(source.getProperty("management.endpoint.health.group.readiness.show-components"))
+        .isEqualTo("always");
+    assertThat(source.getProperty("management.endpoint.health.show-components")).isNull();
+    assertThat(source.getProperty("management.endpoint.health.show-details")).isNull();
   }
 }

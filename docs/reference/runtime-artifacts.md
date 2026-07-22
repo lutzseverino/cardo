@@ -69,6 +69,8 @@ should send `SIGTERM`, stop routing immediately, and allow at least 25 seconds
 before forcing termination to account for observation and process-exit overhead.
 Readiness also fails when the service database is unavailable; liveness remains isolated so a
 database outage withdraws traffic without creating a restart loop.
+The readiness group exposes component names and statuses so orchestrators can read
+`components.db.status`; health details and other health groups retain their existing visibility.
 
 ## Image Metadata
 

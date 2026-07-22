@@ -468,7 +468,6 @@ assert_jar_database_outage() {
     SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$postgres_port/cardo" \
     SPRING_DATASOURCE_USERNAME=cardo \
     SPRING_DATASOURCE_PASSWORD=cardo-smoke \
-    MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS=always \
     KEYCLOAK_BASE_URL="http://127.0.0.1:$provider_port" \
     KEYCLOAK_ISSUER_URI="http://127.0.0.1:$provider_port/realms/cardo" \
     KEYCLOAK_CLIENT_SECRET=cardo-smoke \
@@ -554,7 +553,6 @@ smoke_jar() {
     SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$postgres_port/cardo" \
     SPRING_DATASOURCE_USERNAME=cardo \
     SPRING_DATASOURCE_PASSWORD=cardo-smoke \
-    MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS=always \
     KEYCLOAK_BASE_URL="http://127.0.0.1:$provider_port" \
     KEYCLOAK_ISSUER_URI="http://127.0.0.1:$provider_port/realms/cardo" \
     KEYCLOAK_CLIENT_SECRET=cardo-smoke \
@@ -683,7 +681,6 @@ smoke_image() {
     --env SPRING_DATASOURCE_URL="jdbc:postgresql://$postgres_container:5432/cardo" \
     --env SPRING_DATASOURCE_USERNAME=cardo \
     --env SPRING_DATASOURCE_PASSWORD=cardo-smoke \
-    --env MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS=always \
     --env KEYCLOAK_BASE_URL="http://host.docker.internal:$provider_port" \
     --env KEYCLOAK_ISSUER_URI="http://host.docker.internal:$provider_port/realms/cardo" \
     --env KEYCLOAK_CLIENT_SECRET=cardo-smoke \
