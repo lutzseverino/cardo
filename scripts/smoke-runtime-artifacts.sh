@@ -444,6 +444,7 @@ assert_database_outage_withdraws_readiness() {
 
   docker stop --time 5 "$postgres_container" >/dev/null
   while (( SECONDS < deadline )); do
+    : >"$response_file"
     status=$(curl --silent --max-time 5 --output "$response_file" --write-out '%{http_code}' \
       "$readiness_url" || true)
     if [[ "$status" == "503" ]] \
