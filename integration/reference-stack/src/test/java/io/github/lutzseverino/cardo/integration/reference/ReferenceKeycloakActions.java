@@ -34,7 +34,8 @@ final class ReferenceKeycloakActions {
         @Override
         public Map<String, java.util.List<String>> get(
             URI uri, Map<String, java.util.List<String>> requestHeaders) throws IOException {
-          Map<String, java.util.List<String>> selected = cookies.get(uri, requestHeaders);
+          Map<String, java.util.List<String>> selected =
+              cookies.get(cookieSelectionUri(uri), requestHeaders);
           java.util.List<String> cookie = selected.get("Cookie");
           if (cookie == null) {
             return selected;
@@ -274,6 +275,18 @@ final class ReferenceKeycloakActions {
         .collect(java.util.stream.Collectors.joining("; "));
   }
 
+  private static URI cookieSelectionUri(URI uri) {
+    String host = uri.getHost();
+    boolean loopback =
+        "localhost".equalsIgnoreCase(host)
+            || "127.0.0.1".equals(host)
+            || "[::1]".equals(host)
+            || "::1".equals(host);
+    return loopback && "http".equalsIgnoreCase(uri.getScheme())
+        ? URI.create("https" + uri.toString().substring(uri.getScheme().length()))
+        : uri;
+  }
+
   private String browserState(Page page, URI target) {
     String stored =
         cookies.getCookieStore().getCookies().stream()
@@ -294,7 +307,10 @@ final class ReferenceKeycloakActions {
     String selected;
     try {
       selected =
-          cookies.get(target, Map.of()).getOrDefault("Cookie", java.util.List.of()).stream()
+          cookies
+              .get(cookieSelectionUri(target), Map.of())
+              .getOrDefault("Cookie", java.util.List.of())
+              .stream()
               .flatMap(header -> java.util.Arrays.stream(header.split(";\\s*")))
               .filter(attribute -> !attribute.startsWith("$"))
               .filter(attribute -> attribute.contains("="))

@@ -93,12 +93,14 @@ class ReferenceKeycloakActionsTest {
             case 1 -> {
               exchange
                   .getResponseHeaders()
-                  .add("Set-Cookie", "AUTH_SESSION_ID=session; Version=1; Path=/realms/reference/");
+                  .add(
+                      "Set-Cookie",
+                      "AUTH_SESSION_ID=session; Version=1; Path=/realms/reference/; Secure");
               exchange
                   .getResponseHeaders()
                   .add(
                       "Set-Cookie",
-                      "KC_AUTH_SESSION_HASH=hash; Version=1; Path=/realms/reference/");
+                      "KC_AUTH_SESSION_HASH=hash; Version=1; Path=/realms/reference/; Secure");
               respond(
                   exchange,
                   200,
