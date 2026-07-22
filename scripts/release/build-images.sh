@@ -21,6 +21,14 @@ command -v syft >/dev/null || { echo "syft is required for image inventories" >&
 
 printf '{"images":[' >"$output_directory/images.json"
 separator=
+./mvnw --batch-mode --no-transfer-progress \
+  -Drevision="$version" \
+  -DbuildNumber="$source_revision" \
+  -DskipTests \
+  -pl identity,invite,billing \
+  -am \
+  clean install
+
 for service in identity invite billing; do
   image="ghcr.io/lutzseverino/cardo/$service:$version"
   ./mvnw --batch-mode --no-transfer-progress \
@@ -29,7 +37,7 @@ for service in identity invite billing; do
     -Dcardo.image.name="$image" \
     -DskipTests \
     -pl "$service" \
-    clean package spring-boot:build-image-no-fork
+    spring-boot:build-image-no-fork
   image_id=$(docker image inspect --format '{{.Id}}' "$image")
   labels=$(docker image inspect --format '{{json .Config.Labels}}' "$image")
   jq --exit-status \

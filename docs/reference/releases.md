@@ -106,6 +106,11 @@ vulnerability report, and a SHA-256 checksum list. GitHub artifact attestations
 cover the release files and the three registry digests.
 
 The candidate and publication jobs independently build every service image.
+Each image build starts from a clean runner by installing the exact release
+version and revision once for the `identity,invite,billing` reactor with its
+upstream modules. It then invokes the direct image goal separately for each
+executable service, so a resumed second dispatch does not depend on ambient or
+published Cardo artifacts and never applies the image goal to library modules.
 Before any registry write, publication requires all three local image content
 IDs and normalized CycloneDX inventories to match the validated candidate byte
 for byte.
