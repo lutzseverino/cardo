@@ -31,3 +31,12 @@ sanitized logs and milestone summary under
 `integration/reference-stack/target/reference-stack/` together with the module's
 Surefire and Failsafe reports. Diagnostics redact credentials, cookies, JWTs,
 and invitation/action links.
+
+## Cleanup
+
+The harness stops all four JAR processes, containers, and the disposable Docker
+network whether the journey succeeds or fails. PostgreSQL databases, Mailpit
+messages, Keycloak state, and Caddy's temporary authority live only in those
+disposable resources. Sanitized reports under `target/` are the only retained
+fixture output; delete that build directory when local diagnostics are no
+longer needed.

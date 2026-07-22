@@ -82,9 +82,9 @@ status response directly because no application behavior or persistence access i
 - `identity` owns platform users, authentication, browser-session lifecycle, Identity runtime
   reconciliation, and Identity-provider integration. It does not own product membership or product
   authorization policy.
-- `invite` owns invitation tokens, delivery, provisional-identity coordination, expiry, and captured
-  grant mechanics. The consuming product owns the domain transition performed when an invitation is
-  accepted.
+- `invite` owns invitation tokens, delivery, provisional-identity coordination, expiry, and
+  lifecycle state. The consuming product owns the domain transition performed when an invitation is
+  accepted, including its grant plan, retained receipt, and convergence response.
 - `billing` owns billing customers, checkout and portal sessions, provider event processing, and
   platform entitlements. Products own the domain meaning of limits and paid capabilities.
 - `identity-product-auth` owns the reusable product-boundary authentication mechanics documented in
