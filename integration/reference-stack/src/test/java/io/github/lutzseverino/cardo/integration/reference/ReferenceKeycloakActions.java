@@ -41,7 +41,11 @@ final class ReferenceKeycloakActions {
           }
           Map<String, java.util.List<String>> normalized = new LinkedHashMap<>(selected);
           normalized.put(
-              "Cookie", cookie.stream().map(ReferenceKeycloakActions::browserCookie).toList());
+              "Cookie",
+              cookie.stream()
+                  .map(ReferenceKeycloakActions::browserCookie)
+                  .filter(header -> !header.isEmpty())
+                  .toList());
           return Map.copyOf(normalized);
         }
 

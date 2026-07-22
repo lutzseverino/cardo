@@ -163,11 +163,7 @@ class ReferenceKeycloakActionsTest {
               "GET /realms/reference/login-actions/profile",
               "POST /realms/reference/login-actions/profile");
       assertThat(cookies.subList(1, cookies.size()))
-          .allSatisfy(
-              cookie ->
-                  assertThat(cookie)
-                      .contains("AUTH_SESSION_ID=session", "KC_AUTH_SESSION_HASH=hash")
-                      .doesNotContain("$", "\""));
+          .containsOnly("AUTH_SESSION_ID=session; KC_AUTH_SESSION_HASH=hash");
     } finally {
       provider.stop(0);
     }
