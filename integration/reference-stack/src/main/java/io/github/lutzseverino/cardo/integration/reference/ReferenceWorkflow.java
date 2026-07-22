@@ -104,7 +104,7 @@ class ReferenceWorkflow {
             new CreateInvitation(
                 state.requestId(),
                 ReferenceContract.TENANT_ID,
-                "reference:tenant",
+                ReferenceContract.TENANT_RESOURCE_TYPE,
                 state.email(),
                 state.invitedBy(),
                 acceptUrl));

@@ -61,6 +61,18 @@ class ReferenceWorkflowTest {
     verify(invitations).create(request.capture());
     assertThat(request.getValue().requestId()).isEqualTo(INVITATION);
     assertThat(request.getValue().tenantId()).isEqualTo(ReferenceContract.TENANT_ID);
+    assertThat(request.getValue().tenantResourceType())
+        .startsWith(ReferenceContract.PRODUCT_OUTBOUND_CLIENT + ":")
+        .isEqualTo(ReferenceContract.TENANT_RESOURCE_TYPE);
+    assertThat(ReferenceContract.tenantResource())
+        .satisfies(
+            resource -> {
+              assertThat(resource.resourceServerClientId())
+                  .isEqualTo(ReferenceContract.PRODUCT_CLIENT);
+              assertThat(resource.type()).isEqualTo(request.getValue().tenantResourceType());
+              assertThat(resource.name())
+                  .isEqualTo(resource.type() + ":" + ReferenceContract.TENANT_ID);
+            });
     verify(store).recordCreated(INVITATION, REMOTE, INVITED_USER);
     verify(store).completeCommand(command.id());
   }
