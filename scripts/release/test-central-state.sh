@@ -23,6 +23,11 @@ if [[ ${0##*/} == curl ]]; then
         ;;
     esac
   done
+  if [[ -n ${MOCK_CENTRAL_HTTP_STATUS:-} ]]; then
+    : >"$output"
+    printf '%s' "$MOCK_CENTRAL_HTTP_STATUS"
+    exit
+  fi
   relative=${url#https://repo1.maven.org/maven2/io/github/lutzseverino/cardo/}
   source_file="$MOCK_CENTRAL_DIRECTORY/$relative"
   if [[ -f $source_file ]]; then
@@ -76,19 +81,51 @@ expect_failure() {
   fi
 }
 
+expect_http_failure() {
+  local label=$1
+  local status=$2
+  local output
+  if output=$(PATH="$mock_bin:$PATH" MOCK_CENTRAL_DIRECTORY="$absent" \
+    MOCK_CENTRAL_HTTP_STATUS="$status" \
+    scripts/release/check-central-state.sh "$version" "$repository" 2>&1); then
+    echo "Central state fixture unexpectedly accepted $label" >&2
+    exit 1
+  fi
+  [[ $output == *"HTTP $status"* ]] \
+    || { echo "Central state fixture did not report HTTP $status for $label" >&2; exit 1; }
+}
+
 absent="$central/absent"
 identical="$central/identical"
 lone_secondary="$central/lone-secondary"
+lone_javadoc="$central/lone-javadoc"
+lone_cyclonedx="$central/lone-cyclonedx"
 lone_signature="$central/lone-signature"
 mixed="$central/mixed"
 mismatch="$central/mismatch"
-mkdir -p "$absent" "$identical" "$lone_secondary" "$lone_signature" "$mixed" "$mismatch"
+mkdir -p \
+  "$absent" \
+  "$identical" \
+  "$lone_secondary" \
+  "$lone_javadoc" \
+  "$lone_cyclonedx" \
+  "$lone_signature" \
+  "$mixed" \
+  "$mismatch"
 cp -R "$release_root/." "$identical/"
 printf 'different ignored checksum\n' \
   >"$identical/example/$version/example-$version.jar.sha256"
-mkdir -p "$lone_secondary/example/$version" "$lone_signature/example/$version"
+mkdir -p \
+  "$lone_secondary/example/$version" \
+  "$lone_javadoc/example/$version" \
+  "$lone_cyclonedx/example/$version" \
+  "$lone_signature/example/$version"
 cp "$release_root/example/$version/example-$version-sources.jar" \
   "$lone_secondary/example/$version/"
+cp "$release_root/example/$version/example-$version-javadoc.jar" \
+  "$lone_javadoc/example/$version/"
+cp "$release_root/example/$version/example-$version-cyclonedx.json" \
+  "$lone_cyclonedx/example/$version/"
 cp "$release_root/example/$version/example-$version.jar.asc" \
   "$lone_signature/example/$version/"
 mkdir -p "$mixed/cardo/$version"
@@ -99,8 +136,13 @@ printf 'different binary\n' >"$mismatch/example/$version/example-$version.jar"
 check_state absent "$absent"
 check_state published "$identical"
 expect_failure lone-secondary "$lone_secondary"
+expect_failure lone-javadoc "$lone_javadoc"
+expect_failure lone-cyclonedx "$lone_cyclonedx"
 expect_failure lone-signature "$lone_signature"
 expect_failure mixed "$mixed"
 expect_failure mismatch "$mismatch"
+expect_http_failure forbidden 403
+expect_http_failure rate-limited 429
+expect_http_failure service-unavailable 503
 
 echo "Central state fixtures passed"
