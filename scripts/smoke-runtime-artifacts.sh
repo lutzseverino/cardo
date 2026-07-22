@@ -439,10 +439,12 @@ assert_database_outage_withdraws_readiness() {
   local readiness_url=$2
   local response_file="$temporary_directory/readiness-outage.json"
   local deadline=$((SECONDS + 45))
-  local status
+  local status="not requested"
+  local readiness_statuses="unavailable"
 
   docker stop --time 5 "$postgres_container" >/dev/null
   while (( SECONDS < deadline )); do
+    : >"$response_file"
     status=$(curl --silent --max-time 5 --output "$response_file" --write-out '%{http_code}' \
       "$readiness_url" || true)
     if [[ "$status" == "503" ]] \
@@ -453,7 +455,13 @@ assert_database_outage_withdraws_readiness() {
     fi
     sleep 1
   done
-  fail "$service readiness did not report the unavailable database"
+  if [[ -s "$response_file" ]]; then
+    readiness_statuses=$(jq --compact-output \
+      '{status, components: ((.components // {}) | with_entries(.value = {status: .value.status}))}' \
+      "$response_file" 2>/dev/null || printf 'invalid JSON')
+  fi
+  fail "$service readiness did not report the unavailable database" \
+    "(last HTTP status: $status; statuses: $readiness_statuses)"
 }
 
 assert_jar_database_outage() {
@@ -463,11 +471,14 @@ assert_jar_database_outage() {
   port=$(free_port)
   log="$temporary_directory/$service-jar-database-outage.log"
 
+  # Complete pool failure detection before the readiness client's 5s deadline.
   env \
     SERVER_PORT="$port" \
     SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$postgres_port/cardo" \
     SPRING_DATASOURCE_USERNAME=cardo \
     SPRING_DATASOURCE_PASSWORD=cardo-smoke \
+    SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=1000 \
+    SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT=1000 \
     KEYCLOAK_BASE_URL="http://127.0.0.1:$provider_port" \
     KEYCLOAK_ISSUER_URI="http://127.0.0.1:$provider_port/realms/cardo" \
     KEYCLOAK_CLIENT_SECRET=cardo-smoke \
