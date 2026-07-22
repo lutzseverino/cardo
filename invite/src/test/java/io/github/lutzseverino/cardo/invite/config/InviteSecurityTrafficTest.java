@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @WebMvcTest(InviteSecurityTrafficTest.TrafficController.class)
 @Import({
   SecurityConfig.class,
+  ProductCallerConfiguration.class,
   ProductCallerReader.class,
   InviteSecurityTrafficTest.TrafficController.class
 })

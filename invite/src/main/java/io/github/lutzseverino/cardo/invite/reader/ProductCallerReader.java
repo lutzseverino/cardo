@@ -44,7 +44,7 @@ public class ProductCallerReader {
     if (clientId == null || clientId.isBlank()) {
       throw invalidToken("Missing product client identifier.");
     }
-    if (!properties.allowedClientIdSet().contains(clientId)) {
+    if (!properties.allowedClientIds().contains(clientId)) {
       throw invalidToken("The product client is not allowed to call Invite.");
     }
     return clientId;

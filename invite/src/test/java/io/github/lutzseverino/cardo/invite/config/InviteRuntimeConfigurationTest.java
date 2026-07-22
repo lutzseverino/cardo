@@ -5,14 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.ServerSocket;
 import java.time.Duration;
-import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -22,18 +20,20 @@ class InviteRuntimeConfigurationTest {
   void acceptsLocalAndIsolatedProductionConfigurations() throws Exception {
     policy(
             new InviteRuntimeProperties(null, null, null),
-            new ProductCallerProperties(List.of()),
+            new ProductCallerProperties(Set.of()),
             new MockEnvironment())
         .afterPropertiesSet();
-    policy(production(), new ProductCallerProperties(List.of("clinic")), productionEnvironment())
+    policy(production(), new ProductCallerProperties(Set.of("clinic")), productionEnvironment())
         .afterPropertiesSet();
   }
 
   @Test
-  void rejectsDuplicateProductionAllowlistWithoutDisclosingSecrets() {
-    assertThatThrownBy(() -> new ProductCallerProperties(List.of("clinic", "clinic")))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("allowed-client-ids");
+  void preservesPublicSetConstructorAndAccessorContract() {
+    ProductCallerProperties properties = new ProductCallerProperties(Set.of("clinic", "polity"));
+
+    assertThat(properties.allowedClientIds()).containsExactlyInAnyOrder("clinic", "polity");
+    assertThatThrownBy(() -> properties.allowedClientIds().add("another"))
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
@@ -42,15 +42,15 @@ class InviteRuntimeConfigurationTest {
     identityClient.setProperty("cardo.identity.client.base-url", "https://localhost./api/v1");
     assertThatThrownBy(
             () ->
-                policy(production(), new ProductCallerProperties(List.of("clinic")), identityClient)
+                policy(production(), new ProductCallerProperties(Set.of("clinic")), identityClient)
                     .afterPropertiesSet())
         .hasMessageContaining("cardo.identity.client.base-url");
 
     MockEnvironment smtp = productionEnvironment();
-    smtp.setProperty("spring.mail.host", "::1");
+    smtp.setProperty("spring.mail.host", "127.1");
     assertThatThrownBy(
             () ->
-                policy(production(), new ProductCallerProperties(List.of("clinic")), smtp)
+                policy(production(), new ProductCallerProperties(Set.of("clinic")), smtp)
                     .afterPropertiesSet())
         .hasMessageContaining("spring.mail.host");
 
@@ -58,7 +58,7 @@ class InviteRuntimeConfigurationTest {
     datasource.setProperty("spring.datasource.url", "jdbc:postgresql://[::1]:5432/cardo_invite");
     assertThatThrownBy(
             () ->
-                policy(production(), new ProductCallerProperties(List.of("clinic")), datasource)
+                policy(production(), new ProductCallerProperties(Set.of("clinic")), datasource)
                     .afterPropertiesSet())
         .hasMessageContaining("spring.datasource");
   }
@@ -66,7 +66,7 @@ class InviteRuntimeConfigurationTest {
   @Test
   void yamlListBindingPreservesDuplicatesForValidation() {
     new ApplicationContextRunner()
-        .withUserConfiguration(ProductCallerBindingConfiguration.class)
+        .withUserConfiguration(ProductCallerConfiguration.class)
         .withInitializer(
             context -> {
               try {
@@ -88,6 +88,22 @@ class InviteRuntimeConfigurationTest {
                   .hasRootCauseInstanceOf(IllegalArgumentException.class)
                   .rootCause()
                   .hasMessageContaining("allowed-client-ids");
+            });
+  }
+
+  @Test
+  void bindingMapsAValidRawListToThePublicSetContract() {
+    new ApplicationContextRunner()
+        .withUserConfiguration(ProductCallerConfiguration.class)
+        .withPropertyValues(
+            "cardo.invite.product-callers.allowed-client-ids[0]=clinic",
+            "cardo.invite.product-callers.allowed-client-ids[1]=polity")
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              assertThat(context.getBean(ProductCallerProperties.class).allowedClientIds())
+                  .isInstanceOf(Set.class)
+                  .containsExactlyInAnyOrder("clinic", "polity");
             });
   }
 
@@ -219,8 +235,4 @@ class InviteRuntimeConfigurationTest {
         .withProperty("spring.datasource.username", "cardo_invite_app")
         .withProperty("spring.datasource.password", "invite-db-secret");
   }
-
-  @Configuration(proxyBeanMethods = false)
-  @EnableConfigurationProperties(ProductCallerProperties.class)
-  static class ProductCallerBindingConfiguration {}
 }

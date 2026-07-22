@@ -71,6 +71,16 @@ class IdentityRuntimeConfigurationTest {
                         production(),
                         productionSession(),
                         productionKeycloak(
+                            "https://127.1", URI.create("https://app.example.com/done")),
+                        productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("cardo.identity.keycloak.base-url");
+    assertThatThrownBy(
+            () ->
+                policy(
+                        production(),
+                        productionSession(),
+                        productionKeycloak(
                             "https://id.example.com", URI.create("https://localhost./done")),
                         productionEnvironment())
                     .afterPropertiesSet())

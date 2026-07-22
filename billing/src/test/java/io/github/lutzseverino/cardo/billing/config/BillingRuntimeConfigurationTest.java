@@ -46,7 +46,7 @@ class BillingRuntimeConfigurationTest {
                     .afterPropertiesSet())
         .hasMessageContaining("cardo.billing.keycloak.base-url");
     MockEnvironment datasource = productionEnvironment();
-    datasource.setProperty("spring.datasource.url", "jdbc:postgresql://0.0.0.0:5432/cardo_billing");
+    datasource.setProperty("spring.datasource.url", "jdbc:postgresql://127.0.1:5432/cardo_billing");
     assertThatThrownBy(
             () -> policy(production(), productionStripe(), datasource).afterPropertiesSet())
         .hasMessageContaining("spring.datasource");

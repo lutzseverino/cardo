@@ -270,7 +270,7 @@ class IdentityProviderMutationServiceTest {
         new IdentityProviderMutationService(
             terminalRepository,
             new IdentityProviderMutationProperties(
-                Duration.ofSeconds(5), Duration.ZERO, Duration.ofMinutes(1), 1, 50),
+                Duration.ofSeconds(5), Duration.ofNanos(1), Duration.ofMinutes(1), 1, 50),
             mock(IdentityWorkflowMetrics.class));
     assertThat(
             terminalService.recordFailure(

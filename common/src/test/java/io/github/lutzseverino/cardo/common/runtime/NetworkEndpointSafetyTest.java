@@ -15,12 +15,19 @@ class NetworkEndpointSafetyTest {
         "api.localhost.",
         "127.0.0.1",
         "127.255.255.254",
+        "127.1",
+        "127.0.1",
+        "127.16777215",
         "2130706433",
         "0.0.0.0",
+        "0.0",
+        "0.0.0",
         "0",
         "[::1]",
         "::1",
         "[::]",
+        "::7f00:1",
+        "::ffff:7f00:1",
         "::ffff:127.0.0.1",
         "::ffff:0.0.0.0"
       })
@@ -29,7 +36,17 @@ class NetworkEndpointSafetyTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"id.example.com", "10.0.0.5", "192.168.1.5", "2001:db8::1"})
+  @ValueSource(
+      strings = {
+        "id.example.com",
+        "1",
+        "126.16777215",
+        "128.1",
+        "10.0.0.5",
+        "192.168.1.5",
+        "2001:db8::1",
+        "::ffff:192.168.1.5"
+      })
   void acceptsRemoteHosts(String host) {
     assertThat(NetworkEndpointSafety.isLocalOrUnspecified(host)).isFalse();
   }
