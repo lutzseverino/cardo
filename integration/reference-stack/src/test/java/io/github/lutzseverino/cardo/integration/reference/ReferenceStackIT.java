@@ -132,6 +132,7 @@ class ReferenceStackIT {
           invitationBrowser.request("GET", invitationLink, null, Map.of());
       assertThat(resolved.status()).isEqualTo(200);
       assertThat(resolved.body()).contains(INVITED_EMAIL, ReferenceContract.TENANT_ID.toString());
+      UUID remoteInvitationId = UUID.fromString(string(invitationBrowser.object(resolved), "id"));
       ReferenceHttp.Response requested =
           invitationBrowser.request(
               "POST",
@@ -226,7 +227,7 @@ class ReferenceStackIT {
                   requireObject(
                       internal.request(
                           "GET",
-                          stack.inviteInternal("/api/v1/invitations/" + invitationId),
+                          stack.inviteInternal("/api/v1/invitations/" + remoteInvitationId),
                           null,
                           bearer(inviteToken)),
                       200,
@@ -237,7 +238,8 @@ class ReferenceStackIT {
               internal
                   .request(
                       "GET",
-                      stack.inviteInternal("/api/v1/invitations/" + invitationId + "/convergence"),
+                      stack.inviteInternal(
+                          "/api/v1/invitations/" + remoteInvitationId + "/convergence"),
                       null,
                       bearer(inviteToken))
                   .status())
