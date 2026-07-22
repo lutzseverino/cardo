@@ -28,6 +28,11 @@ The clients have distinct responsibilities:
   `cardo_user_id` mapper targets. Deployment configuration may add other
   distinct targets.
 
+The configured runtime client ID must never be `identity`, in local or
+production mode. Mapper target overlap remains valid, but the runtime client
+and fixed catalog owner are separate credentials and may not collapse into one
+client definition.
+
 The runtime credential is not a realm bootstrap or contract-materializer
 credential. It may read the provider definitions listed below and retain the
 operational permissions needed for user lifecycle, existing client-role
@@ -55,6 +60,13 @@ role is not a third direct grant. Do not directly add `query-users`,
 The `identity` PAT has no realm-management roles; Admin API reads for clients,
 users, mappers, and roles must return `403`. Conversely, catalog protection
 calls never use the `cardo-identity` realm-admin token.
+
+Keycloak assigns its realm default role to a newly created service-account user;
+the role's composites can add an `account` entry to `resource_access`. The
+deployment materializer must remove those default realm grants from the
+`identity` service account before granting `identity:uma_protection`, then prove
+the exact catalog token claim. Merely omitting explicit `account` grants is not
+sufficient.
 
 `manage-users` is a coarse built-in Keycloak role. Cardo never uses it to grant
 authority to a service-account user, but the built-in role can technically
@@ -102,10 +114,11 @@ The `identity` client has exactly these Cardo-owned client roles:
 
 The runtime credential must successfully perform exact client lookup, mapper
 lookup, Identity role lookup, and a bounded user-directory read. The separate
-Identity catalog credential must have `azp=identity`, exactly the
-`identity:uma_protection` client role, no realm-management roles, and a
-successful UMA protection resource read. A missing role is drift: role
-assignment paths never create its definition.
+Identity catalog credential must have `azp=identity`, a `resource_access` claim
+containing only `identity` with exactly the `uma_protection` role, and a
+successful UMA protection resource read. Any foreign client entry or extra
+Identity role is drift. A missing role is drift: role assignment paths never
+create its definition.
 
 ## Startup Behavior
 
@@ -134,7 +147,9 @@ digest-pinned image declared in `DisposableKeycloakProvisioner`. The snapshots
 prove unique clients, one canonical mapper per target, the exact fixed roles,
 and unchanged direct grants. Token claims prove the two direct
 realm-management grants (plus Keycloak's derived `query-clients`) and the
-automatic `identity:uma_protection` role on the separate catalog service account.
+automatic `identity:uma_protection` role on the separate catalog service account,
+after convergently removing Keycloak's default realm grant and derived `account`
+resource access.
 The exercise also proves read-only validation,
 runtime role assignment and UMA behavior, definition-write denial, drift
 detection, privileged repair, and a second convergent repair. The portable

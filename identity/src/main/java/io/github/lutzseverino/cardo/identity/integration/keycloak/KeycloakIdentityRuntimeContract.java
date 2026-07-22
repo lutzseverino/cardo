@@ -103,15 +103,13 @@ final class KeycloakIdentityRuntimeContract implements IdentityRuntimeContract {
               ? value
               : Map.of();
       Set<String> identityRoles = stringSet(identityAccess.get("roles"));
-      if (!Set.of("uma_protection").equals(identityRoles)) {
+      if (!Set.of(IdentityPermissions.CLIENT_ID).equals(resourceAccess.keySet())
+          || !Set.of("uma_protection").equals(identityRoles)) {
         drift.add(
             new Drift(
-                "Identity catalog credential must have exactly identity:uma_protection", false));
-      }
-      if (resourceAccess.containsKey("realm-management")) {
-        drift.add(
-            new Drift(
-                "Identity catalog credential must not have realm-management authority", false));
+                "Identity catalog credential resource_access must contain exactly "
+                    + "identity:uma_protection",
+                false));
       }
     } catch (java.text.ParseException exception) {
       drift.add(new Drift("Identity catalog credential returned an unreadable token", false));

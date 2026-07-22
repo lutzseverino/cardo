@@ -1,6 +1,7 @@
 package io.github.lutzseverino.cardo.identity.config;
 
 import io.github.lutzseverino.cardo.common.runtime.NetworkEndpointSafety;
+import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import java.net.URI;
 import java.time.Duration;
 import java.util.HashSet;
@@ -24,6 +25,7 @@ class IdentityRuntimeConfiguration {
       KeycloakProperties keycloak,
       Environment environment) {
     return () -> {
+      requireDistinctKeycloakClientOwners(keycloak);
       if (runtime.mode() != IdentityRuntimeProperties.Mode.PRODUCTION) {
         return;
       }
@@ -63,6 +65,15 @@ class IdentityRuntimeConfiguration {
       }
       requireIsolatedDatasource(environment, "identity");
     };
+  }
+
+  private static void requireDistinctKeycloakClientOwners(KeycloakProperties keycloak) {
+    if (keycloak.clientId() != null
+        && IdentityPermissions.CLIENT_ID.equals(keycloak.clientId().strip())) {
+      throw new IllegalStateException(
+          "Invalid property cardo.identity.keycloak.client-id: must be distinct from the fixed "
+              + "Identity authorization catalog client identity.");
+    }
   }
 
   @Bean("identityOutboundRestClientBuilder")

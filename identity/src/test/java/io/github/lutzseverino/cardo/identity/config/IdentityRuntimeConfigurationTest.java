@@ -31,6 +31,28 @@ class IdentityRuntimeConfigurationTest {
   }
 
   @Test
+  void rejectsTheFixedCatalogOwnerAsRuntimeClientInEveryMode() {
+    KeycloakProperties keycloak = keycloakWithRuntimeClientId("identity");
+
+    assertThatThrownBy(
+            () ->
+                policy(
+                        new IdentityRuntimeProperties(null, null, null),
+                        localSession(),
+                        keycloak,
+                        new MockEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("cardo.identity.keycloak.client-id")
+        .hasMessageContaining("must be distinct");
+    assertThatThrownBy(
+            () ->
+                policy(production(), productionSession(), keycloak, productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("cardo.identity.keycloak.client-id")
+        .hasMessageContaining("must be distinct");
+  }
+
+  @Test
   void rejectsUnsafeProductionConfigurationWithoutDisclosingSecrets() {
     MockEnvironment environment = productionEnvironment();
     environment.setProperty("spring.datasource.password", "database-secret-value");
@@ -284,6 +306,19 @@ class IdentityRuntimeConfigurationTest {
         "cardo-web",
         URI.create("https://app.example.com/invitations/completed"),
         List.of("cardo-identity", "identity", "billing"),
+        false);
+  }
+
+  private KeycloakProperties keycloakWithRuntimeClientId(String clientId) {
+    return new KeycloakProperties(
+        "https://id.example.com",
+        "cardo",
+        clientId,
+        "identity-runtime-secret-prod",
+        "identity-authorization-secret-prod",
+        "cardo-web",
+        URI.create("https://app.example.com/invitations/completed"),
+        List.of(clientId, "identity", "billing"),
         false);
   }
 

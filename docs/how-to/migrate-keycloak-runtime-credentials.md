@@ -31,9 +31,11 @@ credentials.
 6. Materialize `identity` as a separate confidential resource-server client
    with its own service account and Authorization Services enabled. Give that
    service account only Keycloak's automatic `identity:uma_protection` client
-   role. Do not grant realm-management or Identity application roles to it.
-   Keep the mapper on `cardo-identity`, `identity`, and `billing` (plus any other
-   configured targets).
+   role. Remove Keycloak's realm default role from that service-account user;
+   otherwise its composites add a foreign `account` entry to the catalog PAT's
+   `resource_access`. Do not grant realm-management or Identity application
+   roles to it. Keep the mapper on `cardo-identity`, `identity`, and `billing`
+   (plus any other configured targets).
 7. Store distinct secrets in `KEYCLOAK_CLIENT_SECRET` and
    `KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET`. Missing, equal, known
    development, or placeholder values fail production startup.

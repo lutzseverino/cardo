@@ -89,8 +89,14 @@ class KeycloakIdentityRuntimeContractIntegrationTest {
           .containsExactlyInAnyOrder("manage-users", "query-clients", "view-clients");
       assertThat(keycloak.runtimeClientRoles(runtimeToken)).isEmpty();
       assertThat(keycloak.authorizationClientRoles(runtimeToken)).isEmpty();
-      assertThat(keycloak.authorizationClientRoles(catalogTokens.clientCredentialsToken()))
-          .containsExactly("uma_protection");
+      String catalogToken = catalogTokens.clientCredentialsToken();
+      assertThat(keycloak.authorizationClientRoles(catalogToken)).containsExactly("uma_protection");
+      Map<?, ?> catalogResourceAccess =
+          (Map<?, ?>) JWTParser.parse(catalogToken).getJWTClaimsSet().getClaim("resource_access");
+      assertThat(catalogResourceAccess.keySet().stream().map(Object::toString).toList())
+          .containsExactly("identity");
+      assertThat(((Map<?, ?>) catalogResourceAccess.get("identity")).get("roles"))
+          .isEqualTo(List.of("uma_protection"));
       assertThatCode(validator::validate).doesNotThrowAnyException();
       KeycloakIdentityRuntimeContract swappedCredentials =
           new KeycloakIdentityRuntimeContract(

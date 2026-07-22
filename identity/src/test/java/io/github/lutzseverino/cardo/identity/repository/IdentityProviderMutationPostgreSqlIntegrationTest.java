@@ -3,6 +3,7 @@ package io.github.lutzseverino.cardo.identity.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.identity.config.IdentityProviderMutationProperties;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutation;
 import io.github.lutzseverino.cardo.identity.model.IdentityProviderMutationStatus;
@@ -23,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -217,6 +219,71 @@ class IdentityProviderMutationPostgreSqlIntegrationTest {
   }
 
   @Test
+  void activePasswordProvisionBlocksAProvisionalRequestForTheSameEmail() {
+    service.requestPasswordProvision("user@example.com", "User");
+
+    assertThatThrownBy(() -> service.requestProvisionalProvision("user@example.com"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> assertThat(failure.code()).isEqualTo("user_provisioning_in_progress"));
+
+    assertThat(activeProvisioningMutations())
+        .singleElement()
+        .extracting(IdentityProviderMutation::getType)
+        .isEqualTo(IdentityProviderMutationType.PROVISION_PASSWORD_USER);
+  }
+
+  @Test
+  void activeProvisionalProvisionBlocksAPasswordRequestForTheSameEmail() {
+    service.requestProvisionalProvision("user@example.com");
+
+    assertThatThrownBy(() -> service.requestPasswordProvision("user@example.com", "User"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> assertThat(failure.code()).isEqualTo("user_provisioning_in_progress"));
+
+    assertThat(activeProvisioningMutations())
+        .singleElement()
+        .extracting(IdentityProviderMutation::getType)
+        .isEqualTo(IdentityProviderMutationType.PROVISION_PROVISIONAL_USER);
+  }
+
+  @Test
+  void concurrentCrossTypeRequestsCreateExactlyOneActiveOwner() throws Exception {
+    CountDownLatch start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      Future<String> password =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  service.requestPasswordProvision("user@example.com", "User");
+                  return "accepted";
+                } catch (ApiException failure) {
+                  return failure.code();
+                }
+              });
+      Future<String> provisional =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  service.requestProvisionalProvision("user@example.com");
+                  return "accepted";
+                } catch (ApiException failure) {
+                  return failure.code();
+                }
+              });
+      start.countDown();
+
+      assertThat(List.of(password.get(), provisional.get()))
+          .containsExactlyInAnyOrder("accepted", "user_provisioning_in_progress");
+    }
+
+    assertThat(activeProvisioningMutations()).singleElement();
+  }
+
+  @Test
   void concurrentEquivalentProvisionalRequestsShareOneDurableIntent() throws Exception {
     CountDownLatch start = new CountDownLatch(1);
     try (var executor = Executors.newFixedThreadPool(2)) {
@@ -322,6 +389,111 @@ class IdentityProviderMutationPostgreSqlIntegrationTest {
               + "', 'PROVISION_PROVISIONAL_USER', 'REQUESTED', "
               + "'new@example.com', 'marker-v4', now())");
     }
+  }
+
+  @Test
+  void v6PreservesValidV5RowsAndInstallsCrossTypeOwnerExclusivity() throws Exception {
+    String schema = "owner_exclusivity_" + UUID.randomUUID().toString().replace("-", "");
+    migrate(schema, "5");
+    try (Connection connection = connection(schema);
+        Statement statement = connection.createStatement()) {
+      insertProvisioningMutation(
+          statement, "PROVISION_PASSWORD_USER", "REQUESTED", "password@example.com", "marker-1");
+      insertProvisioningMutation(
+          statement,
+          "PROVISION_PROVISIONAL_USER",
+          "REQUESTED",
+          "provisional@example.com",
+          "marker-2");
+      insertProvisioningMutation(
+          statement, "PROVISION_PROVISIONAL_USER", "COMPLETED", "password@example.com", "marker-3");
+    }
+
+    migrate(schema, "6");
+
+    try (Connection connection = connection(schema);
+        Statement statement = connection.createStatement()) {
+      try (ResultSet rows =
+          statement.executeQuery("select count(*) from identity_provider_mutations")) {
+        rows.next();
+        assertThat(rows.getInt(1)).isEqualTo(3);
+      }
+      assertThatThrownBy(
+              () ->
+                  insertProvisioningMutation(
+                      statement,
+                      "PROVISION_PROVISIONAL_USER",
+                      "REQUESTED",
+                      "password@example.com",
+                      "marker-4"))
+          .isInstanceOf(java.sql.SQLException.class);
+    }
+  }
+
+  @Test
+  void v6FailsSafelyWhenV5ContainsCrossTypeActiveDuplicates() throws Exception {
+    String schema = "owner_preflight_" + UUID.randomUUID().toString().replace("-", "");
+    migrate(schema, "5");
+    try (Connection connection = connection(schema);
+        Statement statement = connection.createStatement()) {
+      insertProvisioningMutation(
+          statement, "PROVISION_PASSWORD_USER", "REQUESTED", "private@example.com", "marker-1");
+      insertProvisioningMutation(
+          statement, "PROVISION_PROVISIONAL_USER", "REQUESTED", "private@example.com", "marker-2");
+    }
+
+    assertThatThrownBy(() -> migrate(schema, "6"))
+        .isInstanceOf(FlywayException.class)
+        .hasMessageContaining("operator reconciliation")
+        .hasMessageNotContaining("private@example.com");
+
+    try (Connection connection = connection(schema);
+        Statement statement = connection.createStatement()) {
+      try (ResultSet rows =
+          statement.executeQuery("select count(*) from identity_provider_mutations")) {
+        rows.next();
+        assertThat(rows.getInt(1)).isEqualTo(2);
+      }
+      try (ResultSet index =
+          statement.executeQuery(
+              "select indexdef from pg_indexes where schemaname = current_schema() "
+                  + "and indexname = 'uk_identity_provider_mutations_active_provision_email'")) {
+        index.next();
+        assertThat(index.getString(1)).contains("normalized_email, mutation_type");
+      }
+    }
+  }
+
+  private List<IdentityProviderMutation> activeProvisioningMutations() {
+    return mutations.findAll().stream()
+        .filter(
+            mutation ->
+                mutation.getStatus() == IdentityProviderMutationStatus.REQUESTED
+                    && (mutation.getType() == IdentityProviderMutationType.PROVISION_PASSWORD_USER
+                        || mutation.getType()
+                            == IdentityProviderMutationType.PROVISION_PROVISIONAL_USER))
+        .toList();
+  }
+
+  private void insertProvisioningMutation(
+      Statement statement, String type, String status, String email, String marker)
+      throws Exception {
+    statement.executeUpdate(
+        "insert into identity_provider_mutations "
+            + "(id, mutation_type, status, normalized_email, display_name, correlation_marker, "
+            + "next_attempt_at) values ('"
+            + UUID.randomUUID()
+            + "', '"
+            + type
+            + "', '"
+            + status
+            + "', '"
+            + email
+            + "', "
+            + ("PROVISION_PASSWORD_USER".equals(type) ? "'User'" : "null")
+            + ", '"
+            + marker
+            + "', now())");
   }
 
   private void migrate(String schema, String target) {
