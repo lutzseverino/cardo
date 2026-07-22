@@ -420,8 +420,12 @@ public class UserService {
   private UserResult resolveProvisionalProvisionConflict(
       IdentityProviderMutationWork work, String providerSubject, RuntimeException failure) {
     Optional<UserProjection> existing = users.findProjectedByEmail(work.email());
-    if (existing.isPresent()
-        && providerSubject.equals(existing.orElseThrow().getKeycloakSubject())) {
+    if (existing.isEmpty()) {
+      providerMutations.recordFailure(
+          work, failure, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
+      throw failure;
+    }
+    if (providerSubject.equals(existing.orElseThrow().getKeycloakSubject())) {
       return transactions.execute(status -> completeProvisionalProvision(work, providerSubject));
     }
 

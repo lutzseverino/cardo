@@ -344,6 +344,61 @@ class UserServiceTest {
   }
 
   @Test
+  void retriesIntegrityFailureWithoutAnEmailConflictAndAllowsLaterMarkerRecovery() {
+    UserService service = service();
+    UUID userId = UUID.randomUUID();
+    IdentityProviderMutationWork work = provisionalWork();
+    IdentityProviderMutationWork recoveredWork =
+        new IdentityProviderMutationWork(
+            work.id(),
+            UUID.randomUUID(),
+            work.type(),
+            work.userId(),
+            work.providerSubject(),
+            work.email(),
+            work.name(),
+            work.correlationMarker(),
+            work.desiredEnabled(),
+            work.desiredVersion());
+    DataIntegrityViolationException rollback =
+        new DataIntegrityViolationException("binding or grant constraint");
+    when(users.findProjectedByEmail("employee@example.com")).thenReturn(Optional.empty());
+    when(providerMutations.requestProvisionalProvision("employee@example.com"))
+        .thenReturn(work, recoveredWork);
+    when(identityProvider.provisionProvisionalIdentity("employee@example.com", "marker-1"))
+        .thenReturn(new IdentityProvider.ProvisionedIdentity("subject-1"))
+        .thenThrow(ApiException.conflict("user_exists", "User already exists."));
+    when(identityProvider.findIdentityByCorrelationMarker("marker-1"))
+        .thenReturn(Optional.of(new IdentityProvider.ProvisionedIdentity("subject-1")));
+    when(transactions.execute(any(TransactionCallback.class)))
+        .thenThrow(rollback)
+        .thenAnswer(
+            invocation -> invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(null));
+    when(users.saveAndFlush(any(User.class)))
+        .thenAnswer(invocation -> persisted(invocation, userId));
+    when(users.findProjectedById(userId))
+        .thenReturn(
+            Optional.of(
+                projection(userId, "subject-1", "employee@example.com", UserStatus.INVITED)));
+
+    assertThatThrownBy(
+            () -> service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
+        .isSameAs(rollback);
+
+    verify(providerMutations)
+        .recordFailure(work, rollback, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
+    verify(providerMutations, never())
+        .recordTerminalFailure(eq(work), any(RuntimeException.class), any());
+
+    assertThat(service.createProvisional(new CreateProvisionalUserInput("employee@example.com")))
+        .extracting(UserResult::id, UserResult::status)
+        .containsExactly(userId, UserStatus.INVITED);
+    verify(identityProvider).findIdentityByCorrelationMarker("marker-1");
+    verify(providerMutations).completeProvisionalProvision(recoveredWork, "subject-1", userId);
+    verify(identityProvider, never()).deleteIdentity(any());
+  }
+
+  @Test
   void preservesMarkerOwnedIdentityWhenLocalCompletionRollsBack() {
     UserService service = service();
     IdentityProviderMutationWork work = provisionalWork();
