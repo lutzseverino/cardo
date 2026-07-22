@@ -57,6 +57,10 @@ The inherited enforcement defaults to skipped; only these consumers set
 
 - Keep product resource catalogs, domain rules, tenant semantics, and lifecycle
   decisions in the product.
+- Keep realm bootstrap, OAuth clients, service accounts, protocol mappers,
+  provider-definition roles, and service-account grants in deployment
+  provisioning. Cardo runtime credentials validate and operate against that
+  provider state; they do not own its desired definitions.
 - Do not make Identity or Billing silently grant product-domain access.
 - Keep invitation token lifecycle in Invite. Products own why an invitation is
   created, what resource it targets, and any domain lifecycle surrounding

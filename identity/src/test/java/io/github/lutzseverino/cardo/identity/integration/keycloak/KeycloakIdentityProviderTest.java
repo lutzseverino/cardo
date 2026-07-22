@@ -516,7 +516,8 @@ class KeycloakIdentityProviderTest {
             "secret",
             "cardo-web",
             URI.create("https://app.example/invitations/completed"),
-            List.of()),
+            List.of(),
+            false),
         mock(KeycloakRealmAdminClient.class),
         tokens,
         rest);

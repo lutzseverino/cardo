@@ -125,7 +125,7 @@ start_provider_stub() {
 import json
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 RSA_MODULUS = (
     "oEz1YiQqKNThOSAgGSjtYouxYSAlxJPX2BMvM7LbTFLIx9QuCf-iuq6LSYjF_sqUqgPqYBvrzqoUewDqjT7"
@@ -134,6 +134,32 @@ RSA_MODULUS = (
     "dXNBPMHGVt1V1X86GFOg4sUdLQeTrkOgNb_swbX8foW4MbUhnCmEIlMRIhKyrOZAlDiPk7g185xOd0i84oEI"
     "pey8PGw"
 )
+
+CLIENTS = {
+    "cardo-identity": "uuid-cardo-identity",
+    "cardo-web": "uuid-cardo-web",
+    "identity": "uuid-identity",
+    "billing": "uuid-billing",
+}
+
+CANONICAL_MAPPER = {
+    "id": "mapper-cardo-user-id",
+    "name": "cardo_user_id",
+    "protocol": "openid-connect",
+    "protocolMapper": "oidc-usermodel-attribute-mapper",
+    "consentRequired": False,
+    "config": {
+        "user.attribute": "cardo_user_id",
+        "claim.name": "cardo_user_id",
+        "jsonType.label": "String",
+        "access.token.claim": "true",
+        "id.token.claim": "false",
+        "userinfo.token.claim": "false",
+        "multivalued": "false",
+    },
+}
+
+IDENTITY_ROLES = {"profile:read", "profile:write", "user:provision"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -163,6 +189,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def send_empty(self, status):
+        self.send_response(status)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
         request = urlparse(self.path)
@@ -195,9 +226,24 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         elif request.path == "/admin/realms/cardo/clients":
-            client_id = parse_qs(request.query).get("clientId", ["cardo-smoke"])[0]
-            self.send_json(200, [{"id": "cardo-smoke", "clientId": client_id}])
+            client_id = parse_qs(request.query).get("clientId", [""])[0]
+            client_uuid = CLIENTS.get(client_id)
+            clients = [] if client_uuid is None else [{"id": client_uuid, "clientId": client_id}]
+            self.send_json(200, clients)
         elif request.path.endswith("/protocol-mappers/models"):
+            client_uuid = request.path.split("/")[-3]
+            self.send_json(200, [CANONICAL_MAPPER] if client_uuid in CLIENTS.values() else [])
+        elif request.path.startswith("/admin/realms/cardo/clients/uuid-identity/roles/"):
+            role = unquote(request.path.rsplit("/", 1)[-1])
+            self.send_json(
+                200 if role in IDENTITY_ROLES else 404,
+                {"id": "role-" + role, "name": role}
+                if role in IDENTITY_ROLES
+                else {"error": "not_found"},
+            )
+        elif request.path == "/admin/realms/cardo/users":
+            self.send_json(200, [])
+        elif request.path == "/realms/cardo/authz/protection/resource_set":
             self.send_json(200, [])
         else:
             self.send_json(404, {"error": "not_found"})
@@ -208,14 +254,23 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"length": len(body)})
         elif self.path.endswith("/protocol/openid-connect/token"):
             self.send_json(200, {"access_token": "cardo-smoke", "expires_in": 3600})
+        elif "/protocol-mappers/models" in self.path or self.path.endswith("/roles"):
+            self.send_empty(403)
         else:
-            self.send_response(204)
-            self.end_headers()
+            self.send_json(404, {"error": "not_found"})
 
     def do_PUT(self):
         self.read_request_body()
-        self.send_response(204)
-        self.end_headers()
+        if "/protocol-mappers/models/" in self.path:
+            self.send_empty(403)
+        else:
+            self.send_json(404, {"error": "not_found"})
+
+    def do_DELETE(self):
+        if "/protocol-mappers/models/" in self.path:
+            self.send_empty(403)
+        else:
+            self.send_json(404, {"error": "not_found"})
 
     def log_message(self, message, *args):
         return
@@ -247,6 +302,19 @@ connection.close()
 assert response.status == 200
 assert payload == {"length": sum(map(len, chunks))}
 PY
+  local mapper_write_status role_write_status unexpected_status
+  mapper_write_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST --data '{}' \
+    "http://127.0.0.1:$provider_port/admin/realms/cardo/clients/uuid-identity/protocol-mappers/models")
+  role_write_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST --data '{}' \
+    "http://127.0.0.1:$provider_port/admin/realms/cardo/clients/uuid-identity/roles")
+  unexpected_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST --data '{}' "http://127.0.0.1:$provider_port/unexpected")
+  [[ "$mapper_write_status" == "403" && "$role_write_status" == "403" ]] \
+    || fail "provider stub does not reject mapper and role definition writes"
+  [[ "$unexpected_status" == "404" ]] \
+    || fail "provider stub does not deny unexpected requests by default"
 }
 
 start_postgresql() {

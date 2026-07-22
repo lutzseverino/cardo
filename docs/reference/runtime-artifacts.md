@@ -102,7 +102,11 @@ The smoke installs the reactor locally, starts an isolated disposable PostgreSQL
 for each artifact, packages and starts every JAR, builds and starts every image,
 and verifies reproducibility, metadata, non-root image ownership, exact public
 probe paths, information, readiness withdrawal, bounded termination, and
-cleanup. Identity uses a local protocol
-stub for provider discovery and its existing startup contract; the smoke does
-not provision or validate a Keycloak deployment. Full provider and product
-integration belongs to the portable full-stack reference environment.
+cleanup. Identity uses a local protocol stub containing the exact clients,
+canonical claim mappers, fixed Identity roles, and provider read capabilities
+required by its startup contract. The stub returns `403` for mapper and role
+definition writes and `404` for unexpected requests, proving that artifact
+startup does not rely on provider mutation. It is not a Keycloak emulator; the
+Identity integration suite separately exercises the contract against a
+digest-pinned disposable Keycloak. Full product integration still belongs to
+the portable full-stack reference environment.

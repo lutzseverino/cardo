@@ -28,6 +28,7 @@ Use the [how-to template](../_templates/how-to.template.md) for new guides.
 ## Guides
 
 - [Embed Authorization](embed-authorization.md)
+- [Migrate Keycloak Runtime Credentials](migrate-keycloak-runtime-credentials.md)
 - [Operate Durable Workflows](operate-durable-workflows.md)
 - [Release Cardo](release-cardo.md)
 - [Repair Billing Customer Provisioning](repair-billing-customer-provisioning.md)

@@ -13,7 +13,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -245,19 +244,6 @@ public class KeycloakIdentityProvider implements IdentityProvider {
     } catch (RestClientResponseException exception) {
       throw providerException(exception);
     }
-  }
-
-  @Override
-  public void ensureUserIdClaimMapped(List<String> clientIds) {
-    Optional.ofNullable(clientIds).orElseGet(List::of).stream()
-        .filter(Objects::nonNull)
-        .map(String::trim)
-        .filter(clientId -> !clientId.isBlank())
-        .distinct()
-        .forEach(
-            clientId ->
-                admin.ensureAccessTokenUserAttributeMapper(
-                    clientId, CardoJwtClaims.IDENTITY_USER_ID, CardoJwtClaims.IDENTITY_USER_ID));
   }
 
   @Override

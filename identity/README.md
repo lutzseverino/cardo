@@ -36,6 +36,18 @@ Identity-session validation and product-token exchange, while Authorization expo
 convergence. Consumers still provision their provider, product, frontend, and deployment portions
 of the contract.
 
+Identity startup validates its exact deployment-owned Keycloak clients,
+canonical `cardo_user_id` mappers, three fixed Identity roles, user-directory
+read, and UMA protection read. Startup is read-only by default and aggregates
+independent drift without disclosing provider responses or credentials. The
+temporary `cardo.identity.keycloak.legacy-startup-mutation-enabled` flag can
+repair only those mapper and role definitions before validation; it never
+creates clients or grants. Startup failures always direct operators to
+deployment provisioning and mention the flag only when every discovered drift
+is repairable by that narrow seam. See the
+[provider contract](../docs/reference/keycloak-provider-contract.md) and
+[credential migration guide](../docs/how-to/migrate-keycloak-runtime-credentials.md).
+
 ## Browser Session Configuration
 
 Local HTTP development uses the defaults:
@@ -130,8 +142,9 @@ solely by email.
 
 Migration V3 backfills idempotent user-id binding and desired enabled-state
 mutations for every local user. This replaces startup-wide rebinding; mapper
-installation still runs at startup, while the mutation worker drains and
-repairs the backfill. Provider identities orphaned before V3 have no trustworthy
+installation now belongs to deployment provisioning, while Identity validates
+it at startup and the mutation worker drains and repairs the backfill. Provider
+identities orphaned before V3 have no trustworthy
 correlation marker and are deliberately not auto-deleted. Operators must audit
 Keycloak users without `identity_user_id` against local `users.keycloak_subject`
 and resolve those historical records manually. Migration V4 only extends
@@ -139,8 +152,9 @@ mutation constraints and the active-provisioning index for provisional work; it
 does not backfill historical provider-only identities because those rows have no
 trustworthy Cardo correlation marker.
 
-The Identity integration tests use Testcontainers with PostgreSQL 17.5 to
-exercise Flyway migrations, partial indexes, and row-lock behavior. Running
+The Identity integration tests use Testcontainers with PostgreSQL 17.5 and a
+digest-pinned disposable Keycloak to exercise datastore behavior and the
+provider authority boundary. Running
 `./mvnw --batch-mode --no-transfer-progress verify` therefore requires a
 Docker-compatible container runtime.
 
