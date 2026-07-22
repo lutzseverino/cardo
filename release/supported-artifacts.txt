@@ -1,0 +1,13 @@
+common-api
+common
+openapi-support
+authorization-keycloak-client
+authorization-security
+authorization
+identity-client
+identity-client-http
+identity-product-auth
+invite-client
+invite-client-http
+billing-client
+billing-client-http

@@ -39,4 +39,5 @@ Use the [reference template](../_templates/reference.template.md) for new refere
 - [Method Naming](method-naming.md)
 - [OpenAPI Contract Changes](openapi-contract-changes.md)
 - [Product Integration](product-integration.md)
+- [Releases](releases.md)
 - [Runtime Artifacts](runtime-artifacts.md)

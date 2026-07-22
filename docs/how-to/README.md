@@ -29,6 +29,8 @@ Use the [how-to template](../_templates/how-to.template.md) for new guides.
 
 - [Embed Authorization](embed-authorization.md)
 - [Operate Durable Workflows](operate-durable-workflows.md)
+- [Release Cardo](release-cardo.md)
 - [Repair Billing Customer Provisioning](repair-billing-customer-provisioning.md)
+- [Roll Back A Cardo Release](rollback-cardo.md)
 - [Roll Out Scoped Service Tokens](roll-out-scoped-service-tokens.md)
 - [Set Up Stripe Billing](set-up-stripe-billing.md)

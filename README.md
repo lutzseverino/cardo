@@ -37,6 +37,8 @@ See the [integration reference](docs/reference/product-integration.md)
 for artifact selection, configuration, and ownership rules.
 Deployments consume the executable JAR and OCI image process contract described
 in the [runtime artifact reference](docs/reference/runtime-artifacts.md).
+Released consumers align supported libraries through the
+[`cardo-bom` and immutable release contract](docs/reference/releases.md).
 
 ## Development
 
@@ -48,9 +50,10 @@ Cardo targets Java 21 and Spring Boot 4.
 ./mvnw install
 ```
 
-`./mvnw install` publishes the current snapshot to the local Maven repository. CI
-validates formatting, compilation, generated OpenAPI boundaries, and the
-complete Maven test suite.
+`./mvnw install` installs the current development snapshot locally. Products
+consume published versions from Maven Central; local installation is not a
+release path. CI validates formatting, compilation, generated OpenAPI
+boundaries, and the complete Maven test suite.
 
 ## Documentation
 
