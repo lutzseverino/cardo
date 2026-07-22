@@ -1,12 +1,13 @@
-package io.github.lutzseverino.cardo.identity.config;
+package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
 import io.github.lutzseverino.cardo.authorization.spring.CardoJwtClaims;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
+import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
-final class IdentityKeycloakProviderContract {
+final class KeycloakIdentityProviderContract {
 
   static final String MAPPER_NAME = CardoJwtClaims.IDENTITY_USER_ID;
   static final List<String> IDENTITY_ROLES =
@@ -32,7 +33,7 @@ final class IdentityKeycloakProviderContract {
           "multivalued",
           "false");
 
-  private IdentityKeycloakProviderContract() {}
+  private KeycloakIdentityProviderContract() {}
 
   static List<String> expectedClientIds(KeycloakProperties properties) {
     LinkedHashSet<String> clients = new LinkedHashSet<>();

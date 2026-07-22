@@ -1,4 +1,4 @@
-package io.github.lutzseverino.cardo.identity.config;
+package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
+import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import java.net.URI;
 import java.util.List;
 import org.hamcrest.Matchers;
@@ -20,13 +21,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-class IdentityKeycloakProviderContractValidatorTest {
+class KeycloakIdentityRuntimeContractTest {
 
   @Test
   void acceptsTheExactReadOnlyProviderContract() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    IdentityKeycloakProviderContractValidator validator = validator(rest);
+    KeycloakIdentityRuntimeContract validator = validator(rest);
     expectValidClients(server);
     expectCanonicalMapper(server, "runtime-uuid");
     expectCanonicalMapper(server, "identity-uuid");
@@ -43,7 +44,7 @@ class IdentityKeycloakProviderContractValidatorTest {
   void aggregatesIndependentDriftWithoutDisclosingProviderResponsesOrCredentials() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    IdentityKeycloakProviderContractValidator validator = validator(rest);
+    KeycloakIdentityRuntimeContract validator = validator(rest);
     expectClient(
         server,
         "runtime",
@@ -99,7 +100,8 @@ class IdentityKeycloakProviderContractValidatorTest {
         .hasMessageContaining("mapper lookup returned HTTP 403")
         .hasMessageContaining("Identity role profile:read lookup returned HTTP 404")
         .hasMessageContaining("user directory read returned HTTP 403")
-        .hasMessageContaining("legacy-startup-mutation-enabled")
+        .hasMessageContaining("Repair all drift with deployment-owned provisioning")
+        .hasMessageNotContaining("legacy-startup-mutation-enabled")
         .hasMessageNotContaining("runtime-secret")
         .hasMessageNotContaining("provider-secret-body")
         .hasMessageNotContaining("missing-role-secret")
@@ -109,11 +111,40 @@ class IdentityKeycloakProviderContractValidatorTest {
     server.verify();
   }
 
-  private IdentityKeycloakProviderContractValidator validator(RestClient.Builder rest) {
+  @Test
+  void limitsLegacyRepairAdviceToMapperAndFixedRoleDrift() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityRuntimeContract validator = validator(rest);
+    expectValidClients(server);
+    expectCanonicalMapper(server, "runtime-uuid");
+    expectCanonicalMapper(server, "identity-uuid");
+    server
+        .expect(requestTo(Matchers.endsWith("/clients/billing-uuid/protocol-mappers/models")))
+        .andExpect(method(GET))
+        .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+    server
+        .expect(requestTo(Matchers.endsWith("/clients/identity-uuid/roles/profile%3Aread")))
+        .andExpect(method(GET))
+        .andRespond(withStatus(HttpStatus.NOT_FOUND));
+    expectRole(server, "profile%3Awrite", "profile:write");
+    expectRole(server, "user%3Aprovision", "user:provision");
+    expectReadCapabilities(server);
+
+    assertThatThrownBy(validator::validate)
+        .hasMessageContaining("Repair all drift with deployment-owned provisioning")
+        .hasMessageContaining("legacy-startup-mutation-enabled");
+
+    server.verify();
+  }
+
+  private KeycloakIdentityRuntimeContract validator(RestClient.Builder rest) {
     KeycloakClientCredentialsTokenProvider tokens =
         mock(KeycloakClientCredentialsTokenProvider.class);
     when(tokens.clientCredentialsToken()).thenReturn("runtime-secret-token");
-    return new IdentityKeycloakProviderContractValidator(properties(false), tokens, rest);
+    KeycloakLegacyStartupRepair repair =
+        new KeycloakLegacyStartupRepair(properties(false), tokens, rest.clone());
+    return new KeycloakIdentityRuntimeContract(properties(false), tokens, repair, rest);
   }
 
   private void expectValidClients(MockRestServiceServer server) {

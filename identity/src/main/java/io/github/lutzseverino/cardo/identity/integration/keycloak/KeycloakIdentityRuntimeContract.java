@@ -1,7 +1,9 @@
-package io.github.lutzseverino.cardo.identity.config;
+package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
+import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
+import io.github.lutzseverino.cardo.identity.provider.IdentityRuntimeContract;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -14,28 +16,32 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
-final class IdentityKeycloakProviderContractValidator {
+final class KeycloakIdentityRuntimeContract implements IdentityRuntimeContract {
 
   private final KeycloakProperties properties;
   private final KeycloakClientCredentialsTokenProvider clientCredentialsTokens;
+  private final KeycloakLegacyStartupRepair legacyRepair;
   private final RestClient rest;
 
-  IdentityKeycloakProviderContractValidator(
+  KeycloakIdentityRuntimeContract(
       KeycloakProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
+      KeycloakLegacyStartupRepair legacyRepair,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
     this.properties = properties;
     this.clientCredentialsTokens = clientCredentialsTokens;
+    this.legacyRepair = legacyRepair;
     this.rest = rest.clone().baseUrl(properties.baseUrl()).build();
   }
 
-  void validate() {
-    List<String> drift = new ArrayList<>();
+  @Override
+  public void validate() {
+    List<Drift> drift = new ArrayList<>();
     String token;
     try {
       token = clientCredentialsTokens.clientCredentialsToken();
     } catch (RuntimeException exception) {
-      throw invalid(List.of("runtime credential token acquisition failed"));
+      throw invalid(List.of(new Drift("runtime credential token acquisition failed", false)));
     }
 
     Map<String, String> clientUuids = clients(token, drift);
@@ -71,11 +77,16 @@ final class IdentityKeycloakProviderContractValidator {
     }
   }
 
-  private Map<String, String> clients(String token, List<String> drift) {
+  @Override
+  public void repairLegacyStartupDefinitions() {
+    legacyRepair.repair();
+  }
+
+  private Map<String, String> clients(String token, List<Drift> drift) {
     Map<String, String> clientUuids = new LinkedHashMap<>();
-    for (String clientId : IdentityKeycloakProviderContract.expectedClientIds(properties)) {
+    for (String clientId : KeycloakIdentityProviderContract.expectedClientIds(properties)) {
       try {
-        IdentityKeycloakProviderContract.ClientRepresentation[] response =
+        KeycloakIdentityProviderContract.ClientRepresentation[] response =
             rest.get()
                 .uri(
                     uri ->
@@ -84,8 +95,8 @@ final class IdentityKeycloakProviderContractValidator {
                             .build(properties.realm()))
                 .header(HttpHeaders.AUTHORIZATION, bearer(token))
                 .retrieve()
-                .body(IdentityKeycloakProviderContract.ClientRepresentation[].class);
-        List<IdentityKeycloakProviderContract.ClientRepresentation> exact =
+                .body(KeycloakIdentityProviderContract.ClientRepresentation[].class);
+        List<KeycloakIdentityProviderContract.ClientRepresentation> exact =
             response == null
                 ? List.of()
                 : Arrays.stream(response)
@@ -95,26 +106,31 @@ final class IdentityKeycloakProviderContractValidator {
         if (exact.size() == 1) {
           clientUuids.put(clientId, exact.getFirst().id());
         } else {
-          drift.add("client " + clientId + " expected one exact match but found " + exact.size());
+          drift.add(
+              new Drift(
+                  "client " + clientId + " expected one exact match but found " + exact.size(),
+                  false));
         }
       } catch (RestClientResponseException exception) {
         drift.add(
-            "client " + clientId + " lookup returned HTTP " + exception.getStatusCode().value());
+            new Drift(
+                "client " + clientId + " lookup returned HTTP " + exception.getStatusCode().value(),
+                false));
       } catch (RuntimeException exception) {
-        drift.add("client " + clientId + " lookup failed");
+        drift.add(new Drift("client " + clientId + " lookup failed", false));
       }
     }
     return clientUuids;
   }
 
-  private void validateMappers(String token, Map<String, String> clientUuids, List<String> drift) {
-    for (String clientId : IdentityKeycloakProviderContract.mapperClientIds(properties)) {
+  private void validateMappers(String token, Map<String, String> clientUuids, List<Drift> drift) {
+    for (String clientId : KeycloakIdentityProviderContract.mapperClientIds(properties)) {
       String clientUuid = clientUuids.get(clientId);
       if (clientUuid == null) {
         continue;
       }
       try {
-        IdentityKeycloakProviderContract.ProtocolMapper[] response =
+        KeycloakIdentityProviderContract.ProtocolMapper[] response =
             rest.get()
                 .uri(
                     "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
@@ -122,50 +138,56 @@ final class IdentityKeycloakProviderContractValidator {
                     clientUuid)
                 .header(HttpHeaders.AUTHORIZATION, bearer(token))
                 .retrieve()
-                .body(IdentityKeycloakProviderContract.ProtocolMapper[].class);
-        List<IdentityKeycloakProviderContract.ProtocolMapper> named =
+                .body(KeycloakIdentityProviderContract.ProtocolMapper[].class);
+        List<KeycloakIdentityProviderContract.ProtocolMapper> named =
             response == null
                 ? List.of()
                 : Arrays.stream(response)
                     .filter(
                         mapper ->
-                            IdentityKeycloakProviderContract.MAPPER_NAME.equals(mapper.name()))
+                            KeycloakIdentityProviderContract.MAPPER_NAME.equals(mapper.name()))
                     .toList();
         if (named.size() != 1) {
           drift.add(
-              "client "
-                  + clientId
-                  + " mapper "
-                  + IdentityKeycloakProviderContract.MAPPER_NAME
-                  + " expected one definition but found "
-                  + named.size());
-        } else if (!IdentityKeycloakProviderContract.isCanonical(named.getFirst())) {
+              new Drift(
+                  "client "
+                      + clientId
+                      + " mapper "
+                      + KeycloakIdentityProviderContract.MAPPER_NAME
+                      + " expected one definition but found "
+                      + named.size(),
+                  true));
+        } else if (!KeycloakIdentityProviderContract.isCanonical(named.getFirst())) {
           drift.add(
-              "client "
-                  + clientId
-                  + " mapper "
-                  + IdentityKeycloakProviderContract.MAPPER_NAME
-                  + " has incompatible semantics");
+              new Drift(
+                  "client "
+                      + clientId
+                      + " mapper "
+                      + KeycloakIdentityProviderContract.MAPPER_NAME
+                      + " has incompatible semantics",
+                  true));
         }
       } catch (RestClientResponseException exception) {
         drift.add(
-            "client "
-                + clientId
-                + " mapper lookup returned HTTP "
-                + exception.getStatusCode().value());
+            new Drift(
+                "client "
+                    + clientId
+                    + " mapper lookup returned HTTP "
+                    + exception.getStatusCode().value(),
+                false));
       } catch (RuntimeException exception) {
-        drift.add("client " + clientId + " mapper lookup failed");
+        drift.add(new Drift("client " + clientId + " mapper lookup failed", false));
       }
     }
   }
 
-  private void validateRoles(String token, String clientUuid, List<String> drift) {
+  private void validateRoles(String token, String clientUuid, List<Drift> drift) {
     if (clientUuid == null) {
       return;
     }
-    for (String role : IdentityKeycloakProviderContract.IDENTITY_ROLES) {
+    for (String role : KeycloakIdentityProviderContract.IDENTITY_ROLES) {
       try {
-        IdentityKeycloakProviderContract.RoleRepresentation response =
+        KeycloakIdentityProviderContract.RoleRepresentation response =
             rest.get()
                 .uri(
                     "/admin/realms/{realm}/clients/{clientUuid}/roles/{role}",
@@ -174,41 +196,55 @@ final class IdentityKeycloakProviderContractValidator {
                     role)
                 .header(HttpHeaders.AUTHORIZATION, bearer(token))
                 .retrieve()
-                .body(IdentityKeycloakProviderContract.RoleRepresentation.class);
+                .body(KeycloakIdentityProviderContract.RoleRepresentation.class);
         if (response == null
             || response.id() == null
             || response.id().isBlank()
             || !role.equals(response.name())) {
-          drift.add("Identity role " + role + " is missing or incompatible");
+          drift.add(new Drift("Identity role " + role + " is missing or incompatible", true));
         }
       } catch (RestClientResponseException exception) {
         drift.add(
-            "Identity role " + role + " lookup returned HTTP " + exception.getStatusCode().value());
+            new Drift(
+                "Identity role "
+                    + role
+                    + " lookup returned HTTP "
+                    + exception.getStatusCode().value(),
+                exception.getStatusCode().value() == 404));
       } catch (RuntimeException exception) {
-        drift.add("Identity role " + role + " lookup failed");
+        drift.add(new Drift("Identity role " + role + " lookup failed", false));
       }
     }
   }
 
-  private void validateCapability(String label, List<String> drift, Runnable request) {
+  private void validateCapability(String label, List<Drift> drift, Runnable request) {
     try {
       request.run();
     } catch (RestClientResponseException exception) {
-      drift.add(label + " returned HTTP " + exception.getStatusCode().value());
+      drift.add(new Drift(label + " returned HTTP " + exception.getStatusCode().value(), false));
     } catch (RuntimeException exception) {
-      drift.add(label + " failed");
+      drift.add(new Drift(label + " failed", false));
     }
   }
 
-  private IllegalStateException invalid(List<String> drift) {
+  private IllegalStateException invalid(List<Drift> drift) {
+    String advice = ". Repair all drift with deployment-owned provisioning.";
+    if (!drift.isEmpty() && drift.stream().allMatch(Drift::legacyRepairable)) {
+      advice +=
+          " For canonical mapper and fixed Identity-role drift only, the temporary "
+              + "cardo.identity.keycloak.legacy-startup-mutation-enabled flag may be used.";
+    }
     return new IllegalStateException(
         "Identity Keycloak provider contract is invalid: "
-            + String.join("; ", drift)
-            + ". Repair with deployment-owned provisioning or temporarily enable "
-            + "cardo.identity.keycloak.legacy-startup-mutation-enabled.");
+            + drift.stream()
+                .map(Drift::description)
+                .collect(java.util.stream.Collectors.joining("; "))
+            + advice);
   }
 
   private String bearer(String token) {
     return "Bearer " + token;
   }
+
+  private record Drift(String description, boolean legacyRepairable) {}
 }

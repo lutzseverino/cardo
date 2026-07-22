@@ -42,7 +42,9 @@ read, and UMA protection read. Startup is read-only by default and aggregates
 independent drift without disclosing provider responses or credentials. The
 temporary `cardo.identity.keycloak.legacy-startup-mutation-enabled` flag can
 repair only those mapper and role definitions before validation; it never
-creates clients or grants. See the
+creates clients or grants. Startup failures always direct operators to
+deployment provisioning and mention the flag only when every discovered drift
+is repairable by that narrow seam. See the
 [provider contract](../docs/reference/keycloak-provider-contract.md) and
 [credential migration guide](../docs/how-to/migrate-keycloak-runtime-credentials.md).
 

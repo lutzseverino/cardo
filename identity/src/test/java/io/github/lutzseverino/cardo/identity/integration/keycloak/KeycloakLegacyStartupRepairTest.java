@@ -1,4 +1,4 @@
-package io.github.lutzseverino.cardo.identity.config;
+package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -21,13 +21,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-class IdentityKeycloakLegacyStartupRepairTest {
+class KeycloakLegacyStartupRepairTest {
 
   @Test
   void convergesMissingDriftedAndDuplicateProviderDefinitions() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    IdentityKeycloakLegacyStartupRepair repair = repair(rest);
+    KeycloakLegacyStartupRepair repair = repair(rest);
     expectClient(server, "runtime", "runtime-uuid");
     expectMappers(server, "runtime-uuid", "[]");
     expectCanonicalMapperWrite(server, POST, "runtime-uuid", null);
@@ -70,7 +70,7 @@ class IdentityKeycloakLegacyStartupRepairTest {
   void isReadOnlyWhenDefinitionsAreAlreadyCanonical() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    IdentityKeycloakLegacyStartupRepair repair = repair(rest);
+    KeycloakLegacyStartupRepair repair = repair(rest);
     expectClient(server, "runtime", "runtime-uuid");
     expectMappers(server, "runtime-uuid", canonicalMapperResponse());
     expectClient(server, "identity", "identity-uuid");
@@ -89,12 +89,47 @@ class IdentityKeycloakLegacyStartupRepairTest {
     server.verify();
   }
 
-  private IdentityKeycloakLegacyStartupRepair repair(RestClient.Builder rest) {
+  @Test
+  void convergesMapperAfterAConcurrentCreateConflict() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakLegacyStartupRepair repair = repair(rest);
+    expectClient(server, "runtime", "runtime-uuid");
+    expectMappers(server, "runtime-uuid", "[]");
+    server
+        .expect(requestTo(Matchers.endsWith("/clients/runtime-uuid/protocol-mappers/models")))
+        .andExpect(method(POST))
+        .andRespond(withStatus(HttpStatus.CONFLICT));
+    expectMappers(
+        server,
+        "runtime-uuid",
+        """
+        [{"id":"concurrent-mapper","name":"cardo_user_id","protocol":"openid-connect",
+          "protocolMapper":"oidc-hardcoded-claim-mapper","consentRequired":false,"config":{}}]
+        """);
+    expectCanonicalMapperWrite(server, PUT, "runtime-uuid", "concurrent-mapper");
+    expectClient(server, "identity", "identity-uuid");
+    expectMappers(server, "identity-uuid", canonicalMapperResponse());
+    expectClient(server, "billing", "billing-uuid");
+    expectMappers(server, "billing-uuid", canonicalMapperResponse());
+    expectClient(server, "identity", "identity-uuid");
+    expectRoleLookup(server, "profile%3Aread", HttpStatus.OK);
+    expectClient(server, "identity", "identity-uuid");
+    expectRoleLookup(server, "profile%3Awrite", HttpStatus.OK);
+    expectClient(server, "identity", "identity-uuid");
+    expectRoleLookup(server, "user%3Aprovision", HttpStatus.OK);
+
+    repair.repair();
+
+    server.verify();
+  }
+
+  private KeycloakLegacyStartupRepair repair(RestClient.Builder rest) {
     KeycloakClientCredentialsTokenProvider tokens =
         mock(KeycloakClientCredentialsTokenProvider.class);
     when(tokens.clientCredentialsToken()).thenReturn("runtime-token");
-    return new IdentityKeycloakLegacyStartupRepair(
-        IdentityKeycloakProviderContractValidatorTest.properties(true), tokens, rest);
+    return new KeycloakLegacyStartupRepair(
+        KeycloakIdentityRuntimeContractTest.properties(true), tokens, rest);
   }
 
   private void expectClient(MockRestServiceServer server, String clientId, String clientUuid) {

@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.identity.config;
 
+import io.github.lutzseverino.cardo.identity.provider.IdentityRuntimeContract;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -12,16 +13,12 @@ public final class IdentityRuntimeContractInitializer implements ApplicationRunn
   private static final Logger LOGGER =
       LoggerFactory.getLogger(IdentityRuntimeContractInitializer.class);
 
-  private final IdentityKeycloakProviderContractValidator validator;
-  private final IdentityKeycloakLegacyStartupRepair legacyRepair;
+  private final IdentityRuntimeContract runtimeContract;
   private final KeycloakProperties keycloak;
 
   IdentityRuntimeContractInitializer(
-      IdentityKeycloakProviderContractValidator validator,
-      IdentityKeycloakLegacyStartupRepair legacyRepair,
-      KeycloakProperties keycloak) {
-    this.validator = validator;
-    this.legacyRepair = legacyRepair;
+      IdentityRuntimeContract runtimeContract, KeycloakProperties keycloak) {
+    this.runtimeContract = runtimeContract;
     this.keycloak = keycloak;
   }
 
@@ -31,8 +28,8 @@ public final class IdentityRuntimeContractInitializer implements ApplicationRunn
       LOGGER.warn(
           "Legacy Keycloak startup mutation is enabled; this temporary compatibility mode "
               + "requires broad provider authority and should be disabled after migration");
-      legacyRepair.repair();
+      runtimeContract.repairLegacyStartupDefinitions();
     }
-    validator.validate();
+    runtimeContract.validate();
   }
 }

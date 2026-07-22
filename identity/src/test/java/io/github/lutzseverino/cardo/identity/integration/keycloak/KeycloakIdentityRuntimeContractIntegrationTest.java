@@ -1,4 +1,4 @@
-package io.github.lutzseverino.cardo.identity.config;
+package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -14,32 +14,49 @@ import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthorization
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthorizationException;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.authorization.resource.AuthorizationResource;
-import io.github.lutzseverino.cardo.identity.integration.keycloak.RealKeycloakIdentityProviderExercise;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
-import org.testcontainers.DockerClientFactory;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers(disabledWithoutDocker = true)
-class IdentityKeycloakProviderContractIntegrationTest {
+class KeycloakIdentityRuntimeContractIntegrationTest {
 
   @Test
   void validatesAndRepairsARealProviderWithoutGrantingRuntimeDefinitionWrites() {
-    org.junit.jupiter.api.Assumptions.assumeTrue(
-        DockerClientFactory.instance().isDockerAvailable());
     try (DisposableKeycloakProvisioner keycloak = new DisposableKeycloakProvisioner()) {
       keycloak.start();
-      keycloak.provisionContract();
+      keycloak.bootstrapRealm();
+      DisposableKeycloakProvisioner.ContractSnapshot first = keycloak.materializeContract();
+      DisposableKeycloakProvisioner.ContractSnapshot second = keycloak.materializeContract();
+      assertThat(second).isEqualTo(first);
+      assertThat(second.clientCounts())
+          .containsEntry("cardo-identity", 1)
+          .containsEntry("identity", 1)
+          .containsEntry("setup", 1)
+          .containsEntry("billing", 1);
+      assertThat(second.mapperCounts())
+          .containsEntry("cardo-identity", 1)
+          .containsEntry("identity", 1)
+          .containsEntry("billing", 1);
+      assertThat(second.identityRoles())
+          .containsExactlyInAnyOrder("profile:read", "profile:write", "user:provision");
+      assertThat(second.realmManagementGrants())
+          .containsExactlyInAnyOrder("manage-users", "view-clients");
+      assertThat(second.runtimeClientGrants()).containsExactly("uma_protection");
       RestClient.Builder rest = RestClient.builder();
       KeycloakClientCredentialsTokenProvider runtimeTokens = keycloak.runtimeTokens(rest);
-      IdentityKeycloakProviderContractValidator validator =
-          new IdentityKeycloakProviderContractValidator(
-              keycloak.properties(false), runtimeTokens, rest);
-
-      assertThatCode(validator::validate).doesNotThrowAnyException();
+      KeycloakLegacyStartupRepair repair =
+          new KeycloakLegacyStartupRepair(keycloak.properties(false), runtimeTokens, rest.clone());
+      KeycloakIdentityRuntimeContract validator =
+          new KeycloakIdentityRuntimeContract(
+              keycloak.properties(false), runtimeTokens, repair, rest);
 
       String runtimeToken = runtimeTokens.clientCredentialsToken();
+      assertThat(keycloak.realmManagementRoles(runtimeToken))
+          .containsExactlyInAnyOrder("manage-users", "query-clients", "view-clients");
+      assertThat(keycloak.runtimeClientRoles(runtimeToken)).containsExactly("uma_protection");
+      assertThatCode(validator::validate).doesNotThrowAnyException();
       assertThat(keycloak.mapperDefinitionWriteStatus(runtimeToken)).isEqualTo(403);
       assertThat(keycloak.roleDefinitionWriteStatus(runtimeToken)).isEqualTo(403);
       RealKeycloakIdentityProviderExercise.verify(
@@ -84,9 +101,8 @@ class IdentityKeycloakProviderContractIntegrationTest {
           .hasMessageContaining("client billing mapper cardo_user_id expected one definition")
           .hasMessageContaining("Identity role profile:read lookup returned HTTP 404");
 
-      IdentityKeycloakLegacyStartupRepair runtimeRepair =
-          new IdentityKeycloakLegacyStartupRepair(
-              keycloak.properties(true), runtimeTokens, rest.clone());
+      KeycloakLegacyStartupRepair runtimeRepair =
+          new KeycloakLegacyStartupRepair(keycloak.properties(true), runtimeTokens, rest.clone());
       runtimeRepair.repair();
       assertThatThrownBy(validator::validate)
           .hasMessageContaining("client billing mapper cardo_user_id expected one definition")
@@ -95,9 +111,8 @@ class IdentityKeycloakProviderContractIntegrationTest {
       KeycloakClientCredentialsTokenProvider privileged =
           mock(KeycloakClientCredentialsTokenProvider.class);
       when(privileged.clientCredentialsToken()).thenReturn(keycloak.privilegedToken());
-      IdentityKeycloakLegacyStartupRepair privilegedRepair =
-          new IdentityKeycloakLegacyStartupRepair(
-              keycloak.properties(true), privileged, rest.clone());
+      KeycloakLegacyStartupRepair privilegedRepair =
+          new KeycloakLegacyStartupRepair(keycloak.properties(true), privileged, rest.clone());
       privilegedRepair.repair();
 
       assertThatCode(validator::validate).doesNotThrowAnyException();

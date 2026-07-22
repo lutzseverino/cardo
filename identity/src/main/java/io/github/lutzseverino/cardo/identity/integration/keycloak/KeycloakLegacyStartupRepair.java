@@ -1,7 +1,8 @@
-package io.github.lutzseverino.cardo.identity.config;
+package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
+import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -15,16 +16,15 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
-final class IdentityKeycloakLegacyStartupRepair {
+final class KeycloakLegacyStartupRepair {
 
-  private static final Logger LOGGER =
-      LoggerFactory.getLogger(IdentityKeycloakLegacyStartupRepair.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(KeycloakLegacyStartupRepair.class);
 
   private final KeycloakProperties properties;
   private final KeycloakClientCredentialsTokenProvider clientCredentialsTokens;
   private final RestClient rest;
 
-  IdentityKeycloakLegacyStartupRepair(
+  KeycloakLegacyStartupRepair(
       KeycloakProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
@@ -42,10 +42,10 @@ final class IdentityKeycloakLegacyStartupRepair {
       return;
     }
 
-    for (String clientId : IdentityKeycloakProviderContract.mapperClientIds(properties)) {
+    for (String clientId : KeycloakIdentityProviderContract.mapperClientIds(properties)) {
       repairMapper(token, clientId);
     }
-    for (String role : IdentityKeycloakProviderContract.IDENTITY_ROLES) {
+    for (String role : KeycloakIdentityProviderContract.IDENTITY_ROLES) {
       repairRole(token, role);
     }
   }
@@ -57,16 +57,16 @@ final class IdentityKeycloakLegacyStartupRepair {
         LOGGER.warn("Legacy Keycloak startup repair found no unique client named {}", clientId);
         return;
       }
-      List<IdentityKeycloakProviderContract.ProtocolMapper> named = namedMappers(token, clientUuid);
+      List<KeycloakIdentityProviderContract.ProtocolMapper> named = namedMappers(token, clientUuid);
       if (named.isEmpty()) {
         createMapper(token, clientUuid);
         return;
       }
 
-      List<IdentityKeycloakProviderContract.ProtocolMapper> repairable =
+      List<KeycloakIdentityProviderContract.ProtocolMapper> repairable =
           named.stream()
               .filter(mapper -> mapper.id() != null && !mapper.id().isBlank())
-              .sorted(Comparator.comparing(IdentityKeycloakProviderContract.ProtocolMapper::id))
+              .sorted(Comparator.comparing(KeycloakIdentityProviderContract.ProtocolMapper::id))
               .toList();
       if (repairable.isEmpty()) {
         LOGGER.warn(
@@ -75,11 +75,11 @@ final class IdentityKeycloakLegacyStartupRepair {
         return;
       }
 
-      IdentityKeycloakProviderContract.ProtocolMapper retained = repairable.getFirst();
-      if (!IdentityKeycloakProviderContract.isCanonical(retained)) {
+      KeycloakIdentityProviderContract.ProtocolMapper retained = repairable.getFirst();
+      if (!KeycloakIdentityProviderContract.isCanonical(retained)) {
         updateMapper(token, clientUuid, retained.id());
       }
-      for (IdentityKeycloakProviderContract.ProtocolMapper duplicate :
+      for (KeycloakIdentityProviderContract.ProtocolMapper duplicate :
           repairable.subList(1, repairable.size())) {
         deleteMapper(token, clientUuid, duplicate.id());
       }
@@ -129,7 +129,7 @@ final class IdentityKeycloakLegacyStartupRepair {
   }
 
   private String exactClientUuid(String token, String clientId) {
-    IdentityKeycloakProviderContract.ClientRepresentation[] response =
+    KeycloakIdentityProviderContract.ClientRepresentation[] response =
         rest.get()
             .uri(
                 uri ->
@@ -138,8 +138,8 @@ final class IdentityKeycloakLegacyStartupRepair {
                         .build(properties.realm()))
             .header(HttpHeaders.AUTHORIZATION, bearer(token))
             .retrieve()
-            .body(IdentityKeycloakProviderContract.ClientRepresentation[].class);
-    List<IdentityKeycloakProviderContract.ClientRepresentation> exact =
+            .body(KeycloakIdentityProviderContract.ClientRepresentation[].class);
+    List<KeycloakIdentityProviderContract.ClientRepresentation> exact =
         response == null
             ? List.of()
             : Arrays.stream(response)
@@ -149,9 +149,9 @@ final class IdentityKeycloakLegacyStartupRepair {
     return exact.size() == 1 ? exact.getFirst().id() : null;
   }
 
-  private List<IdentityKeycloakProviderContract.ProtocolMapper> namedMappers(
+  private List<KeycloakIdentityProviderContract.ProtocolMapper> namedMappers(
       String token, String clientUuid) {
-    IdentityKeycloakProviderContract.ProtocolMapper[] response =
+    KeycloakIdentityProviderContract.ProtocolMapper[] response =
         rest.get()
             .uri(
                 "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
@@ -159,11 +159,11 @@ final class IdentityKeycloakLegacyStartupRepair {
                 clientUuid)
             .header(HttpHeaders.AUTHORIZATION, bearer(token))
             .retrieve()
-            .body(IdentityKeycloakProviderContract.ProtocolMapper[].class);
+            .body(KeycloakIdentityProviderContract.ProtocolMapper[].class);
     return response == null
         ? List.of()
         : Arrays.stream(response)
-            .filter(mapper -> IdentityKeycloakProviderContract.MAPPER_NAME.equals(mapper.name()))
+            .filter(mapper -> KeycloakIdentityProviderContract.MAPPER_NAME.equals(mapper.name()))
             .toList();
   }
 
@@ -175,18 +175,18 @@ final class IdentityKeycloakLegacyStartupRepair {
               properties.realm(),
               clientUuid)
           .header(HttpHeaders.AUTHORIZATION, bearer(token))
-          .body(IdentityKeycloakProviderContract.canonicalMapper())
+          .body(KeycloakIdentityProviderContract.canonicalMapper())
           .retrieve()
           .toBodilessEntity();
     } catch (RestClientResponseException exception) {
       if (exception.getStatusCode() != HttpStatus.CONFLICT) {
         throw exception;
       }
-      List<IdentityKeycloakProviderContract.ProtocolMapper> concurrent =
+      List<KeycloakIdentityProviderContract.ProtocolMapper> concurrent =
           namedMappers(token, clientUuid);
       if (concurrent.size() == 1
           && concurrent.getFirst().id() != null
-          && !IdentityKeycloakProviderContract.isCanonical(concurrent.getFirst())) {
+          && !KeycloakIdentityProviderContract.isCanonical(concurrent.getFirst())) {
         updateMapper(token, clientUuid, concurrent.getFirst().id());
       }
     }
@@ -200,7 +200,7 @@ final class IdentityKeycloakLegacyStartupRepair {
             clientUuid,
             mapperId)
         .header(HttpHeaders.AUTHORIZATION, bearer(token))
-        .body(IdentityKeycloakProviderContract.canonicalMapper().withId(mapperId))
+        .body(KeycloakIdentityProviderContract.canonicalMapper().withId(mapperId))
         .retrieve()
         .toBodilessEntity();
   }
@@ -222,7 +222,7 @@ final class IdentityKeycloakLegacyStartupRepair {
       rest.post()
           .uri("/admin/realms/{realm}/clients/{clientUuid}/roles", properties.realm(), clientUuid)
           .header(HttpHeaders.AUTHORIZATION, bearer(token))
-          .body(new IdentityKeycloakProviderContract.RoleRepresentation(null, role))
+          .body(new KeycloakIdentityProviderContract.RoleRepresentation(null, role))
           .retrieve()
           .toBodilessEntity();
     } catch (RestClientResponseException exception) {

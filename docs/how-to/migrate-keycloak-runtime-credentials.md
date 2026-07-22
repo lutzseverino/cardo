@@ -9,10 +9,12 @@ least-privilege runtime credential.
 1. Inventory the exact runtime client, credential-setup client, configured
    user-ID mapper targets, and fixed `identity` resource server. Compare them
    with the [provider contract](../reference/keycloak-provider-contract.md).
-2. In deployment code, provision the canonical `cardo_user_id` mapper once on
-   every configured target and provision the three fixed Identity client roles.
-   Make duplicate cleanup explicit and reviewable. Do not use application
-   startup as the desired-state owner.
+2. Keep one-time realm bootstrap separate from an idempotent deployment
+   materializer. In the materializer, provision exactly one canonical
+   `cardo_user_id` mapper on every configured target and the three fixed
+   Identity client roles. Make duplicate cleanup explicit and reviewable. Run
+   the materializer twice in deployment tests and require the second snapshot
+   of clients, mappers, roles, and grants to be unchanged.
 3. If the deployed realm is already drifted, temporarily deploy Identity with
    `IDENTITY_KEYCLOAK_LEGACY_STARTUP_MUTATION_ENABLED=true` and the existing
    privileged credential. Confirm the broad-authority warning and a successful
@@ -20,12 +22,27 @@ least-privilege runtime credential.
 4. Apply the same canonical definitions through deployment provisioning, then
    set `IDENTITY_KEYCLOAK_LEGACY_STARTUP_MUTATION_ENABLED=false` or remove the
    variable. Restart and require read-only validation to succeed.
-5. Rotate the runtime secret to a client whose service account can perform the
-   documented provider reads, user lifecycle, existing client-role
-   assignment/removal, and Identity UMA operations, but cannot write clients,
-   mapper definitions, client-role definitions, or service-account grants.
-6. Revoke the old privileged secret and authority only after all Identity
-   replicas use the constrained credential.
+5. Provision a distinct confidential `cardo-identity` runtime client and
+   service account. Enable Authorization Services so Keycloak automatically
+   assigns `cardo-identity:uma_protection`. Directly assign only
+   `realm-management:manage-users` and `realm-management:view-clients`; the
+   latter appears in tokens with its Keycloak-derived `query-clients`
+   composite. Keep the `identity` resource-server/static-role client distinct,
+   and put the mapper on `cardo-identity`, `identity`, and `billing` (plus any
+   other configured targets).
+6. Before removing the old authority, stop every Identity replica that still
+   uses the privileged credential. A rolling secret change is insufficient:
+   an already-issued access token remains usable until revoked or expired, and
+   each Identity process caches its provider token.
+7. Remove the old service-account grants and rotate/revoke the old secret.
+   Revoke the old client's sessions or issued tokens when the provider and
+   deployment support that operation. If revocation is not supported, wait at
+   least the maximum access-token lifetime that was configured when the old
+   tokens were issued. Secret rotation alone does not invalidate those tokens.
+8. Start every Identity replica with the constrained client and the legacy
+   flag absent or `false`. This restart clears Cardo's process-local provider
+   token cache. Require read-only validation and the runtime checks below to
+   succeed before restoring traffic.
 
 The compatibility flag is a one-migration escape hatch, not a supported steady
 state. Remove it from deployment configuration immediately after the successful
@@ -37,6 +54,10 @@ all maintained deployments have migrated.
 - Identity starts with the flag absent or `false`.
 - Startup logs contain no legacy mutation warning.
 - Exact client, mapper, role, user-directory, and UMA reads succeed.
+- The service-account token contains effective realm-management roles
+  `manage-users`, `view-clients`, and the composite child `query-clients`, plus
+  `cardo-identity:uma_protection`; direct grant inspection contains only
+  `manage-users`, `view-clients`, and the automatic PAT role.
 - A mapper-definition or client-role-definition write made with the runtime
   credential receives `403`.
 - User provisioning, enabled-state changes, existing role assignment/removal,
@@ -46,8 +67,11 @@ all maintained deployments have migrated.
 
 ## Rollback
 
-If constrained startup fails, restore the previous credential and temporarily
-set the legacy flag to `true`. Capture the redacted drift list, repair the
-deployment-owned definitions or missing read grants, and repeat the migration.
-Do not grant client-management authority permanently and do not leave the flag
-enabled after validation succeeds.
+If constrained startup fails, keep traffic stopped while you capture the
+redacted drift list and repair the deployment-owned definitions or missing
+runtime grant. If rollback is necessary, restore the previous credential and
+authority, restart all replicas so no process retains the constrained token,
+and temporarily set the legacy flag to `true`. Repeat the same revocation or
+maximum-token-lifetime drain when moving forward again. Do not grant
+client-management authority permanently and do not leave the flag enabled
+after validation succeeds.

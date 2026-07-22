@@ -6,19 +6,58 @@ Cardo runtime behavior.
 
 ## Ownership
 
-The deployment repository owns realm bootstrap, clients, client secrets,
-service accounts, provider-definition roles, protocol mappers, and grants to
-service accounts. Cardo validates those definitions at startup but does not
-normally create or repair them. Product repositories own their product resource
-catalogs, scopes, policies, and grants. Cardo's fixed `identity` resource server
-is the only resource-server catalog covered here.
+The deployment repository owns the one-time realm bootstrap and an idempotent
+contract materializer for clients, client secrets, service accounts,
+provider-definition roles, protocol mappers, and grants to service accounts.
+Cardo validates those definitions at startup but does not normally create or
+repair them. Product repositories own their product resource catalogs, scopes,
+policies, and grants.
 
-The runtime credential is not a realm bootstrap credential. It may read the
-provider definitions listed below and retain the operational permissions needed
-for user lifecycle, client-role assignment/removal, and UMA resource/grant
-operations. It must not be able to create clients, change client definitions,
-write protocol mappers, create client roles, or grant new authority to service
-accounts.
+The clients have distinct responsibilities:
+
+- `cardo-identity` is the confidential runtime OAuth client and service account.
+  Authorization Services is enabled on this client so Keycloak automatically
+  assigns its service account the client role `uma_protection`; the resulting
+  PAT operates Cardo's UMA Protection API catalog.
+- `identity` is the fixed Identity resource-server audience and static-role
+  client. It owns `profile:read`, `profile:write`, and `user:provision`; it is
+  not the runtime OAuth client.
+- `cardo-identity`, `identity`, and `billing` are the default
+  `cardo_user_id` mapper targets. Deployment configuration may add other
+  distinct targets.
+
+The runtime credential is not a realm bootstrap or contract-materializer
+credential. It may read the provider definitions listed below and retain the
+operational permissions needed for user lifecycle, existing client-role
+assignment/removal, and UMA resource/grant operations. It must not be able to
+create clients, change client definitions, write protocol mappers, or create
+client roles.
+
+### Endpoint and Authority Matrix
+
+| Surface | Runtime operation | Required runtime authority | Definition owner |
+| --- | --- | --- | --- |
+| `/realms/{realm}/protocol/openid-connect/token` | obtain a client-credentials token for `cardo-identity` | valid runtime client authentication | deployment materializer |
+| `/admin/realms/{realm}/clients` and client mapper/role reads | exact client, `cardo_user_id` mapper, and fixed `identity` role validation | `realm-management:view-clients` | deployment materializer |
+| `/admin/realms/{realm}/users` and user-scoped endpoints | user search, create, read, update, enable/disable, and delete | `realm-management:manage-users` | Cardo runtime |
+| `/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUuid}` | assign/remove already-defined `identity` client roles | `realm-management:manage-users` | Cardo runtime |
+| `/realms/{realm}/authz/protection/resource_set` and `/permission/ticket` | Cardo-owned UMA resources and grants | the automatic `cardo-identity:uma_protection` PAT role | Cardo runtime |
+| realm, client, mapper, client-role, and service-account grant definitions | bootstrap and converge desired provider definitions | deployment-only provisioning credential; absent from the runtime credential | deployment bootstrap/materializer |
+
+The smallest directly assigned realm-management set proven by the disposable
+Keycloak exercise is `manage-users` plus `view-clients`. Keycloak expands the
+`view-clients` composite in the access token with `query-clients`; that effective
+role is not a third direct grant. Do not directly add `query-users`,
+`view-users`, or `query-clients`.
+
+`manage-users` is a coarse built-in Keycloak role. Cardo never uses it to grant
+authority to a service-account user, but the built-in role can technically
+alter user and service-account role mappings. A deployment that requires hard
+provider-side denial of that operation must replace the coarse role with
+Keycloak fine-grained admin permissions and separately prove every endpoint in
+this matrix. The default contract proves least authority for Cardo's required
+operations; it does not claim that `manage-users` creates a technical
+service-account-grant boundary.
 
 ## Required Definitions
 
@@ -68,6 +107,10 @@ contract is incomplete, ambiguous, incompatible, or unreadable. The failure
 aggregates independent drift while excluding credentials, tokens, provider
 response bodies, and configured endpoints.
 
+Every validation failure directs operators to deployment-owned provisioning.
+Only when all discovered drift is repairable mapper or fixed-role drift does
+the failure also mention the legacy flag.
+
 When the temporary flag is `true`, Identity logs a broad-authority warning,
 repairs only the `cardo_user_id` mappers and the three Identity client roles,
 then executes the same validator. Repair is convergent and tolerates concurrent
@@ -77,8 +120,13 @@ adds a service-account grant. See the
 
 ## Verification
 
-The test suite provisions a disposable Keycloak from the digest-pinned image
-declared in `DisposableKeycloakProvisioner`. It proves read-only validation,
+The test suite performs a one-time realm bootstrap and then calls the
+deployment-style materializer twice against a disposable Keycloak from the
+digest-pinned image declared in `DisposableKeycloakProvisioner`. The snapshots
+prove unique clients, one canonical mapper per target, the exact fixed roles,
+and unchanged direct grants. Token claims prove the two direct
+realm-management grants (plus Keycloak's derived `query-clients`) and the
+automatic `uma_protection` role. The exercise also proves read-only validation,
 runtime role assignment and UMA behavior, definition-write denial, drift
 detection, privileged repair, and a second convergent repair. The portable
 artifact smoke uses a deterministic protocol stub with the same valid read

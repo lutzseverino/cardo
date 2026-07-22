@@ -6,6 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import io.github.lutzseverino.cardo.identity.provider.IdentityRuntimeContract;
+import java.net.URI;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -14,49 +17,52 @@ class IdentityRuntimeContractInitializerTest {
 
   @Test
   void validatesWithoutMutatingByDefault() {
-    IdentityKeycloakProviderContractValidator validator =
-        mock(IdentityKeycloakProviderContractValidator.class);
-    IdentityKeycloakLegacyStartupRepair repair = mock(IdentityKeycloakLegacyStartupRepair.class);
+    IdentityRuntimeContract runtimeContract = mock(IdentityRuntimeContract.class);
     IdentityRuntimeContractInitializer initializer =
-        new IdentityRuntimeContractInitializer(
-            validator, repair, IdentityKeycloakProviderContractValidatorTest.properties(false));
+        new IdentityRuntimeContractInitializer(runtimeContract, properties(false));
 
     initializer.run(new DefaultApplicationArguments());
 
-    verify(repair, never()).repair();
-    verify(validator).validate();
+    verify(runtimeContract, never()).repairLegacyStartupDefinitions();
+    verify(runtimeContract).validate();
   }
 
   @Test
   void repairsBeforeValidatingOnlyWhenTheLegacyFlagIsEnabled() {
-    IdentityKeycloakProviderContractValidator validator =
-        mock(IdentityKeycloakProviderContractValidator.class);
-    IdentityKeycloakLegacyStartupRepair repair = mock(IdentityKeycloakLegacyStartupRepair.class);
+    IdentityRuntimeContract runtimeContract = mock(IdentityRuntimeContract.class);
     IdentityRuntimeContractInitializer initializer =
-        new IdentityRuntimeContractInitializer(
-            validator, repair, IdentityKeycloakProviderContractValidatorTest.properties(true));
+        new IdentityRuntimeContractInitializer(runtimeContract, properties(true));
 
     initializer.run(new DefaultApplicationArguments());
 
-    InOrder order = inOrder(repair, validator);
-    order.verify(repair).repair();
-    order.verify(validator).validate();
+    InOrder order = inOrder(runtimeContract);
+    order.verify(runtimeContract).repairLegacyStartupDefinitions();
+    order.verify(runtimeContract).validate();
   }
 
   @Test
   void propagatesValidationFailure() {
-    IdentityKeycloakProviderContractValidator validator =
-        mock(IdentityKeycloakProviderContractValidator.class);
-    IdentityKeycloakLegacyStartupRepair repair = mock(IdentityKeycloakLegacyStartupRepair.class);
+    IdentityRuntimeContract runtimeContract = mock(IdentityRuntimeContract.class);
     org.mockito.Mockito.doThrow(new IllegalStateException("provider drift"))
-        .when(validator)
+        .when(runtimeContract)
         .validate();
     IdentityRuntimeContractInitializer initializer =
-        new IdentityRuntimeContractInitializer(
-            validator, repair, IdentityKeycloakProviderContractValidatorTest.properties(false));
+        new IdentityRuntimeContractInitializer(runtimeContract, properties(false));
 
     assertThatThrownBy(() -> initializer.run(new DefaultApplicationArguments()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("provider drift");
+  }
+
+  private KeycloakProperties properties(boolean legacyMutation) {
+    return new KeycloakProperties(
+        "https://keycloak.example",
+        "cardo",
+        "runtime",
+        "runtime-secret",
+        "setup",
+        URI.create("https://app.example/invitations/completed"),
+        List.of("runtime", "identity", "billing"),
+        legacyMutation);
   }
 }

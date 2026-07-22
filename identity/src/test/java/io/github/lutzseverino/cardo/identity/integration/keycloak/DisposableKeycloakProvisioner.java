@@ -1,8 +1,11 @@
-package io.github.lutzseverino.cardo.identity.config;
+package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenSettings;
+import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -12,6 +15,7 @@ import java.net.Socket;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +37,14 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
   private static final String REALM = "cardo-contract";
   private static final String ADMIN_USERNAME = "cardo-test-admin";
   private static final String ADMIN_PASSWORD = "cardo-test-password";
-  private static final String RUNTIME_CLIENT = "identity";
+  private static final String RUNTIME_CLIENT = "cardo-identity";
+  private static final String RESOURCE_SERVER_CLIENT = "identity";
   private static final String RUNTIME_SECRET = "identity-runtime-secret";
+  private static final List<String> RUNTIME_REALM_MANAGEMENT_ROLES =
+      List.of("manage-users", "view-clients");
+  private static final List<String> MAPPER_CLIENTS =
+      List.of(RUNTIME_CLIENT, RESOURCE_SERVER_CLIENT, "billing");
+  private static final ObjectMapper JSON = new ObjectMapper();
 
   private final GenericContainer<?> container =
       new GenericContainer<>(DockerImageName.parse(IMAGE))
@@ -58,7 +68,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
     rest = RestClient.builder().baseUrl(baseUrl()).build();
   }
 
-  void provisionContract() {
+  void bootstrapRealm() {
     String admin = adminToken();
     post(
         admin,
@@ -85,18 +95,20 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
                 "starttls",
                 "false")));
     configureUserProfile(admin);
-    createClient(admin, RUNTIME_CLIENT, RUNTIME_SECRET, true);
-    createClient(admin, "setup", "setup-secret", false);
-    createClient(admin, "billing", "billing-secret", false);
-    installMapper(admin, RUNTIME_CLIENT);
-    installMapper(admin, "billing");
-    for (String role : IdentityKeycloakProviderContract.IDENTITY_ROLES) {
-      createRole(admin, role);
-    }
     createSessionUser(admin);
-    grantRuntimeManagementRoles(
-        admin,
-        List.of("manage-users", "query-users", "view-users", "query-clients", "view-clients"));
+  }
+
+  ContractSnapshot materializeContract() {
+    String admin = adminToken();
+    ensureClient(admin, RUNTIME_CLIENT, RUNTIME_SECRET, true, true, true, false);
+    ensureClient(
+        admin, RESOURCE_SERVER_CLIENT, "identity-resource-secret", false, false, false, false);
+    ensureClient(admin, "setup", "setup-secret", false, false, false, true);
+    ensureClient(admin, "billing", "billing-secret", false, false, false, false);
+    MAPPER_CLIENTS.forEach(clientId -> ensureMapper(admin, clientId));
+    KeycloakIdentityProviderContract.IDENTITY_ROLES.forEach(role -> ensureRole(admin, role));
+    grantRuntimeClientRoles(admin, "realm-management", RUNTIME_REALM_MANAGEMENT_ROLES);
+    return snapshot(admin);
   }
 
   KeycloakProperties properties(boolean legacyMutation) {
@@ -107,7 +119,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         RUNTIME_SECRET,
         "setup",
         URI.create("https://app.example/invitations/completed"),
-        List.of(RUNTIME_CLIENT, "billing"),
+        MAPPER_CLIENTS,
         legacyMutation);
   }
 
@@ -131,7 +143,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
       post(
           token,
           "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
-          IdentityKeycloakProviderContract.canonicalMapper(),
+          KeycloakIdentityProviderContract.canonicalMapper(),
           REALM,
           clientUuid(adminToken(), "billing"));
       return 204;
@@ -147,7 +159,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
           "/admin/realms/{realm}/clients/{clientUuid}/roles",
           Map.of("name", "runtime-must-not-create"),
           REALM,
-          clientUuid(adminToken(), RUNTIME_CLIENT));
+          clientUuid(adminToken(), RESOURCE_SERVER_CLIENT));
       return 204;
     } catch (RestClientResponseException exception) {
       return exception.getStatusCode().value();
@@ -178,7 +190,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
   void deleteMapper(String clientId) {
     String admin = adminToken();
     String clientUuid = clientUuid(admin, clientId);
-    IdentityKeycloakProviderContract.ProtocolMapper[] mappers =
+    KeycloakIdentityProviderContract.ProtocolMapper[] mappers =
         rest.get()
             .uri(
                 "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
@@ -186,9 +198,9 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
                 clientUuid)
             .header(HttpHeaders.AUTHORIZATION, bearer(admin))
             .retrieve()
-            .body(IdentityKeycloakProviderContract.ProtocolMapper[].class);
+            .body(KeycloakIdentityProviderContract.ProtocolMapper[].class);
     Arrays.stream(mappers)
-        .filter(mapper -> IdentityKeycloakProviderContract.MAPPER_NAME.equals(mapper.name()))
+        .filter(mapper -> KeycloakIdentityProviderContract.MAPPER_NAME.equals(mapper.name()))
         .forEach(mapper -> delete(admin, clientUuid, mapper.id()));
   }
 
@@ -198,7 +210,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         .uri(
             "/admin/realms/{realm}/clients/{clientUuid}/roles/{role}",
             REALM,
-            clientUuid(admin, RUNTIME_CLIENT),
+            clientUuid(admin, RESOURCE_SERVER_CLIENT),
             role)
         .header(HttpHeaders.AUTHORIZATION, bearer(admin))
         .retrieve()
@@ -212,7 +224,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
           .uri(
               "/admin/realms/{realm}/clients/{clientUuid}/roles/{role}",
               REALM,
-              clientUuid(admin, RUNTIME_CLIENT),
+              clientUuid(admin, RESOURCE_SERVER_CLIENT),
               role)
           .header(HttpHeaders.AUTHORIZATION, bearer(admin))
           .retrieve()
@@ -243,18 +255,39 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         resourceId);
   }
 
-  private void createClient(
-      String admin, String clientId, String secret, boolean authorizationServices) {
+  List<String> realmManagementRoles(String token) {
+    return resourceRoles(token, "realm-management");
+  }
+
+  List<String> runtimeClientRoles(String token) {
+    return resourceRoles(token, RUNTIME_CLIENT);
+  }
+
+  private void ensureClient(
+      String admin,
+      String clientId,
+      String secret,
+      boolean serviceAccount,
+      boolean directGrant,
+      boolean authorizationServices,
+      boolean standardFlow) {
+    List<ClientRepresentation> existing = exactClients(admin, clientId);
+    if (existing.size() > 1) {
+      throw new IllegalStateException("Disposable realm has duplicate client " + clientId);
+    }
+    if (!existing.isEmpty()) {
+      return;
+    }
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("clientId", clientId);
     body.put("enabled", true);
     body.put("publicClient", false);
     body.put("secret", secret);
-    body.put("serviceAccountsEnabled", authorizationServices);
-    body.put("standardFlowEnabled", "setup".equals(clientId));
-    body.put("directAccessGrantsEnabled", authorizationServices);
+    body.put("serviceAccountsEnabled", serviceAccount);
+    body.put("standardFlowEnabled", standardFlow);
+    body.put("directAccessGrantsEnabled", directGrant);
     body.put("authorizationServicesEnabled", authorizationServices);
-    if ("setup".equals(clientId)) {
+    if (standardFlow) {
       body.put("redirectUris", List.of("https://app.example/*"));
     }
     post(admin, "/admin/realms/{realm}/clients", body, REALM);
@@ -286,22 +319,53 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
     return optional;
   }
 
-  private void installMapper(String admin, String clientId) {
-    post(
-        admin,
-        "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
-        IdentityKeycloakProviderContract.canonicalMapper(),
-        REALM,
-        clientUuid(admin, clientId));
+  private void ensureMapper(String admin, String clientId) {
+    String clientUuid = clientUuid(admin, clientId);
+    List<KeycloakIdentityProviderContract.ProtocolMapper> named = namedMappers(admin, clientUuid);
+    if (named.size() > 1) {
+      throw new IllegalStateException("Disposable realm has duplicate mapper on " + clientId);
+    }
+    if (named.isEmpty()) {
+      post(
+          admin,
+          "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
+          KeycloakIdentityProviderContract.canonicalMapper(),
+          REALM,
+          clientUuid);
+    } else if (!KeycloakIdentityProviderContract.isCanonical(named.getFirst())) {
+      put(
+          admin,
+          "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models/{mapperId}",
+          KeycloakIdentityProviderContract.canonicalMapper().withId(named.getFirst().id()),
+          REALM,
+          clientUuid,
+          named.getFirst().id());
+    }
   }
 
-  private void createRole(String admin, String role) {
-    post(
-        admin,
-        "/admin/realms/{realm}/clients/{clientUuid}/roles",
-        Map.of("name", role),
-        REALM,
-        clientUuid(admin, RUNTIME_CLIENT));
+  private void ensureRole(String admin, String role) {
+    String resourceServerUuid = clientUuid(admin, RESOURCE_SERVER_CLIENT);
+    try {
+      rest.get()
+          .uri(
+              "/admin/realms/{realm}/clients/{clientUuid}/roles/{role}",
+              REALM,
+              resourceServerUuid,
+              role)
+          .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+          .retrieve()
+          .toBodilessEntity();
+    } catch (RestClientResponseException exception) {
+      if (exception.getStatusCode().value() != 404) {
+        throw exception;
+      }
+      post(
+          admin,
+          "/admin/realms/{realm}/clients/{clientUuid}/roles",
+          Map.of("name", role),
+          REALM,
+          resourceServerUuid);
+    }
   }
 
   private void createSessionUser(String admin) {
@@ -327,9 +391,10 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         REALM);
   }
 
-  private void grantRuntimeManagementRoles(String admin, List<String> roleNames) {
+  private void grantRuntimeClientRoles(
+      String admin, String targetClientId, List<String> roleNames) {
     String runtimeUuid = clientUuid(admin, RUNTIME_CLIENT);
-    String realmManagementUuid = clientUuid(admin, "realm-management");
+    String targetClientUuid = clientUuid(admin, targetClientId);
     UserRepresentation serviceAccount =
         rest.get()
             .uri(
@@ -340,29 +405,107 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
             .retrieve()
             .body(UserRepresentation.class);
     List<RoleRepresentation> roles =
-        roleNames.stream().map(role -> managementRole(admin, realmManagementUuid, role)).toList();
+        roleNames.stream().map(role -> clientRole(admin, targetClientUuid, role)).toList();
     post(
         admin,
         "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUuid}",
         roles,
         REALM,
         serviceAccount.id(),
-        realmManagementUuid);
+        targetClientUuid);
   }
 
-  private RoleRepresentation managementRole(String admin, String realmManagementUuid, String role) {
+  private RoleRepresentation clientRole(String admin, String clientUuid, String role) {
     return rest.get()
-        .uri(
-            "/admin/realms/{realm}/clients/{clientUuid}/roles/{role}",
-            REALM,
-            realmManagementUuid,
-            role)
+        .uri("/admin/realms/{realm}/clients/{clientUuid}/roles/{role}", REALM, clientUuid, role)
         .header(HttpHeaders.AUTHORIZATION, bearer(admin))
         .retrieve()
         .body(RoleRepresentation.class);
   }
 
-  private String clientUuid(String token, String clientId) {
+  private ContractSnapshot snapshot(String admin) {
+    Map<String, Integer> clientCounts = new LinkedHashMap<>();
+    for (String clientId : List.of(RUNTIME_CLIENT, RESOURCE_SERVER_CLIENT, "setup", "billing")) {
+      clientCounts.put(clientId, exactClients(admin, clientId).size());
+    }
+    Map<String, Integer> mapperCounts = new LinkedHashMap<>();
+    for (String clientId : MAPPER_CLIENTS) {
+      mapperCounts.put(clientId, namedMappers(admin, clientUuid(admin, clientId)).size());
+    }
+    List<String> identityRoles =
+        clientRoles(admin, RESOURCE_SERVER_CLIENT).stream()
+            .map(RoleRepresentation::name)
+            .filter(KeycloakIdentityProviderContract.IDENTITY_ROLES::contains)
+            .sorted()
+            .toList();
+    return new ContractSnapshot(
+        Map.copyOf(clientCounts),
+        Map.copyOf(mapperCounts),
+        identityRoles,
+        assignedClientRoles(admin, "realm-management"),
+        assignedClientRoles(admin, RUNTIME_CLIENT));
+  }
+
+  private List<RoleRepresentation> clientRoles(String admin, String clientId) {
+    RoleRepresentation[] roles =
+        rest.get()
+            .uri(
+                uri ->
+                    uri.path("/admin/realms/{realm}/clients/{clientUuid}/roles")
+                        .queryParam("first", 0)
+                        .queryParam("max", 100)
+                        .build(REALM, clientUuid(admin, clientId)))
+            .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+            .retrieve()
+            .body(RoleRepresentation[].class);
+    return roles == null ? List.of() : Arrays.asList(roles);
+  }
+
+  private List<String> assignedClientRoles(String admin, String targetClientId) {
+    String runtimeUuid = clientUuid(admin, RUNTIME_CLIENT);
+    UserRepresentation serviceAccount =
+        rest.get()
+            .uri(
+                "/admin/realms/{realm}/clients/{clientUuid}/service-account-user",
+                REALM,
+                runtimeUuid)
+            .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+            .retrieve()
+            .body(UserRepresentation.class);
+    RoleRepresentation[] roles =
+        rest.get()
+            .uri(
+                "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUuid}",
+                REALM,
+                serviceAccount.id(),
+                clientUuid(admin, targetClientId))
+            .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+            .retrieve()
+            .body(RoleRepresentation[].class);
+    return roles == null
+        ? List.of()
+        : Arrays.stream(roles).map(RoleRepresentation::name).sorted().toList();
+  }
+
+  private List<KeycloakIdentityProviderContract.ProtocolMapper> namedMappers(
+      String token, String clientUuid) {
+    KeycloakIdentityProviderContract.ProtocolMapper[] mappers =
+        rest.get()
+            .uri(
+                "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
+                REALM,
+                clientUuid)
+            .header(HttpHeaders.AUTHORIZATION, bearer(token))
+            .retrieve()
+            .body(KeycloakIdentityProviderContract.ProtocolMapper[].class);
+    return mappers == null
+        ? List.of()
+        : Arrays.stream(mappers)
+            .filter(mapper -> KeycloakIdentityProviderContract.MAPPER_NAME.equals(mapper.name()))
+            .toList();
+  }
+
+  private List<ClientRepresentation> exactClients(String token, String clientId) {
     ClientRepresentation[] clients =
         rest.get()
             .uri(
@@ -373,11 +516,32 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
             .header(HttpHeaders.AUTHORIZATION, bearer(token))
             .retrieve()
             .body(ClientRepresentation[].class);
-    return Arrays.stream(clients)
-        .filter(client -> clientId.equals(client.clientId()))
-        .findFirst()
-        .orElseThrow()
-        .id();
+    return clients == null
+        ? List.of()
+        : Arrays.stream(clients).filter(client -> clientId.equals(client.clientId())).toList();
+  }
+
+  private String clientUuid(String token, String clientId) {
+    List<ClientRepresentation> clients = exactClients(token, clientId);
+    if (clients.size() != 1) {
+      throw new IllegalStateException(
+          "Expected one disposable Keycloak client " + clientId + " but found " + clients.size());
+    }
+    return clients.getFirst().id();
+  }
+
+  private List<String> resourceRoles(String token, String clientId) {
+    try {
+      String[] parts = token.split("\\.");
+      JwtClaims claims = JSON.readValue(Base64.getUrlDecoder().decode(parts[1]), JwtClaims.class);
+      ResourceAccess access =
+          claims.resourceAccess() == null ? null : claims.resourceAccess().get(clientId);
+      return access == null || access.roles() == null
+          ? List.of()
+          : access.roles().stream().sorted().toList();
+    } catch (RuntimeException | IOException exception) {
+      throw new IllegalStateException("Could not inspect the disposable runtime token", exception);
+    }
   }
 
   private String adminToken() {
@@ -512,4 +676,17 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
   private record UserRepresentation(String id) {}
 
   private record RoleRepresentation(String id, String name) {}
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  private record JwtClaims(
+      @JsonProperty("resource_access") Map<String, ResourceAccess> resourceAccess) {}
+
+  private record ResourceAccess(List<String> roles) {}
+
+  record ContractSnapshot(
+      Map<String, Integer> clientCounts,
+      Map<String, Integer> mapperCounts,
+      List<String> identityRoles,
+      List<String> realmManagementGrants,
+      List<String> runtimeClientGrants) {}
 }

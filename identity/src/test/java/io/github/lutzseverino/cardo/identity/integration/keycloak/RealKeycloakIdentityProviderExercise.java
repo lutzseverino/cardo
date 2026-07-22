@@ -13,11 +13,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.web.client.RestClient;
 
-public final class RealKeycloakIdentityProviderExercise {
+final class RealKeycloakIdentityProviderExercise {
 
   private RealKeycloakIdentityProviderExercise() {}
 
-  public static void verify(
+  static void verify(
       KeycloakProperties properties,
       KeycloakClientCredentialsTokenProvider runtimeTokens,
       RestClient.Builder rest) {

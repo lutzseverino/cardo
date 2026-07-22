@@ -3,6 +3,7 @@ package io.github.lutzseverino.cardo.identity.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.lutzseverino.cardo.identity.config.IdentityRuntimeContractInitializer;
+import io.github.lutzseverino.cardo.identity.provider.IdentityRuntimeContract;
 import io.github.lutzseverino.cardo.identity.workflow.ReconcileIdentityOperationsWorkflow;
 import io.github.lutzseverino.cardo.identity.workflow.ReconcileIdentityProviderMutationsWorkflow;
 import jakarta.persistence.Entity;
@@ -55,9 +56,11 @@ class IdentityApplicationBoundaryTest {
     assertThat(
             Arrays.stream(IdentityRuntimeContractInitializer.class.getDeclaredFields())
                 .map(field -> field.getType().getSimpleName()))
-        .contains(
-            "IdentityKeycloakProviderContractValidator", "IdentityKeycloakLegacyStartupRepair")
-        .noneMatch(name -> name.endsWith("Workflow"));
+        .contains(IdentityRuntimeContract.class.getSimpleName());
+    assertThat(
+            Arrays.stream(IdentityRuntimeContractInitializer.class.getDeclaredFields())
+                .map(field -> field.getType().getPackageName()))
+        .noneMatch(packageName -> packageName.contains(".integration."));
   }
 
   @Test
