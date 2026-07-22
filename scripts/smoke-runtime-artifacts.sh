@@ -122,6 +122,7 @@ PY
 start_provider_stub() {
   provider_port=$(free_port)
   python3 - "$provider_port" >"$temporary_directory/provider.log" 2>&1 <<'PY' &
+import base64
 import json
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -160,9 +161,34 @@ CANONICAL_MAPPER = {
 }
 
 IDENTITY_ROLES = {"profile:read", "profile:write", "user:provision"}
+RUNTIME_CLIENT_SECRET = "cardo-smoke"
+CATALOG_CLIENT_SECRET = "cardo-catalog-smoke"
+
+
+def encode_segment(value):
+    encoded = base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode())
+    return encoded.rstrip(b"=").decode()
+
+
+def access_token(authorized_party):
+    claims = {"azp": authorized_party}
+    if authorized_party == "identity":
+        claims["resource_access"] = {"identity": {"roles": ["uma_protection"]}}
+    return encode_segment({"alg": "none", "typ": "JWT"}) + "." + encode_segment(claims) + "."
 
 
 class Handler(BaseHTTPRequestHandler):
+    def authorized_party(self):
+        authorization = self.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            return None
+        try:
+            payload = authorization.removeprefix("Bearer ").split(".")[1]
+            payload += "=" * (-len(payload) % 4)
+            return json.loads(base64.urlsafe_b64decode(payload))["azp"]
+        except (IndexError, KeyError, ValueError, json.JSONDecodeError):
+            return None
+
     def read_request_body(self):
         if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
             chunks = []
@@ -225,6 +251,8 @@ class Handler(BaseHTTPRequestHandler):
                     ]
                 },
             )
+        elif request.path.startswith("/admin/") and self.authorized_party() == "identity":
+            self.send_empty(403)
         elif request.path == "/admin/realms/cardo/clients":
             client_id = parse_qs(request.query).get("clientId", [""])[0]
             client_uuid = CLIENTS.get(client_id)
@@ -244,7 +272,10 @@ class Handler(BaseHTTPRequestHandler):
         elif request.path == "/admin/realms/cardo/users":
             self.send_json(200, [])
         elif request.path == "/realms/cardo/authz/protection/resource_set":
-            self.send_json(200, [])
+            if self.authorized_party() == "identity":
+                self.send_json(200, [])
+            else:
+                self.send_empty(403)
         else:
             self.send_json(404, {"error": "not_found"})
 
@@ -253,7 +284,20 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/__cardo_smoke__/chunked-body":
             self.send_json(200, {"length": len(body)})
         elif self.path.endswith("/protocol/openid-connect/token"):
-            self.send_json(200, {"access_token": "cardo-smoke", "expires_in": 3600})
+            form = parse_qs(body.decode())
+            client_id = form.get("client_id", [""])[0]
+            client_secret = form.get("client_secret", [""])[0]
+            expected_secret = {
+                "cardo-identity": RUNTIME_CLIENT_SECRET,
+                "identity": CATALOG_CLIENT_SECRET,
+            }.get(client_id)
+            if expected_secret is None or client_secret != expected_secret:
+                self.send_json(401, {"error": "invalid_client"})
+            else:
+                self.send_json(
+                    200,
+                    {"access_token": access_token(client_id), "expires_in": 3600},
+                )
         elif "/protocol-mappers/models" in self.path or self.path.endswith("/roles"):
             self.send_empty(403)
         else:
@@ -458,6 +502,7 @@ smoke_jar() {
     KEYCLOAK_BASE_URL="http://127.0.0.1:$provider_port" \
     KEYCLOAK_ISSUER_URI="http://127.0.0.1:$provider_port/realms/cardo" \
     KEYCLOAK_CLIENT_SECRET=cardo-smoke \
+    KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET=cardo-catalog-smoke \
     java -jar "$jar" >"$log" 2>&1 &
   process=$!
   processes+=("$process")
@@ -585,6 +630,7 @@ smoke_image() {
     --env KEYCLOAK_BASE_URL="http://host.docker.internal:$provider_port" \
     --env KEYCLOAK_ISSUER_URI="http://host.docker.internal:$provider_port/realms/cardo" \
     --env KEYCLOAK_CLIENT_SECRET=cardo-smoke \
+    --env KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET=cardo-catalog-smoke \
     "$image" >/dev/null
   watched_container=$container
   port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort}}' "$container")

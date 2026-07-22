@@ -26,7 +26,7 @@ final class KeycloakLegacyStartupRepair {
 
   KeycloakLegacyStartupRepair(
       KeycloakProperties properties,
-      KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
+      @Qualifier("identityProviderRuntimeTokenProvider") KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
     this.properties = properties;
     this.clientCredentialsTokens = clientCredentialsTokens;

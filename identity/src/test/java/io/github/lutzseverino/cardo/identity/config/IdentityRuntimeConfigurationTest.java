@@ -40,6 +40,7 @@ class IdentityRuntimeConfigurationTest {
             "cardo",
             "cardo-identity",
             "",
+            "",
             "cardo-web",
             URI.create("https://app.example.com/invitations/completed"),
             List.of("identity", "billing"),
@@ -52,6 +53,42 @@ class IdentityRuntimeConfigurationTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("cardo.identity.keycloak.client-secret")
         .hasMessageNotContaining("database-secret-value");
+  }
+
+  @Test
+  void rejectsAMissingAuthorizationCatalogSecret() {
+    KeycloakProperties keycloak = productionKeycloak("identity-runtime-secret-prod", "");
+
+    assertThatThrownBy(
+            () ->
+                policy(production(), productionSession(), keycloak, productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("cardo.identity.keycloak.authorization-client-secret");
+  }
+
+  @Test
+  void rejectsEqualRuntimeAndAuthorizationCatalogSecrets() {
+    KeycloakProperties keycloak =
+        productionKeycloak("one-production-secret", "one-production-secret");
+
+    assertThatThrownBy(
+            () ->
+                policy(production(), productionSession(), keycloak, productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("authorization-client-secret")
+        .hasMessageContaining("must be distinct");
+  }
+
+  @Test
+  void rejectsPlaceholderAuthorizationCatalogSecrets() {
+    KeycloakProperties keycloak = productionKeycloak("identity-runtime-secret-prod", "placeholder");
+
+    assertThatThrownBy(
+            () ->
+                policy(production(), productionSession(), keycloak, productionEnvironment())
+                    .afterPropertiesSet())
+        .hasMessageContaining("authorization-client-secret")
+        .hasMessageNotContaining("identity-runtime-secret-prod");
   }
 
   @Test
@@ -211,6 +248,7 @@ class IdentityRuntimeConfigurationTest {
         "cardo",
         "cardo-identity",
         "",
+        "",
         "cardo-web",
         URI.create("http://localhost:3000/invitations/completed"),
         List.of("identity"),
@@ -227,9 +265,24 @@ class IdentityRuntimeConfigurationTest {
         baseUrl,
         "cardo",
         "cardo-identity",
-        "identity-secret",
+        "identity-runtime-secret-prod",
+        "identity-authorization-secret-prod",
         "cardo-web",
         redirectUri,
+        List.of("cardo-identity", "identity", "billing"),
+        false);
+  }
+
+  private KeycloakProperties productionKeycloak(
+      String runtimeClientSecret, String authorizationClientSecret) {
+    return new KeycloakProperties(
+        "https://id.example.com",
+        "cardo",
+        "cardo-identity",
+        runtimeClientSecret,
+        authorizationClientSecret,
+        "cardo-web",
+        URI.create("https://app.example.com/invitations/completed"),
         List.of("cardo-identity", "identity", "billing"),
         false);
   }

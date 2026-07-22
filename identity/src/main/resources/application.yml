@@ -52,6 +52,7 @@ cardo:
       realm: ${KEYCLOAK_REALM:cardo}
       client-id: ${KEYCLOAK_CLIENT_ID:cardo-identity}
       client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+      authorization-client-secret: ${KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET:}
       credential-setup-client-id: ${KEYCLOAK_CREDENTIAL_SETUP_CLIENT_ID:cardo-web}
       credential-setup-redirect-uri: ${KEYCLOAK_CREDENTIAL_SETUP_REDIRECT_URI:http://localhost:3000/invitations/completed}
       user-id-claim-client-ids:

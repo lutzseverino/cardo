@@ -7,7 +7,6 @@ import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapper;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationResult;
 import io.github.lutzseverino.cardo.invite.model.Invitation;
-import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
 import io.github.lutzseverino.cardo.invite.model.InvitationResult;
 import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.model.InvitationTokenResult;
@@ -23,7 +22,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Base64;
-import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,10 +96,7 @@ public class InvitationService {
 
   @Transactional(propagation = Propagation.MANDATORY)
   public CreateInvitationResult create(
-      @NotBlank String product,
-      @Valid CreateInvitationInput input,
-      UUID invitedUserId,
-      String invitedAuthorizationSubject) {
+      @NotBlank String product, @Valid CreateInvitationInput input, UUID invitedUserId) {
     String token = generateToken();
     OffsetDateTime expiresAt = OffsetDateTime.now(clock).plus(properties.ttl());
     Invitation invitation =
@@ -111,11 +106,8 @@ public class InvitationService {
                 product,
                 input.tenantId(),
                 input.tenantResourceType(),
-                input.accessProfile(),
-                input.grants(),
                 EmailAddress.of(input.email()).value(),
                 invitedUserId,
-                invitedAuthorizationSubject,
                 input.invitedBy(),
                 input.acceptUrlBase(),
                 expiresAt,
@@ -157,10 +149,7 @@ public class InvitationService {
         invitation.getProduct(),
         invitation.getTenantId(),
         invitation.getTenantResourceType(),
-        invitation.getAccessProfile(),
-        invitation.grantInputs(),
         invitation.getInvitedUserId(),
-        invitation.getInvitedAuthorizationSubject(),
         invitation.getExpiresAt());
   }
 
@@ -175,21 +164,15 @@ public class InvitationService {
   }
 
   @Transactional(propagation = Propagation.MANDATORY)
-  public Optional<PendingInvitation> prepareAcceptance(
-      UUID invitationId, @NotBlank String product, OffsetDateTime acceptedAt) {
+  public boolean accept(UUID invitationId, @NotBlank String product, OffsetDateTime acceptedAt) {
     Invitation invitation = getEntityForUpdate(invitationId);
     requireOwner(invitation.getProduct(), product);
     if (InvitationStatus.ACCEPTED.equals(invitation.getStatus())) {
-      return Optional.empty();
+      return false;
     }
     requirePlausibleAcceptanceTime(invitation, acceptedAt);
     requirePending(invitation, acceptedAt);
-    return Optional.of(toPending(invitation));
-  }
-
-  @Transactional(propagation = Propagation.MANDATORY)
-  public boolean accept(UUID invitationId, OffsetDateTime acceptedAt, UUID grantReceiptId) {
-    return getEntity(invitationId).accept(acceptedAt, grantReceiptId);
+    return invitation.accept(acceptedAt);
   }
 
   @Transactional(propagation = Propagation.MANDATORY)
@@ -243,12 +226,7 @@ public class InvitationService {
         invitation.getProduct(),
         invitation.getTenantId(),
         invitation.getTenantResourceType(),
-        invitation.getAccessProfile(),
-        invitation.getGrants().stream()
-            .map(grant -> new InvitationGrantInput(grant.getResourceType(), grant.getAction()))
-            .toList(),
         invitation.getInvitedUserId(),
-        invitation.getInvitedAuthorizationSubject(),
         invitation.getExpiresAt());
   }
 
@@ -258,10 +236,7 @@ public class InvitationService {
         invitation.getProduct(),
         invitation.getTenantId(),
         invitation.getTenantResourceType(),
-        invitation.getAccessProfile(),
-        invitation.grantInputs(),
         invitation.getInvitedUserId(),
-        invitation.getInvitedAuthorizationSubject(),
         invitation.getExpiresAt());
   }
 
@@ -333,18 +308,9 @@ public class InvitationService {
     boolean same =
         invitation.getTenantId().equals(input.tenantId())
             && invitation.getTenantResourceType().equals(input.tenantResourceType())
-            && invitation.getAccessProfile().equals(input.accessProfile())
             && invitation.getInvitedEmail().equals(EmailAddress.of(input.email()).value())
             && invitation.getInvitedBy().equals(input.invitedBy())
-            && URI.create(invitation.getAcceptUrlBase()).equals(input.acceptUrlBase())
-            && new LinkedHashSet<>(
-                    invitation.getGrants().stream()
-                        .map(
-                            grant ->
-                                new InvitationGrantInput(
-                                    grant.getResourceType(), grant.getAction()))
-                        .toList())
-                .equals(new LinkedHashSet<>(input.grants()));
+            && URI.create(invitation.getAcceptUrlBase()).equals(input.acceptUrlBase());
     if (!same) {
       throw ApiException.conflict(
           "invitation_request_conflict",

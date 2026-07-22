@@ -16,9 +16,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import io.github.lutzseverino.cardo.authorization.grant.ClientRoleAssignment;
 import io.github.lutzseverino.cardo.authorization.grant.ClientRoleRevocation;
 import io.github.lutzseverino.cardo.authorization.grant.GrantedResourceAction;
+import io.github.lutzseverino.cardo.authorization.grant.ResourceActionAssignment;
 import io.github.lutzseverino.cardo.authorization.grant.ResourceGrantQuery;
 import io.github.lutzseverino.cardo.authorization.resource.AuthorizationResource;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -31,9 +33,7 @@ class KeycloakAuthorizationClientTest {
   void continuesEnsuringResourceAfterConcurrentCreation() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "protection-token");
+    KeycloakAuthorizationClient client = client(rest, "clinic");
     AuthorizationResource resource =
         new AuthorizationResource(
             "clinic", "clinic:clinic:123", "clinic:clinic", null, List.of("read", "write"));
@@ -51,7 +51,7 @@ class KeycloakAuthorizationClientTest {
         .andRespond(
             withSuccess(
                 """
-                [{"_id":"resource-1","name":"clinic:clinic:123"}]
+                ["resource-1"]
                 """,
                 MediaType.APPLICATION_JSON));
     server
@@ -91,9 +91,7 @@ class KeycloakAuthorizationClientTest {
   void assignsAnExistingClientRole() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "admin-token");
+    KeycloakAuthorizationClient client = client(rest, "identity");
     server
         .expect(requestTo(org.hamcrest.Matchers.containsString("clientId=identity")))
         .andExpect(method(GET))
@@ -137,9 +135,7 @@ class KeycloakAuthorizationClientTest {
   void rejectsAMissingClientRoleWithoutTryingToCreateIt() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "admin-token");
+    KeycloakAuthorizationClient client = client(rest, "identity");
     server
         .expect(requestTo(org.hamcrest.Matchers.containsString("clientId=identity")))
         .andExpect(method(GET))
@@ -170,9 +166,7 @@ class KeycloakAuthorizationClientTest {
   void removesExistingClientRoles() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "admin-token");
+    KeycloakAuthorizationClient client = client(rest, "identity");
     server
         .expect(requestTo(org.hamcrest.Matchers.containsString("clientId=identity")))
         .andExpect(method(GET))
@@ -221,9 +215,7 @@ class KeycloakAuthorizationClientTest {
   void ignoresClientRolesThatAreAlreadyAbsent() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "admin-token");
+    KeycloakAuthorizationClient client = client(rest, "identity");
     server
         .expect(requestTo(org.hamcrest.Matchers.containsString("clientId=identity")))
         .andExpect(method(GET))
@@ -251,9 +243,7 @@ class KeycloakAuthorizationClientTest {
   void widensExistingResourceScopes() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "protection-token");
+    KeycloakAuthorizationClient client = client(rest, "clinic");
     AuthorizationResource resource =
         new AuthorizationResource(
             "clinic", "clinic:clinic:123", "clinic:clinic", null, List.of("read", "write"));
@@ -263,7 +253,7 @@ class KeycloakAuthorizationClientTest {
         .andRespond(
             withSuccess(
                 """
-                [{"_id":"resource-1","name":"clinic:clinic:123"}]
+                ["resource-1"]
                 """,
                 MediaType.APPLICATION_JSON));
     server
@@ -303,9 +293,7 @@ class KeycloakAuthorizationClientTest {
   void preservesExistingResourceScopes() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "protection-token");
+    KeycloakAuthorizationClient client = client(rest, "clinic");
     AuthorizationResource resource =
         new AuthorizationResource(
             "clinic", "clinic:clinic:123", "clinic:clinic", null, List.of("read"));
@@ -315,7 +303,7 @@ class KeycloakAuthorizationClientTest {
         .andRespond(
             withSuccess(
                 """
-                [{"_id":"resource-1","name":"clinic:clinic:123"}]
+                ["resource-1"]
                 """,
                 MediaType.APPLICATION_JSON));
     server
@@ -341,16 +329,27 @@ class KeycloakAuthorizationClientTest {
   void findsResourceGrantsByCanonicalResourceName() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "protection-token");
+    KeycloakAuthorizationClient client = client(rest, "clinic");
     server
         .expect(requestTo(org.hamcrest.Matchers.containsString("name=clinic:clinic:123")))
         .andExpect(method(GET))
         .andRespond(
             withSuccess(
                 """
-                [{"_id":"resource-1","name":"clinic:clinic:123"}]
+                ["resource-1"]
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(requestTo(org.hamcrest.Matchers.endsWith("/resource_set/resource-1")))
+        .andExpect(method(GET))
+        .andRespond(
+            withSuccess(
+                """
+                {
+                  "_id": "resource-1",
+                  "name": "clinic:clinic:123",
+                  "resource_scopes": [{"name": "read"}]
+                }
                 """,
                 MediaType.APPLICATION_JSON));
     server
@@ -386,9 +385,7 @@ class KeycloakAuthorizationClientTest {
   void returnsNoGrantsWhenCanonicalResourceDoesNotExist() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
-    KeycloakAuthorizationClient client =
-        new KeycloakAuthorizationClient(
-            "https://keycloak.example", "cardo", rest, () -> "protection-token");
+    KeycloakAuthorizationClient client = client(rest, "clinic");
     server
         .expect(requestTo(org.hamcrest.Matchers.containsString("name=clinic:clinic:123")))
         .andExpect(method(GET))
@@ -400,5 +397,66 @@ class KeycloakAuthorizationClientTest {
 
     assertThat(grants).isEmpty();
     server.verify();
+  }
+
+  @Test
+  void rejectsEveryCrossCatalogOperationBeforeTokenAcquisitionOrNetworkIo() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    AtomicInteger tokenRequests = new AtomicInteger();
+    KeycloakAuthorizationClient client =
+        new KeycloakAuthorizationClient(
+            "https://keycloak.example",
+            "cardo",
+            "identity",
+            rest,
+            () -> {
+              tokenRequests.incrementAndGet();
+              return "protection-token";
+            },
+            () -> {
+              tokenRequests.incrementAndGet();
+              return "admin-token";
+            });
+
+    List<Runnable> operations =
+        List.of(
+            () ->
+                client.ensureResource(
+                    new AuthorizationResource(
+                        "billing", "billing:account:1", "billing:account", null, List.of("read"))),
+            () ->
+                client.grantResourceActions(
+                    new ResourceActionAssignment(
+                        "billing", "resource-1", "subject-1", List.of("read"))),
+            () ->
+                client.findResourceActionGrants(
+                    ResourceGrantQuery.forResourceId("billing", "resource-1", "subject-1")),
+            () -> client.revokeResourceActionGrant("billing", "ticket-1"),
+            () ->
+                client.ensureClientRolesAssigned(
+                    new ClientRoleAssignment("billing", "subject-1", List.of("read"))),
+            () ->
+                client.removeClientRoles(
+                    new ClientRoleRevocation("billing", "subject-1", List.of("read"))));
+
+    operations.forEach(
+        operation ->
+            assertThatThrownBy(operation::run)
+                .isInstanceOf(KeycloakAuthorizationException.class)
+                .hasMessageContaining("bound to resource server identity")
+                .hasMessageContaining("billing"));
+    assertThat(tokenRequests).hasValue(0);
+    server.verify();
+  }
+
+  private KeycloakAuthorizationClient client(RestClient.Builder rest, String catalog) {
+    return new KeycloakAuthorizationClient(
+        "https://keycloak.example",
+        "cardo",
+        catalog,
+        rest,
+        () -> "protection-token",
+        () -> "admin-token");
   }
 }

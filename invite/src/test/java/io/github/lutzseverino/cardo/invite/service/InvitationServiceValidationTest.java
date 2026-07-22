@@ -8,14 +8,12 @@ import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
 import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
 import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapperImpl;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
-import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
 import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
 import io.github.lutzseverino.cardo.invite.workflow.CreateInvitationWorkflow;
 import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.time.Duration;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,8 +40,6 @@ class InvitationServiceValidationTest {
             UUID.randomUUID(),
             "clinic",
             "employee@example.com",
-            "clinic:employee",
-            List.of(new InvitationGrantInput("clinic:clinic", "read")),
             UUID.randomUUID(),
             URI.create("https://clinic.example.com/invitations"));
 
@@ -69,8 +65,6 @@ class InvitationServiceValidationTest {
             UUID.randomUUID(),
             "clinic:clinic",
             "employee@example.com",
-            "clinic:employee",
-            List.of(new InvitationGrantInput("clinic:clinic", "read")),
             UUID.randomUUID(),
             URI.create("https://clinic.example.com/invitations?source=email"));
 

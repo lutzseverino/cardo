@@ -26,7 +26,10 @@ class RevocationProcessor {
         .filter(GrantedResourceAction::granted)
         .filter(grant -> revocation.actions().contains(grant.action()))
         .map(GrantedResourceAction::id)
-        .forEach(authorization::revokeResourceActionGrant);
+        .forEach(
+            ticketId ->
+                authorization.revokeResourceActionGrant(
+                    revocation.resourceServerClientId(), ticketId));
   }
 
   private void revoke(RevocationPlan.AuthorityRevocation revocation) {

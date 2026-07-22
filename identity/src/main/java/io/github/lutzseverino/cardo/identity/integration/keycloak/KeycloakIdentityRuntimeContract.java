@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.identity.integration.keycloak;
 
+import com.nimbusds.jwt.JWTParser;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
@@ -9,6 +10,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -19,17 +21,20 @@ import org.springframework.web.client.RestClientResponseException;
 final class KeycloakIdentityRuntimeContract implements IdentityRuntimeContract {
 
   private final KeycloakProperties properties;
-  private final KeycloakClientCredentialsTokenProvider clientCredentialsTokens;
+  private final KeycloakClientCredentialsTokenProvider runtimeTokens;
+  private final KeycloakClientCredentialsTokenProvider catalogTokens;
   private final KeycloakLegacyStartupRepair legacyRepair;
   private final RestClient rest;
 
   KeycloakIdentityRuntimeContract(
       KeycloakProperties properties,
-      KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
+      @Qualifier("identityProviderRuntimeTokenProvider") KeycloakClientCredentialsTokenProvider runtimeTokens,
+      @Qualifier("identityAuthorizationCatalogTokenProvider") KeycloakClientCredentialsTokenProvider catalogTokens,
       KeycloakLegacyStartupRepair legacyRepair,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
     this.properties = properties;
-    this.clientCredentialsTokens = clientCredentialsTokens;
+    this.runtimeTokens = runtimeTokens;
+    this.catalogTokens = catalogTokens;
     this.legacyRepair = legacyRepair;
     this.rest = rest.clone().baseUrl(properties.baseUrl()).build();
   }
@@ -39,7 +44,8 @@ final class KeycloakIdentityRuntimeContract implements IdentityRuntimeContract {
     List<Drift> drift = new ArrayList<>();
     String token;
     try {
-      token = clientCredentialsTokens.clientCredentialsToken();
+      token = runtimeTokens.clientCredentialsToken();
+      validateAuthorizedParty("runtime credential", token, properties.clientId(), drift);
     } catch (RuntimeException exception) {
       throw invalid(List.of(new Drift("runtime credential token acquisition failed", false)));
     }
@@ -62,18 +68,147 @@ final class KeycloakIdentityRuntimeContract implements IdentityRuntimeContract {
                 .header(HttpHeaders.AUTHORIZATION, bearer(token))
                 .retrieve()
                 .toBodilessEntity());
-    validateCapability(
-        "UMA protection resource read",
-        drift,
-        () ->
-            rest.get()
-                .uri("/realms/{realm}/authz/protection/resource_set", properties.realm())
-                .header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .retrieve()
-                .toBodilessEntity());
+    String catalogToken;
+    try {
+      catalogToken = catalogTokens.clientCredentialsToken();
+      validateCatalogToken(catalogToken, drift);
+      validateCapability(
+          "Identity catalog UMA protection resource read",
+          drift,
+          () ->
+              rest.get()
+                  .uri("/realms/{realm}/authz/protection/resource_set", properties.realm())
+                  .header(HttpHeaders.AUTHORIZATION, bearer(catalogToken))
+                  .retrieve()
+                  .toBodilessEntity());
+      validateCatalogAdminIsolation(catalogToken, clientUuids, drift);
+    } catch (RuntimeException exception) {
+      drift.add(new Drift("Identity catalog credential token acquisition failed", false));
+    }
 
     if (!drift.isEmpty()) {
       throw invalid(drift);
+    }
+  }
+
+  private void validateCatalogToken(String token, List<Drift> drift) {
+    validateAuthorizedParty(
+        "Identity catalog credential", token, IdentityPermissions.CLIENT_ID, drift);
+    try {
+      Map<String, Object> claims = JWTParser.parse(token).getJWTClaimsSet().getClaims();
+      Map<?, ?> resourceAccess =
+          claims.get("resource_access") instanceof Map<?, ?> value ? value : Map.of();
+      Map<?, ?> identityAccess =
+          resourceAccess.get(IdentityPermissions.CLIENT_ID) instanceof Map<?, ?> value
+              ? value
+              : Map.of();
+      Set<String> identityRoles = stringSet(identityAccess.get("roles"));
+      if (!Set.of("uma_protection").equals(identityRoles)) {
+        drift.add(
+            new Drift(
+                "Identity catalog credential must have exactly identity:uma_protection", false));
+      }
+      if (resourceAccess.containsKey("realm-management")) {
+        drift.add(
+            new Drift(
+                "Identity catalog credential must not have realm-management authority", false));
+      }
+    } catch (java.text.ParseException exception) {
+      drift.add(new Drift("Identity catalog credential returned an unreadable token", false));
+    }
+  }
+
+  private void validateAuthorizedParty(
+      String label, String token, String expectedAuthorizedParty, List<Drift> drift) {
+    try {
+      String authorizedParty = JWTParser.parse(token).getJWTClaimsSet().getStringClaim("azp");
+      if (!expectedAuthorizedParty.equals(authorizedParty)) {
+        drift.add(new Drift(label + " has an unexpected authorized party", false));
+      }
+    } catch (java.text.ParseException exception) {
+      drift.add(new Drift(label + " returned an unreadable token", false));
+    }
+  }
+
+  private Set<String> stringSet(Object value) {
+    if (!(value instanceof List<?> list)) {
+      return Set.of();
+    }
+    return list.stream()
+        .filter(String.class::isInstance)
+        .map(String.class::cast)
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+  }
+
+  private void validateCatalogAdminIsolation(
+      String token, Map<String, String> clientUuids, List<Drift> drift) {
+    expectForbidden(
+        "Identity catalog client administration",
+        drift,
+        () ->
+            rest.get()
+                .uri(
+                    uri ->
+                        uri.path("/admin/realms/{realm}/clients")
+                            .queryParam("clientId", IdentityPermissions.CLIENT_ID)
+                            .build(properties.realm()))
+                .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .retrieve()
+                .toBodilessEntity());
+    expectForbidden(
+        "Identity catalog user administration",
+        drift,
+        () ->
+            rest.get()
+                .uri(
+                    uri ->
+                        uri.path("/admin/realms/{realm}/users")
+                            .queryParam("first", 0)
+                            .queryParam("max", 1)
+                            .build(properties.realm()))
+                .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .retrieve()
+                .toBodilessEntity());
+    String identityUuid = clientUuids.get(IdentityPermissions.CLIENT_ID);
+    if (identityUuid == null) {
+      return;
+    }
+    expectForbidden(
+        "Identity catalog mapper administration",
+        drift,
+        () ->
+            rest.get()
+                .uri(
+                    "/admin/realms/{realm}/clients/{clientUuid}/protocol-mappers/models",
+                    properties.realm(),
+                    identityUuid)
+                .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .retrieve()
+                .toBodilessEntity());
+    expectForbidden(
+        "Identity catalog role administration",
+        drift,
+        () ->
+            rest.get()
+                .uri(
+                    "/admin/realms/{realm}/clients/{clientUuid}/roles",
+                    properties.realm(),
+                    identityUuid)
+                .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .retrieve()
+                .toBodilessEntity());
+  }
+
+  private void expectForbidden(String label, List<Drift> drift, Runnable request) {
+    try {
+      request.run();
+      drift.add(new Drift(label + " was unexpectedly allowed", false));
+    } catch (RestClientResponseException exception) {
+      if (exception.getStatusCode().value() != 403) {
+        drift.add(new Drift(label + " returned HTTP " + exception.getStatusCode().value(), false));
+      }
+    } catch (RuntimeException exception) {
+      drift.add(new Drift(label + " failed without an authorization response", false));
     }
   }
 

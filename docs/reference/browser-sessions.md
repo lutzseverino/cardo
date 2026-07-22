@@ -1,7 +1,7 @@
 # Browser Sessions And Product Tokens
 
 This reference is authoritative for the required production contract for Cardo browser cookies,
-product-token acquisition, CSRF, and post-grant authorization convergence. Cardo implements its
+product-token acquisition, CSRF, and product-owned post-grant authorization convergence. Cardo implements its
 Identity, product-auth, and authorization portions; a browser-session consumer is production-ready
 only after its product, frontend, provider, and deployment portions are also complete.
 
@@ -178,14 +178,11 @@ Account provisioning and invitation acceptance use the same sequence:
 product transition -> durable grant receipt -> provider application -> product exchange -> access
 ```
 
-Identity does not decide which product grants are required. Invite continues to own invitation
-grant-snapshot staging, while the consuming product owns its membership transition and user-facing
-convergence state.
-
-Invite retains its acceptance receipt internally and exposes the accepted invitation's state through
-its invitation-scoped grant-convergence route and separate client. Receiptless accepted legacy rows
-are `UNKNOWN`; a retained receipt that Authorization cannot resolve is an integrity failure. Pending
-and revoked invitations have no convergence resource.
+Identity does not decide which product grants are required. Invite owns
+invitation delivery and lifecycle only. The consuming product owns the
+invitation grant plan, stages it with its membership transition, retains the
+receipt, and exposes the user-facing convergence state. Invite has no grant
+snapshot or convergence API.
 
 ## Product-Auth Boundary
 

@@ -33,7 +33,7 @@ class RevocationProcessorTest {
     verify(authorization)
         .findResourceActionGrants(
             ResourceGrantQuery.forResourceName("clinic", "clinic:clinic:123", "subject-1"));
-    verify(authorization).revokeResourceActionGrant("ticket-1");
+    verify(authorization).revokeResourceActionGrant("clinic", "ticket-1");
     verifyNoMoreInteractions(authorization);
   }
 

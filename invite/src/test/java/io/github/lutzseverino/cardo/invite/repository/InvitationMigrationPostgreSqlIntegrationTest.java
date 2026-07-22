@@ -26,10 +26,11 @@ class InvitationMigrationPostgreSqlIntegrationTest {
           .withPassword("invite");
 
   private static final UUID LEGACY_ACCEPTED_ID = UUID.randomUUID();
+  private static final UUID LEGACY_RECEIPT_ID = UUID.randomUUID();
 
   @BeforeAll
   static void migrateLegacyData() throws SQLException {
-    flyway(MigrationVersion.fromVersion("3")).migrate();
+    flyway(MigrationVersion.fromVersion("5")).migrate();
     try (var connection =
             DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -39,33 +40,55 @@ class InvitationMigrationPostgreSqlIntegrationTest {
             insert into invitations (
               id, request_id, product, tenant_id, tenant_resource_type, access_profile,
               invited_email, invited_user_id, invited_authorization_subject, invited_by,
-              accept_url_base, expires_at, token, status, accepted_at)
+              accept_url_base, expires_at, token, status, accepted_at, grant_receipt_id)
             values (?, ?, 'clinic', ?, 'clinic:clinic', 'clinic:employee',
               'legacy@example.com', ?, 'subject-1', ?, 'https://app.example.com/invitations',
-              now() + interval '1 day', 'legacy-token', 'ACCEPTED', now())
+              now() + interval '1 day', 'legacy-token', 'ACCEPTED', now(), ?)
             """)) {
       statement.setObject(1, LEGACY_ACCEPTED_ID);
       statement.setObject(2, UUID.randomUUID());
       statement.setObject(3, UUID.randomUUID());
       statement.setObject(4, UUID.randomUUID());
       statement.setObject(5, UUID.randomUUID());
+      statement.setObject(6, LEGACY_RECEIPT_ID);
+      statement.executeUpdate();
+    }
+    try (var connection =
+            DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        var statement =
+            connection.prepareStatement(
+                "insert into invitation_grants (invitation_id, resource_type, action) values (?, 'clinic:clinic', 'read')")) {
+      statement.setObject(1, LEGACY_ACCEPTED_ID);
       statement.executeUpdate();
     }
     flyway(MigrationVersion.LATEST).migrate();
   }
 
   @Test
-  void v4PreservesLegacyAcceptedInvitationAsReceiptlessAndAddsRevokedCompletionStatus()
-      throws SQLException {
+  void v6PreservesLegacyAuthorizationEvidenceUnderExplicitNames() throws SQLException {
     try (var connection =
             DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         var receipt =
-            connection.prepareStatement("select grant_receipt_id from invitations where id = ?")) {
+            connection.prepareStatement(
+                "select legacy_grant_receipt_id, legacy_access_profile, legacy_invited_authorization_subject from invitations where id = ?")) {
       receipt.setObject(1, LEGACY_ACCEPTED_ID);
       try (var result = receipt.executeQuery()) {
         assertThat(result.next()).isTrue();
-        assertThat(result.getObject(1)).isNull();
+        assertThat(result.getObject(1, UUID.class)).isEqualTo(LEGACY_RECEIPT_ID);
+        assertThat(result.getString(2)).isEqualTo("clinic:employee");
+        assertThat(result.getString(3)).isEqualTo("subject-1");
+      }
+      try (var evidence =
+          connection.prepareStatement(
+              "select resource_type, action from legacy_invitation_grants where invitation_id = ?")) {
+        evidence.setObject(1, LEGACY_ACCEPTED_ID);
+        try (var result = evidence.executeQuery()) {
+          assertThat(result.next()).isTrue();
+          assertThat(result.getString(1)).isEqualTo("clinic:clinic");
+          assertThat(result.getString(2)).isEqualTo("read");
+        }
       }
       assertThat(
               connection
@@ -78,7 +101,7 @@ class InvitationMigrationPostgreSqlIntegrationTest {
                 while (versions.next()) {
                   values.add(versions.getString(1));
                 }
-                assertThat(values).containsExactly("1", "2", "3", "4", "5");
+                assertThat(values).containsExactly("1", "2", "3", "4", "5", "6");
               });
       try (var statement =
           connection.prepareStatement(
@@ -96,7 +119,7 @@ class InvitationMigrationPostgreSqlIntegrationTest {
   }
 
   @Test
-  void v4EnforcesReceiptUniquenessWithoutACrossSchemaForeignKey() throws SQLException {
+  void v6RetainsLegacyReceiptUniquenessWithoutACrossSchemaForeignKey() throws SQLException {
     UUID receiptId = UUID.randomUUID();
     UUID firstId = duplicateInvitation("first-token");
     UUID secondId = duplicateInvitation("second-token");
@@ -117,7 +140,7 @@ class InvitationMigrationPostgreSqlIntegrationTest {
                  and column_definition.attnum = any (constraint_definition.conkey)
                 where constraint_definition.conrelid = 'invitations'::regclass
                   and constraint_definition.contype = 'f'
-                  and column_definition.attname = 'grant_receipt_id'
+                  and column_definition.attname = 'legacy_grant_receipt_id'
                 """)) {
       try (var result = statement.executeQuery()) {
         assertThat(result.next()).isTrue();
@@ -143,8 +166,8 @@ class InvitationMigrationPostgreSqlIntegrationTest {
             connection.prepareStatement(
                 """
             insert into invitations (
-              id, request_id, product, tenant_id, tenant_resource_type, access_profile,
-              invited_email, invited_user_id, invited_authorization_subject, invited_by,
+              id, request_id, product, tenant_id, tenant_resource_type, legacy_access_profile,
+              invited_email, invited_user_id, legacy_invited_authorization_subject, invited_by,
               accept_url_base, expires_at, token, status, accepted_at)
             values (?, ?, 'clinic', ?, 'clinic:clinic', 'clinic:employee',
               'second@example.com', ?, 'subject-2', ?, 'https://app.example.com/invitations',
@@ -167,7 +190,7 @@ class InvitationMigrationPostgreSqlIntegrationTest {
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         var statement =
             connection.prepareStatement(
-                "update invitations set grant_receipt_id = ? where id = ?")) {
+                "update invitations set legacy_grant_receipt_id = ? where id = ?")) {
       statement.setObject(1, receiptId);
       statement.setObject(2, invitationId);
       statement.executeUpdate();

@@ -11,26 +11,19 @@ import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredent
 import io.github.lutzseverino.cardo.invite.client.CreateInvitation;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletion;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletionStatus;
-import io.github.lutzseverino.cardo.invite.client.InvitationGrant;
-import io.github.lutzseverino.cardo.invite.client.InvitationGrantConvergence;
-import io.github.lutzseverino.cardo.invite.client.InvitationGrantConvergenceClient;
-import io.github.lutzseverino.cardo.invite.client.InvitationGrantConvergenceStatus;
 import io.github.lutzseverino.cardo.invite.client.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.client.InvitationToken;
 import io.github.lutzseverino.cardo.invite.client.InvitationsClient;
 import io.github.lutzseverino.cardo.invite.client.http.generated.CreateInvitationRequest;
 import io.github.lutzseverino.cardo.invite.client.http.generated.CreateInvitationResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationCompletionResponse;
-import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationGrantConvergenceResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationTokenResponse;
-import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationGrantConvergenceApi;
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationTokensApi;
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationsApi;
 import java.net.URI;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -59,7 +52,6 @@ class HttpInvitationsClientTest {
     context.run(
         application -> {
           assertThat(application).hasSingleBean(InvitationsClient.class);
-          assertThat(application).hasSingleBean(InvitationGrantConvergenceClient.class);
           InviteClientProperties properties = application.getBean(InviteClientProperties.class);
           assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
           assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(2));
@@ -135,14 +127,7 @@ class HttpInvitationsClientTest {
     URI acceptUrl = URI.create("https://clinic.example.com/invitations/token-1");
     CreateInvitation input =
         new CreateInvitation(
-            requestId,
-            tenantId,
-            "clinic:clinic",
-            "employee@example.com",
-            "clinic:employee",
-            List.of(new InvitationGrant("clinic:clinic", "read")),
-            inviterId,
-            acceptUrlBase);
+            requestId, tenantId, "clinic:clinic", "employee@example.com", inviterId, acceptUrlBase);
     when(invitations.createInvitation(any(CreateInvitationRequest.class)))
         .thenReturn(
             new CreateInvitationResponse()
@@ -157,15 +142,7 @@ class HttpInvitationsClientTest {
         ArgumentCaptor.forClass(CreateInvitationRequest.class);
     verify(invitations).createInvitation(request.capture());
     assertThat(request.getValue().getRequestId()).isEqualTo(requestId);
-    assertThat(request.getValue().getAccessProfile()).isEqualTo("clinic:employee");
     assertThat(request.getValue().getAcceptUrlBase()).isEqualTo(acceptUrlBase);
-    assertThat(request.getValue().getGrants())
-        .singleElement()
-        .satisfies(
-            grant -> {
-              assertThat(grant.getResourceType()).isEqualTo("clinic:clinic");
-              assertThat(grant.getAction()).isEqualTo("read");
-            });
   }
 
   @Test
@@ -208,28 +185,6 @@ class HttpInvitationsClientTest {
   }
 
   @Test
-  void mapsGrantConvergenceAcrossTheSeparateClientBoundary() {
-    InvitationGrantConvergenceApi api = mock(InvitationGrantConvergenceApi.class);
-    HttpInvitationGrantConvergenceClient client = new HttpInvitationGrantConvergenceClient(api);
-    UUID invitationId = UUID.randomUUID();
-    when(api.getInvitationGrantConvergence(invitationId))
-        .thenReturn(
-            new InvitationGrantConvergenceResponse()
-                .invitationId(invitationId)
-                .status(
-                    io.github.lutzseverino.cardo.invite.client.http.generated
-                        .InvitationGrantConvergenceStatus.FAILED)
-                .failureCode("provider_application_failed"));
-
-    assertThat(client.get(invitationId))
-        .isEqualTo(
-            new InvitationGrantConvergence(
-                invitationId,
-                InvitationGrantConvergenceStatus.FAILED,
-                "provider_application_failed"));
-  }
-
-  @Test
   void mapsTheMinimalPublicTokenView() {
     InvitationTokensApi tokens = mock(InvitationTokensApi.class);
     HttpInvitationsClient client = new HttpInvitationsClient(mock(InvitationsApi.class), tokens);
@@ -260,7 +215,6 @@ class HttpInvitationsClientTest {
         .requestId(requestId)
         .tenantId(tenantId)
         .tenantResourceType("clinic:clinic")
-        .accessProfile("clinic:employee")
         .invitedEmail("employee@example.com")
         .invitedUserId(invitedUserId)
         .invitedBy(inviterId)

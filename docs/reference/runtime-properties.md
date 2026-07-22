@@ -31,6 +31,7 @@ fails startup before traffic is served, and errors name the property without ech
 | Identity | `cardo.identity.keycloak.realm` | string | `cardo` | required | no | Non-blank; forms the expected issuer. |
 | Identity | `cardo.identity.keycloak.client-id` | string | `cardo-identity` | required | no | Non-blank runtime client identity. |
 | Identity | `cardo.identity.keycloak.client-secret` | string | blank | required | yes | Non-blank, non-development credential. |
+| Identity authorization | `cardo.identity.keycloak.authorization-client-secret` | string | blank | required | yes | Non-blank, non-development credential for the fixed `identity` catalog client; must differ from `client-secret`. |
 | Identity | `cardo.identity.keycloak.credential-setup-client-id` | string | `cardo-web` | required | no | Non-blank browser client. |
 | Identity | `cardo.identity.keycloak.credential-setup-redirect-uri` | URI | `http://localhost:3000/invitations/completed` | required | no | Remote HTTPS; canonical local endpoints rejected. |
 | Identity | `cardo.identity.keycloak.user-id-claim-client-ids` | list | `cardo-identity`, `identity`, `billing` | required | no | Non-empty, distinct, non-blank entries. |
@@ -47,7 +48,7 @@ fails startup before traffic is served, and errors name the property without ech
 | Identity | `cardo.identity.provider-mutations.claim-lease` | duration | `1m` | optional | no | Positive mutation lease. |
 | Identity | `cardo.identity.provider-mutations.max-attempts` | integer | `12` | optional | no | At least 1. |
 | Identity | `cardo.identity.provider-mutations.batch-size` | integer | `50` | optional | no | At least 1. |
-| Identity authorization | `spring.modulith.events.jdbc.schema` | string | `identity_events` | required | no | Event-publication schema used by grant receipts. |
+| Identity authorization | `spring.modulith.events.jdbc.schema` | string | `identity_events` | required | no | Event-publication schema used by Identity-owned grant receipts. |
 | Identity authorization | `cardo.authorization.plans.max-attempts` | integer | `12` | optional | no | At least 1. |
 | Identity authorization | `cardo.authorization.plans.retry-delay` | duration | `1m` | optional | no | Positive incomplete-plan recovery delay. |
 
@@ -89,9 +90,6 @@ fails startup before traffic is served, and errors name the property without ech
 | Invite | `spring.mail.password` | string | blank | required | yes | Non-blank, non-development credential. |
 | Invite | `spring.mail.properties.mail.smtp.auth` | boolean | `false` | `true` | no | SMTP authentication required. |
 | Invite | `spring.mail.properties.mail.smtp.starttls.enable` | boolean | `false` | `true` | no | STARTTLS required. |
-| Invite authorization | `spring.modulith.events.jdbc.schema` | string | `invite_events` | required | no | Event-publication schema used by grant receipts. |
-| Invite authorization | `cardo.authorization.plans.max-attempts` | integer | `12` | optional | no | At least 1. |
-| Invite authorization | `cardo.authorization.plans.retry-delay` | duration | `1m` | optional | no | Positive incomplete-plan recovery delay. |
 
 ## Billing service
 

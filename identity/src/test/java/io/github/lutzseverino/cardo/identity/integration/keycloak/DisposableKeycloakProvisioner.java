@@ -40,6 +40,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
   private static final String RUNTIME_CLIENT = "cardo-identity";
   private static final String RESOURCE_SERVER_CLIENT = "identity";
   private static final String RUNTIME_SECRET = "identity-runtime-secret";
+  private static final String AUTHORIZATION_SECRET = "identity-authorization-secret";
   private static final List<String> RUNTIME_REALM_MANAGEMENT_ROLES =
       List.of("manage-users", "view-clients");
   private static final List<String> MAPPER_CLIENTS =
@@ -100,14 +101,15 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
 
   ContractSnapshot materializeContract() {
     String admin = adminToken();
-    ensureClient(admin, RUNTIME_CLIENT, RUNTIME_SECRET, true, true, true, false);
-    ensureClient(
-        admin, RESOURCE_SERVER_CLIENT, "identity-resource-secret", false, false, false, false);
+    ensureClient(admin, RUNTIME_CLIENT, RUNTIME_SECRET, true, true, false, false);
+    ensureClient(admin, RESOURCE_SERVER_CLIENT, AUTHORIZATION_SECRET, true, false, true, false);
     ensureClient(admin, "setup", "setup-secret", false, false, false, true);
     ensureClient(admin, "billing", "billing-secret", false, false, false, false);
     MAPPER_CLIENTS.forEach(clientId -> ensureMapper(admin, clientId));
     KeycloakIdentityProviderContract.IDENTITY_ROLES.forEach(role -> ensureRole(admin, role));
     grantRuntimeClientRoles(admin, "realm-management", RUNTIME_REALM_MANAGEMENT_ROLES);
+    grantClientRoles(
+        admin, RESOURCE_SERVER_CLIENT, RESOURCE_SERVER_CLIENT, List.of("uma_protection"));
     return snapshot(admin);
   }
 
@@ -117,6 +119,7 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         REALM,
         RUNTIME_CLIENT,
         RUNTIME_SECRET,
+        AUTHORIZATION_SECRET,
         "setup",
         URI.create("https://app.example/invitations/completed"),
         MAPPER_CLIENTS,
@@ -129,6 +132,17 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         REALM,
         RUNTIME_CLIENT,
         RUNTIME_SECRET,
+        restBuilder.clone(),
+        new KeycloakClientCredentialsTokenSettings(
+            Duration.ofSeconds(5), Duration.ofSeconds(5), Duration.ZERO));
+  }
+
+  KeycloakClientCredentialsTokenProvider catalogTokens(RestClient.Builder restBuilder) {
+    return new KeycloakClientCredentialsTokenProvider(
+        baseUrl(),
+        REALM,
+        RESOURCE_SERVER_CLIENT,
+        AUTHORIZATION_SECRET,
         restBuilder.clone(),
         new KeycloakClientCredentialsTokenSettings(
             Duration.ofSeconds(5), Duration.ofSeconds(5), Duration.ZERO));
@@ -179,6 +193,22 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
                 uri ->
                     uri.path("/admin/realms/{realm}/users")
                         .queryParam("username", "contract-user")
+                        .queryParam("exact", true)
+                        .build(REALM))
+            .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+            .retrieve()
+            .body(UserRepresentation[].class);
+    return Arrays.stream(users).findFirst().orElseThrow().id();
+  }
+
+  String sessionUserId() {
+    String admin = adminToken();
+    UserRepresentation[] users =
+        rest.get()
+            .uri(
+                uri ->
+                    uri.path("/admin/realms/{realm}/users")
+                        .queryParam("username", "session-user@example.test")
                         .queryParam("exact", true)
                         .build(REALM))
             .header(HttpHeaders.AUTHORIZATION, bearer(admin))
@@ -261,6 +291,10 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
 
   List<String> runtimeClientRoles(String token) {
     return resourceRoles(token, RUNTIME_CLIENT);
+  }
+
+  List<String> authorizationClientRoles(String token) {
+    return resourceRoles(token, RESOURCE_SERVER_CLIENT);
   }
 
   private void ensureClient(
@@ -393,7 +427,12 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
 
   private void grantRuntimeClientRoles(
       String admin, String targetClientId, List<String> roleNames) {
-    String runtimeUuid = clientUuid(admin, RUNTIME_CLIENT);
+    grantClientRoles(admin, RUNTIME_CLIENT, targetClientId, roleNames);
+  }
+
+  private void grantClientRoles(
+      String admin, String sourceClientId, String targetClientId, List<String> roleNames) {
+    String runtimeUuid = clientUuid(admin, sourceClientId);
     String targetClientUuid = clientUuid(admin, targetClientId);
     UserRepresentation serviceAccount =
         rest.get()
@@ -442,8 +481,8 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
         Map.copyOf(clientCounts),
         Map.copyOf(mapperCounts),
         identityRoles,
-        assignedClientRoles(admin, "realm-management"),
-        assignedClientRoles(admin, RUNTIME_CLIENT));
+        assignedClientRoles(admin, RUNTIME_CLIENT, "realm-management"),
+        assignedClientRoles(admin, RESOURCE_SERVER_CLIENT, RESOURCE_SERVER_CLIENT));
   }
 
   private List<RoleRepresentation> clientRoles(String admin, String clientId) {
@@ -461,8 +500,9 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
     return roles == null ? List.of() : Arrays.asList(roles);
   }
 
-  private List<String> assignedClientRoles(String admin, String targetClientId) {
-    String runtimeUuid = clientUuid(admin, RUNTIME_CLIENT);
+  private List<String> assignedClientRoles(
+      String admin, String sourceClientId, String targetClientId) {
+    String runtimeUuid = clientUuid(admin, sourceClientId);
     UserRepresentation serviceAccount =
         rest.get()
             .uri(
@@ -688,5 +728,5 @@ final class DisposableKeycloakProvisioner implements AutoCloseable {
       Map<String, Integer> mapperCounts,
       List<String> identityRoles,
       List<String> realmManagementGrants,
-      List<String> runtimeClientGrants) {}
+      List<String> authorizationClientGrants) {}
 }

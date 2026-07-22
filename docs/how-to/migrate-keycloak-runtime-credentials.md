@@ -1,8 +1,9 @@
 # Migrate Keycloak Runtime Credentials
 
 Use this guide to move an existing Identity deployment from startup-owned
-Keycloak mapper and role creation to deployment-owned provisioning and a
-least-privilege runtime credential.
+Keycloak mapper and role creation and a shared provider credential to
+deployment-owned provisioning with separate runtime-admin and Identity-catalog
+credentials.
 
 ## Steps
 
@@ -22,24 +23,30 @@ least-privilege runtime credential.
 4. Apply the same canonical definitions through deployment provisioning, then
    set `IDENTITY_KEYCLOAK_LEGACY_STARTUP_MUTATION_ENABLED=false` or remove the
    variable. Restart and require read-only validation to succeed.
-5. Provision a distinct confidential `cardo-identity` runtime client and
-   service account. Enable Authorization Services so Keycloak automatically
-   assigns `cardo-identity:uma_protection`. Directly assign only
+5. Provision a confidential `cardo-identity` runtime client and service account
+   with Authorization Services disabled. Directly assign only
    `realm-management:manage-users` and `realm-management:view-clients`; the
    latter appears in tokens with its Keycloak-derived `query-clients`
-   composite. Keep the `identity` resource-server/static-role client distinct,
-   and put the mapper on `cardo-identity`, `identity`, and `billing` (plus any
-   other configured targets).
-6. Before removing the old authority, stop every Identity replica that still
+   composite.
+6. Materialize `identity` as a separate confidential resource-server client
+   with its own service account and Authorization Services enabled. Give that
+   service account only Keycloak's automatic `identity:uma_protection` client
+   role. Do not grant realm-management or Identity application roles to it.
+   Keep the mapper on `cardo-identity`, `identity`, and `billing` (plus any other
+   configured targets).
+7. Store distinct secrets in `KEYCLOAK_CLIENT_SECRET` and
+   `KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET`. Missing, equal, known
+   development, or placeholder values fail production startup.
+8. Before removing the old authority, stop every Identity replica that still
    uses the privileged credential. A rolling secret change is insufficient:
    an already-issued access token remains usable until revoked or expired, and
    each Identity process caches its provider token.
-7. Remove the old service-account grants and rotate/revoke the old secret.
+9. Remove the old service-account grants and rotate/revoke the old secret.
    Revoke the old client's sessions or issued tokens when the provider and
    deployment support that operation. If revocation is not supported, wait at
    least the maximum access-token lifetime that was configured when the old
    tokens were issued. Secret rotation alone does not invalidate those tokens.
-8. Start every Identity replica with the constrained client and the legacy
+10. Start every Identity replica with both constrained clients and the legacy
    flag absent or `false`. This restart clears Cardo's process-local provider
    token cache. Require read-only validation and the runtime checks below to
    succeed before restoring traffic.
@@ -54,14 +61,17 @@ all maintained deployments have migrated.
 - Identity starts with the flag absent or `false`.
 - Startup logs contain no legacy mutation warning.
 - Exact client, mapper, role, user-directory, and UMA reads succeed.
-- The service-account token contains effective realm-management roles
-  `manage-users`, `view-clients`, and the composite child `query-clients`, plus
-  `cardo-identity:uma_protection`; direct grant inspection contains only
-  `manage-users`, `view-clients`, and the automatic PAT role.
+- The `cardo-identity` token has `azp=cardo-identity` and effective
+  realm-management roles `manage-users`, `view-clients`, and the composite child
+  `query-clients`; it has no `uma_protection` role.
+- The catalog PAT has `azp=identity`, exactly `identity:uma_protection`, and no
+  realm-management roles. It can read the Identity UMA catalog, while client,
+  user, mapper, and role Admin API reads made with it receive `403`.
 - A mapper-definition or client-role-definition write made with the runtime
   credential receives `403`.
-- User provisioning, enabled-state changes, existing role assignment/removal,
-  and UMA resource/grant operations still work.
+- User provisioning, enabled-state changes, and existing role
+  assignment/removal work with the runtime-admin credential. Identity-owned UMA
+  resource/grant operations work with the catalog PAT.
 - Removing or corrupting a definition in a disposable environment produces one
   redacted startup failure that identifies all discovered drift.
 

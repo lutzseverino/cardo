@@ -20,7 +20,7 @@ behavior or provide a generic plugin framework.
 | --- | --- |
 | Identity | Application users, profiles, provider integration, sessions, and stable user clients |
 | Authorization | Resource vocabulary, permission evaluation, durable grant staging, and provider adapters |
-| Invite | Resource-scoped invitation delivery, expiry, provisional identity completion, lifecycle state, and grant-snapshot staging |
+| Invite | Resource-scoped invitation delivery, expiry, provisional identity completion, acceptance, and revocation lifecycle |
 | Billing | Customers, Stripe checkout and portal integration, entitlements, and stable billing clients |
 | Common API | API error contracts and outbound client error translation |
 | Common | Audit and personal-data markers, value objects, validation, server error handling, and compatibility aggregation |

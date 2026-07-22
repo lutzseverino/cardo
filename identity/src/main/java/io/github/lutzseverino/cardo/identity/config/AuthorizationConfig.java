@@ -8,6 +8,7 @@ import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredent
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakRealmAdminClient;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakRequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
+import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import io.github.lutzseverino.cardo.identity.model.User;
 import io.github.lutzseverino.cardo.identity.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -24,8 +25,8 @@ import org.springframework.web.client.RestClient;
 @EnableJpaRepositories(basePackageClasses = UserRepository.class)
 public class AuthorizationConfig {
 
-  @Bean
-  KeycloakClientCredentialsTokenProvider keycloakClientCredentialsTokenProvider(
+  @Bean("identityProviderRuntimeTokenProvider")
+  KeycloakClientCredentialsTokenProvider identityProviderRuntimeTokenProvider(
       KeycloakProperties keycloak,
       IdentityRuntimeProperties runtime,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
@@ -39,11 +40,26 @@ public class AuthorizationConfig {
             runtime.connectTimeout(), runtime.readTimeout(), java.time.Duration.ofSeconds(30)));
   }
 
+  @Bean("identityAuthorizationCatalogTokenProvider")
+  KeycloakClientCredentialsTokenProvider identityAuthorizationCatalogTokenProvider(
+      KeycloakProperties keycloak,
+      IdentityRuntimeProperties runtime,
+      @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
+    return new KeycloakClientCredentialsTokenProvider(
+        keycloak.baseUrl(),
+        keycloak.realm(),
+        IdentityPermissions.CLIENT_ID,
+        keycloak.authorizationClientSecret(),
+        rest.clone(),
+        new KeycloakClientCredentialsTokenSettings(
+            runtime.connectTimeout(), runtime.readTimeout(), java.time.Duration.ofSeconds(30)));
+  }
+
   @Bean
   KeycloakRealmAdminClient keycloakRealmAdminClient(
       KeycloakProperties keycloak,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest,
-      KeycloakClientCredentialsTokenProvider clientCredentialsTokens) {
+      @Qualifier("identityProviderRuntimeTokenProvider") KeycloakClientCredentialsTokenProvider clientCredentialsTokens) {
     return new KeycloakRealmAdminClient(
         keycloak.baseUrl(),
         keycloak.realm(),
@@ -55,12 +71,15 @@ public class AuthorizationConfig {
   AuthorizationAdminClient keycloakAuthorizationClient(
       KeycloakProperties keycloak,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest,
-      KeycloakClientCredentialsTokenProvider clientCredentialsTokens) {
+      @Qualifier("identityAuthorizationCatalogTokenProvider") KeycloakClientCredentialsTokenProvider catalogTokens,
+      @Qualifier("identityProviderRuntimeTokenProvider") KeycloakClientCredentialsTokenProvider runtimeTokens) {
     return new KeycloakAuthorizationClient(
         keycloak.baseUrl(),
         keycloak.realm(),
+        IdentityPermissions.CLIENT_ID,
         rest.clone(),
-        clientCredentialsTokens::clientCredentialsToken);
+        catalogTokens::clientCredentialsToken,
+        runtimeTokens::clientCredentialsToken);
   }
 
   @Bean

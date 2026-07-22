@@ -29,7 +29,6 @@ class InviteApplicationBoundaryTest {
   private static final Class<?>[] APPLICATION_BOUNDARIES = {
     InvitationService.class,
     InvitationCompletionService.class,
-    InvitationGrantConvergenceService.class,
     AcceptInvitationWorkflow.class,
     CreateInvitationWorkflow.class,
     ReconcileInvitationCompletionsWorkflow.class,
@@ -97,18 +96,14 @@ class InviteApplicationBoundaryTest {
                     "create",
                     String.class,
                     io.github.lutzseverino.cardo.invite.model.CreateInvitationInput.class,
-                    java.util.UUID.class,
-                    String.class)
+                    java.util.UUID.class)
                 .getAnnotation(Transactional.class)
                 .propagation())
         .isEqualTo(Propagation.MANDATORY);
     assertThat(
             InvitationService.class
                 .getMethod(
-                    "accept",
-                    java.util.UUID.class,
-                    java.time.OffsetDateTime.class,
-                    java.util.UUID.class)
+                    "accept", java.util.UUID.class, String.class, java.time.OffsetDateTime.class)
                 .getAnnotation(Transactional.class)
                 .propagation())
         .isEqualTo(Propagation.MANDATORY);

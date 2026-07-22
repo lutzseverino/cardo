@@ -45,6 +45,13 @@ and JWT mechanics use `authorization-security`. These are embedded responsibilit
 leaves, not an Authorization HTTP facade; their existing Java packages and
 constructors are unchanged.
 
+Each `KeycloakAuthorizationClient` instance is bound at construction to exactly
+one resource-server client ID. Protection API calls use that catalog's PAT,
+while client lookup and role assignment use a separate realm-admin credential.
+Every operation carries the expected catalog owner; a mismatch is rejected
+before either credential is acquired or any provider request is sent. Revocation
+plans therefore retain their resource-server owner through provider application.
+
 `AccessProfileService` exposes access-profile queries through `AccessProfileResult`; persistence
 projections remain internal to the embedded application boundary.
 Grant and revocation plans are durable after commit. Stale incomplete publications,
