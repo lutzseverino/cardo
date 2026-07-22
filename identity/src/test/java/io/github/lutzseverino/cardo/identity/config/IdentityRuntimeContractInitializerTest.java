@@ -60,6 +60,7 @@ class IdentityRuntimeContractInitializerTest {
         "cardo",
         "runtime",
         "runtime-secret",
+        "authorization-secret",
         "setup",
         URI.create("https://app.example/invitations/completed"),
         List.of("runtime", "identity", "billing"),

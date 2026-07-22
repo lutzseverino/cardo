@@ -11,14 +11,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.invite.config.OpenApiConfiguration;
 import io.github.lutzseverino.cardo.invite.controller.InvitationController;
-import io.github.lutzseverino.cardo.invite.controller.InvitationGrantConvergenceController;
 import io.github.lutzseverino.cardo.invite.controller.InviteStatusController;
-import io.github.lutzseverino.cardo.invite.mapper.InvitationGrantConvergenceTransportMapper;
 import io.github.lutzseverino.cardo.invite.mapper.InvitationTransportMapper;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
 import io.github.lutzseverino.cardo.invite.reader.ProductCallerReader;
 import io.github.lutzseverino.cardo.invite.service.InvitationCompletionService;
-import io.github.lutzseverino.cardo.invite.service.InvitationGrantConvergenceService;
 import io.github.lutzseverino.cardo.invite.service.InvitationService;
 import io.github.lutzseverino.cardo.invite.workflow.AcceptInvitationWorkflow;
 import io.github.lutzseverino.cardo.invite.workflow.CreateInvitationWorkflow;
@@ -36,12 +33,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(
-    controllers = {
-      InvitationController.class,
-      InvitationGrantConvergenceController.class,
-      InviteStatusController.class
-    })
+@WebMvcTest(controllers = {InvitationController.class, InviteStatusController.class})
 @AutoConfigureMockMvc(addFilters = false)
 @Import(OpenApiConfiguration.class)
 @ImportAutoConfiguration({
@@ -63,8 +55,6 @@ class OpenApiParityTest {
   @MockitoBean private AcceptInvitationWorkflow acceptance;
   @MockitoBean private CreateInvitationWorkflow creation;
   @MockitoBean private InvitationCompletionService completions;
-  @MockitoBean private InvitationGrantConvergenceService convergence;
-  @MockitoBean private InvitationGrantConvergenceTransportMapper convergenceMapper;
   @MockitoBean private InvitationService invitations;
   @MockitoBean private InvitationTransportMapper mapper;
   @MockitoBean private ProductCallerReader callers;
@@ -96,8 +86,7 @@ class OpenApiParityTest {
                     {"requestId":"11111111-1111-1111-1111-111111111111",
                      "tenantId":"22222222-2222-2222-2222-222222222222",
                      "tenantResourceType":"clinic:clinic",
-                     "email":"user@example.com","accessProfile":"clinic:employee",
-                     "grants":[{"resourceType":"clinic:clinic","action":"clinic:read"}],
+                     "email":"user@example.com",
                      "invitedBy":"33333333-3333-3333-3333-333333333333",
                      "acceptUrlBase":"https://clinic.example/invitations"}
                     """))

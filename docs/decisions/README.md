@@ -33,3 +33,4 @@ Use the [decision template](../_templates/decision.template.md) for new decision
 - [Keep Authorization Embedded Until It Owns HTTP](0001-keep-authorization-embedded-until-it-owns-http.md)
 - [Use Durable Identity Credential-Setup Sagas](0002-use-durable-identity-credential-setup-sagas.md)
 - [Exchange Browser Sessions At Product Boundaries](0003-exchange-browser-sessions-at-product-boundaries.md)
+- [Bind UMA Adapters To Catalog Owners](0004-bind-uma-adapters-to-catalog-owners.md)

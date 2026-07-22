@@ -38,7 +38,11 @@ of the contract.
 
 Identity startup validates its exact deployment-owned Keycloak clients,
 canonical `cardo_user_id` mappers, three fixed Identity roles, user-directory
-read, and UMA protection read. Startup is read-only by default and aggregates
+read, and Identity-catalog UMA protection read. Identity uses two confidential
+clients with distinct credentials: `cardo-identity` for user and realm-admin
+runtime work, and `identity` for the Identity authorization catalog. The
+catalog PAT must contain only `identity:uma_protection` and cannot read clients,
+users, mappers, or roles through the Admin API. Startup is read-only by default and aggregates
 independent drift without disclosing provider responses or credentials. The
 temporary `cardo.identity.keycloak.legacy-startup-mutation-enabled` flag can
 repair only those mapper and role definitions before validation; it never
@@ -181,7 +185,9 @@ routes. See the [product integration reference](../docs/reference/product-integr
 ## Documentation
 
 Set `IDENTITY_RUNTIME_MODE=production` together with production session mode, remote HTTPS
-Keycloak/issuer settings, non-development secrets, and an Identity-owned PostgreSQL database with
+Keycloak/issuer settings, distinct non-development
+`KEYCLOAK_IDENTITY_CLIENT_SECRET` and
+`KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET` values, and an Identity-owned PostgreSQL database with
 distinct no-login owner and login application roles. Startup verifies the effective database and
 roles after Flyway completes. Direct Keycloak, authorization, token, session, issuer, and JWK calls default to two-second
 connection and response bounds. See the indexed

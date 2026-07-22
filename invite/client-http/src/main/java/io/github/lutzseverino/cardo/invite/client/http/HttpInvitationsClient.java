@@ -12,7 +12,6 @@ import io.github.lutzseverino.cardo.invite.client.http.generated.AcceptInvitatio
 import io.github.lutzseverino.cardo.invite.client.http.generated.CreateInvitationRequest;
 import io.github.lutzseverino.cardo.invite.client.http.generated.CreateInvitationResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationCompletionResponse;
-import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationGrantRequest;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationTokenResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationTokensApi;
@@ -38,15 +37,6 @@ final class HttpInvitationsClient implements InvitationsClient {
             .tenantId(input.tenantId())
             .tenantResourceType(input.tenantResourceType())
             .email(input.email())
-            .accessProfile(input.accessProfile())
-            .grants(
-                input.grants().stream()
-                    .map(
-                        grant ->
-                            new InvitationGrantRequest()
-                                .resourceType(grant.resourceType())
-                                .action(grant.action()))
-                    .toList())
             .invitedBy(input.invitedBy())
             .acceptUrlBase(input.acceptUrlBase());
     CreateInvitationResponse response = invitations.createInvitation(request);
@@ -97,7 +87,6 @@ final class HttpInvitationsClient implements InvitationsClient {
         response.getRequestId(),
         response.getTenantId(),
         response.getTenantResourceType(),
-        response.getAccessProfile(),
         response.getInvitedEmail(),
         response.getInvitedUserId(),
         response.getInvitedBy(),

@@ -1,8 +1,10 @@
 package io.github.lutzseverino.cardo.invite.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,7 +13,6 @@ import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
 import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapper;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
 import io.github.lutzseverino.cardo.invite.model.Invitation;
-import io.github.lutzseverino.cardo.invite.model.InvitationGrantInput;
 import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationProjection;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
@@ -21,12 +22,47 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class InvitationServiceTest {
+
+  @Test
+  void acceptsThroughTheLockedInvitationAndReportsTheSingleStateTransition() {
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    Invitation invitation = mock(Invitation.class);
+    UUID invitationId = UUID.randomUUID();
+    OffsetDateTime acceptedAt = OffsetDateTime.now().minusMinutes(1);
+    when(invitations.findEntityByIdForUpdate(invitationId)).thenReturn(Optional.of(invitation));
+    when(invitation.getProduct()).thenReturn("clinic");
+    when(invitation.getStatus())
+        .thenReturn(io.github.lutzseverino.cardo.invite.model.InvitationStatus.PENDING);
+    when(invitation.getCreatedAt()).thenReturn(acceptedAt.minusDays(1));
+    when(invitation.getExpiresAt()).thenReturn(acceptedAt.plusDays(1));
+    when(invitation.accept(acceptedAt)).thenReturn(true);
+
+    assertThat(service(invitations).accept(invitationId, "clinic", acceptedAt)).isTrue();
+
+    verify(invitations).findEntityByIdForUpdate(invitationId);
+    verify(invitation).accept(acceptedAt);
+  }
+
+  @Test
+  void repeatedAcceptanceIsIdempotentWhileHoldingTheSameRowLock() {
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    Invitation invitation = mock(Invitation.class);
+    UUID invitationId = UUID.randomUUID();
+    when(invitations.findEntityByIdForUpdate(invitationId)).thenReturn(Optional.of(invitation));
+    when(invitation.getProduct()).thenReturn("clinic");
+    when(invitation.getStatus())
+        .thenReturn(io.github.lutzseverino.cardo.invite.model.InvitationStatus.ACCEPTED);
+
+    assertThat(service(invitations).accept(invitationId, "clinic", OffsetDateTime.now())).isFalse();
+
+    verify(invitations).findEntityByIdForUpdate(invitationId);
+    verify(invitation, never()).accept(any());
+  }
 
   @Test
   void rejectsAnAcceptanceTimestampBeforeTheInvitationCreationWindow() {
@@ -41,8 +77,7 @@ class InvitationServiceTest {
     when(invitation.getCreatedAt()).thenReturn(createdAt);
     InvitationService service = service(invitations);
 
-    assertThatThrownBy(
-            () -> service.prepareAcceptance(invitationId, "clinic", createdAt.minusMinutes(6)))
+    assertThatThrownBy(() -> service.accept(invitationId, "clinic", createdAt.minusMinutes(6)))
         .isInstanceOf(ApiException.class)
         .extracting(exception -> ((ApiException) exception).code())
         .isEqualTo("invitation_acceptance_time_invalid");
@@ -61,9 +96,7 @@ class InvitationServiceTest {
     InvitationService service = service(invitations);
 
     assertThatThrownBy(
-            () ->
-                service.prepareAcceptance(
-                    invitationId, "clinic", OffsetDateTime.now().plusMinutes(6)))
+            () -> service.accept(invitationId, "clinic", OffsetDateTime.now().plusMinutes(6)))
         .isInstanceOf(ApiException.class)
         .extracting(exception -> ((ApiException) exception).code())
         .isEqualTo("invitation_acceptance_time_invalid");
@@ -130,7 +163,7 @@ class InvitationServiceTest {
             invitations);
     CreateInvitationInput input = input();
 
-    service.create("clinic", input, UUID.randomUUID(), "subject-1");
+    service.create("clinic", input, UUID.randomUUID());
 
     verify(delivery).stage(invitationId);
   }
@@ -160,8 +193,6 @@ class InvitationServiceTest {
         UUID.randomUUID(),
         "clinic:clinic",
         "user@example.com",
-        "clinic:employee",
-        List.of(new InvitationGrantInput("clinic:clinic", "read")),
         UUID.randomUUID(),
         URI.create("https://app.example.com/invitations"));
   }

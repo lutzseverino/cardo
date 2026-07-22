@@ -3,7 +3,6 @@ package io.github.lutzseverino.cardo.invite.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.lutzseverino.cardo.authorization.schema.AuthorizationSchemaConfiguration;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import org.junit.jupiter.api.BeforeAll;
@@ -121,6 +120,6 @@ class InviteProductionDatastorePostgreSqlIntegrationTest {
 
   @Configuration(proxyBeanMethods = false)
   @EnableConfigurationProperties({InviteRuntimeProperties.class, InviteDatastoreProperties.class})
-  @Import({InviteDatastoreConfiguration.class, AuthorizationSchemaConfiguration.class})
+  @Import(InviteDatastoreConfiguration.class)
   static class TestConfiguration {}
 }

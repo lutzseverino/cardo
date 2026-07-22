@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >
     Invite owns cross-product invitation tokens, expiry, delivery, provisional
-    identity completion, lifecycle state, and generic access-grant staging.
+    identity completion, and lifecycle state.
     Product services own the domain decision to create or accept an invitation.
   license:
     name: MIT
@@ -18,8 +18,6 @@ tags:
     description: Product-service invitation operations.
   - name: Invitation Tokens
     description: Token-based invitation operations used by product acceptance flows.
-  - name: Invitation Grant Convergence
-    description: Invite-owned authorization convergence for accepted invitations.
 paths:
   /invite:
     get:
@@ -120,32 +118,6 @@ paths:
           $ref: "#/components/responses/Conflict"
         "410":
           $ref: "#/components/responses/Gone"
-  /invitations/{invitationId}/grant-convergence:
-    parameters:
-      - $ref: "#/components/parameters/InvitationId"
-    get:
-      tags: [Invitation Grant Convergence]
-      operationId: getInvitationGrantConvergence
-      summary: Get authorization convergence for an accepted invitation.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Invitation grant convergence found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InvitationGrantConvergenceResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
   /invitations/{invitationId}/revocation:
     parameters:
       - $ref: "#/components/parameters/InvitationId"
@@ -285,19 +257,6 @@ components:
     InvitationStatus:
       type: string
       enum: [pending, accepted, revoked]
-    InvitationGrantRequest:
-      type: object
-      required: [resourceType, action]
-      properties:
-        resourceType:
-          type: string
-          minLength: 1
-          pattern: "^[^:]+:[^:]+$"
-          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
-        action:
-          type: string
-          minLength: 1
-          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
     CreateInvitationRequest:
       type: object
       required:
@@ -305,8 +264,6 @@ components:
         - tenantId
         - tenantResourceType
         - email
-        - accessProfile
-        - grants
         - invitedBy
         - acceptUrlBase
       properties:
@@ -327,17 +284,6 @@ components:
           type: string
           format: email
           x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
-        accessProfile:
-          type: string
-          minLength: 1
-          pattern: "^[^:]+:.+$"
-          description: Product-owned stable profile reference retained for audit.
-          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
-        grants:
-          type: array
-          minItems: 1
-          items:
-            $ref: "#/components/schemas/InvitationGrantRequest"
         invitedBy:
           type: string
           format: uuid
@@ -349,21 +295,6 @@ components:
     InvitationCompletionStatus:
       type: string
       enum: [requested, awaiting_identity, completed, failed, revoked]
-    InvitationGrantConvergenceStatus:
-      type: string
-      enum: [pending, applied, failed, unknown]
-    InvitationGrantConvergenceResponse:
-      type: object
-      required: [invitationId, status]
-      properties:
-        invitationId:
-          type: string
-          format: uuid
-        status:
-          $ref: "#/components/schemas/InvitationGrantConvergenceStatus"
-        failureCode:
-          type: string
-          nullable: true
     InvitationCompletionResponse:
       type: object
       required:
@@ -424,7 +355,6 @@ components:
         - requestId
         - tenantId
         - tenantResourceType
-        - accessProfile
         - invitedEmail
         - invitedUserId
         - invitedBy
@@ -443,8 +373,6 @@ components:
           type: string
           format: uuid
         tenantResourceType:
-          type: string
-        accessProfile:
           type: string
         invitedEmail:
           type: string

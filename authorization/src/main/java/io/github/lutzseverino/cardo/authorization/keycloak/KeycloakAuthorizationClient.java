@@ -24,20 +24,30 @@ import org.springframework.web.client.RestClientResponseException;
 public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
 
   private final String realm;
+  private final String resourceServerClientId;
   private final KeycloakRealmAdminClient admin;
   private final RestClient rest;
   private final Supplier<String> protectionApiToken;
+  private final Supplier<String> realmAdminToken;
 
   public KeycloakAuthorizationClient(
-      String baseUrl, String realm, RestClient.Builder rest, Supplier<String> protectionApiToken) {
+      String baseUrl,
+      String realm,
+      String resourceServerClientId,
+      RestClient.Builder rest,
+      Supplier<String> protectionApiToken,
+      Supplier<String> realmAdminToken) {
     this.realm = realm;
-    this.admin = new KeycloakRealmAdminClient(baseUrl, realm, rest, protectionApiToken);
+    this.resourceServerClientId = requireText(resourceServerClientId, "resourceServerClientId");
+    this.admin = new KeycloakRealmAdminClient(baseUrl, realm, rest, realmAdminToken);
     this.rest = rest.baseUrl(baseUrl).build();
     this.protectionApiToken = protectionApiToken;
+    this.realmAdminToken = realmAdminToken;
   }
 
   @Override
   public CreatedAuthorizationResource ensureResource(AuthorizationResource authorizationResource) {
+    requireBound(authorizationResource.resourceServerClientId());
     Optional<ResourceSetResponse> existing = findResourceByName(authorizationResource.name());
     if (existing.isEmpty()) {
       try {
@@ -52,7 +62,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
         }
       }
     }
-    ResourceSetResponse resource = resource(existing.orElseThrow().id());
+    ResourceSetResponse resource = existing.orElseThrow();
     LinkedHashSet<String> actions =
         resource.resourceScopes().stream()
             .map(ResourceScopeResponse::name)
@@ -84,7 +94,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
   }
 
   private Optional<ResourceSetResponse> findResourceByName(String resourceName) {
-    ResourceSetResponse[] resources =
+    String[] resourceIds =
         rest.get()
             .uri(
                 uri ->
@@ -94,11 +104,12 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
                         .build(realm))
             .header(HttpHeaders.AUTHORIZATION, authorization())
             .retrieve()
-            .body(ResourceSetResponse[].class);
-    if (resources == null) {
+            .body(String[].class);
+    if (resourceIds == null) {
       return Optional.empty();
     }
-    return Arrays.stream(resources)
+    return Arrays.stream(resourceIds)
+        .map(this::resource)
         .filter(resource -> resourceName.equals(resource.name()))
         .findFirst();
   }
@@ -131,6 +142,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
 
   @Override
   public void grantResourceActions(ResourceActionAssignment assignment) {
+    requireBound(assignment.resourceServerClientId());
     assignment
         .actions()
         .forEach(
@@ -147,6 +159,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
 
   @Override
   public List<GrantedResourceAction> findResourceActionGrants(ResourceGrantQuery query) {
+    requireBound(query.resourceServerClientId());
     String resourceId = query.resourceId();
     if (resourceId == null && query.resourceName() != null) {
       Optional<ResourceSetResponse> resource = findResourceByName(query.resourceName());
@@ -184,7 +197,8 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
   }
 
   @Override
-  public void revokeResourceActionGrant(String ticketId) {
+  public void revokeResourceActionGrant(String resourceServerClientId, String ticketId) {
+    requireBound(resourceServerClientId);
     rest.delete()
         .uri("/realms/{realm}/authz/protection/permission/ticket/{ticketId}", realm, ticketId)
         .header(HttpHeaders.AUTHORIZATION, authorization())
@@ -194,6 +208,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
 
   @Override
   public void ensureClientRolesAssigned(ClientRoleAssignment assignment) {
+    requireBound(assignment.resourceServerClientId());
     String clientUuid = clientUuid(assignment.resourceServerClientId());
     List<RoleRepresentation> roles =
         assignment.authorities().stream().map(roleName -> role(clientUuid, roleName)).toList();
@@ -203,7 +218,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
             realm,
             assignment.requesterSubject(),
             clientUuid)
-        .header(HttpHeaders.AUTHORIZATION, authorization())
+        .header(HttpHeaders.AUTHORIZATION, realmAdminAuthorization())
         .body(roles)
         .retrieve()
         .toBodilessEntity();
@@ -211,6 +226,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
 
   @Override
   public void removeClientRoles(ClientRoleRevocation revocation) {
+    requireBound(revocation.resourceServerClientId());
     String clientUuid = clientUuid(revocation.resourceServerClientId());
     List<RoleRepresentation> roles =
         clientRoleMappings(clientUuid, revocation.requesterSubject()).stream()
@@ -225,7 +241,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
             realm,
             revocation.requesterSubject(),
             clientUuid)
-        .header(HttpHeaders.AUTHORIZATION, authorization())
+        .header(HttpHeaders.AUTHORIZATION, realmAdminAuthorization())
         .body(roles)
         .retrieve()
         .toBodilessEntity();
@@ -239,7 +255,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
                 realm,
                 subject,
                 clientUuid)
-            .header(HttpHeaders.AUTHORIZATION, authorization())
+            .header(HttpHeaders.AUTHORIZATION, realmAdminAuthorization())
             .retrieve()
             .body(RoleRepresentation[].class);
     return roles == null ? List.of() : List.of(roles);
@@ -253,7 +269,7 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
               realm,
               clientUuid,
               roleName)
-          .header(HttpHeaders.AUTHORIZATION, authorization())
+          .header(HttpHeaders.AUTHORIZATION, realmAdminAuthorization())
           .retrieve()
           .body(RoleRepresentation.class);
     } catch (RestClientResponseException exception) {
@@ -285,6 +301,28 @@ public class KeycloakAuthorizationClient implements AuthorizationAdminClient {
 
   private String authorization() {
     return bearer(protectionApiToken.get());
+  }
+
+  private String realmAdminAuthorization() {
+    return bearer(realmAdminToken.get());
+  }
+
+  private void requireBound(String requestedResourceServerClientId) {
+    if (!resourceServerClientId.equals(requestedResourceServerClientId)) {
+      throw new KeycloakAuthorizationException(
+          "Authorization client is bound to resource server "
+              + resourceServerClientId
+              + " and cannot access "
+              + requestedResourceServerClientId
+              + ".");
+    }
+  }
+
+  private static String requireText(String value, String name) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalArgumentException(name + " must not be blank");
+    }
+    return value;
   }
 
   private String bearer(String token) {

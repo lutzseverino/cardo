@@ -30,14 +30,12 @@ public class CreateInvitationWorkflow {
       return existing.orElseThrow();
     }
     ProvisionalUser invited = identityUsers.createProvisional(input.email());
-    return invitations.create(product, input, invited.id(), invited.authorizationSubject());
+    return invitations.create(product, input, invited.id());
   }
 
   private void requireProductOwnership(String product, CreateInvitationInput input) {
     String prefix = product + ":";
-    if (!input.tenantResourceType().startsWith(prefix)
-        || !input.accessProfile().startsWith(prefix)
-        || input.grants().stream().anyMatch(grant -> !grant.resourceType().startsWith(prefix))) {
+    if (!input.tenantResourceType().startsWith(prefix)) {
       throw ApiException.forbidden(
           "invitation_product_mismatch",
           "Invitation resources and access profiles must belong to the calling product.");

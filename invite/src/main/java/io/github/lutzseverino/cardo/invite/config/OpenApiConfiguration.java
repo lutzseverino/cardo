@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
             title = "Invite API",
             version = "0.1.0",
             description =
-                "Invite owns cross-product invitation tokens, expiry, delivery, provisional identity completion, lifecycle state, and generic access-grant staging. Product services own the domain decision to create or accept an invitation.",
+                "Invite owns cross-product invitation tokens, expiry, delivery, provisional identity completion, and lifecycle state. Product services own the domain decision to create or accept an invitation.",
             license = @License(name = "MIT", url = "https://opensource.org/license/mit")),
     servers = @Server(url = "/api/v1"))
 @SecurityScheme(

@@ -10,7 +10,7 @@ the same wiring and the packaged shape can stay product-neutral.
 | --- | --- | --- | --- | --- |
 | Identity | users, authentication, sessions, authenticated principal | `identity-client` | `identity-client-http` | `identity-product-auth` for accepting logged-in Cardo users |
 | Authorization | resource naming, permission evaluation, access profiles, grant staging, provider adapters | embedded Java APIs | none while authorization has no HTTP owner | embedded mechanics and docs |
-| Invite | invitation tokens, expiry, delivery, provisional identity completion, lifecycle state, grant-snapshot staging and convergence | `invite-client` | `invite-client-http` | none until multiple products repeat durable invite orchestration |
+| Invite | invitation tokens, expiry, delivery, provisional identity completion, and lifecycle state | `invite-client` | `invite-client-http` | none until multiple products repeat durable invite orchestration |
 | Billing | customers, entitlements, checkout, portal, provider webhooks | `billing-client` | `billing-client-http` | none until products repeat billing guard or flow wiring |
 | Common API | API errors, outbound client error translation, and partial-update value/validation contracts | `common-api` | none | none |
 | Common | data markers, remaining value/validation mechanics, server error handling, compatibility aggregation | `common` | none | none |
@@ -210,12 +210,11 @@ and revoke are idempotent in their matching terminal state. Carry the product's
 committed acceptance timestamp in the durable accept command; Invite evaluates
 expiry against that business timestamp rather than the eventual retry time.
 
-After acceptance, poll the separate `InvitationGrantConvergenceClient` with the
-Invite invitation identifier. Invite exposes only `PENDING`, `APPLIED`,
-`FAILED` with its stable failure code, or `UNKNOWN` for accepted invitations
-created before receipt retention. The authorization receipt identifier remains
-internal to Invite. Pending or revoked invitations return a semantic conflict;
-products must not represent access as converged until the state is `APPLIED`.
+The product stages its invitation grant plan in the same transaction as its
+domain acceptance, retains the returned receipt, and exposes convergence from
+its own API. Invite's accept call transitions only Invite lifecycle state. There
+is no Invite grant-convergence client or route, and products must not represent
+access as converged until their own receipt is `APPLIED`.
 
 Invitation credential setup is asynchronous and does not carry a password.
 Call the completion request and poll the same invitation-scoped completion

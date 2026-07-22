@@ -10,10 +10,13 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.PlainJWT;
 import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredentialsTokenProvider;
 import io.github.lutzseverino.cardo.identity.config.KeycloakProperties;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -92,6 +95,7 @@ class KeycloakIdentityRuntimeContractTest {
         .expect(requestTo(Matchers.endsWith("/realms/cardo/authz/protection/resource_set")))
         .andExpect(method(GET))
         .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+    expectCatalogIsolation(server);
 
     assertThatThrownBy(validator::validate)
         .isInstanceOf(IllegalStateException.class)
@@ -141,10 +145,16 @@ class KeycloakIdentityRuntimeContractTest {
   private KeycloakIdentityRuntimeContract validator(RestClient.Builder rest) {
     KeycloakClientCredentialsTokenProvider tokens =
         mock(KeycloakClientCredentialsTokenProvider.class);
-    when(tokens.clientCredentialsToken()).thenReturn("runtime-secret-token");
+    when(tokens.clientCredentialsToken()).thenReturn(token("runtime", Map.of()));
+    KeycloakClientCredentialsTokenProvider catalogTokens =
+        mock(KeycloakClientCredentialsTokenProvider.class);
+    when(catalogTokens.clientCredentialsToken())
+        .thenReturn(
+            token("identity", Map.of("identity", Map.of("roles", List.of("uma_protection")))));
     KeycloakLegacyStartupRepair repair =
         new KeycloakLegacyStartupRepair(properties(false), tokens, rest.clone());
-    return new KeycloakIdentityRuntimeContract(properties(false), tokens, repair, rest);
+    return new KeycloakIdentityRuntimeContract(
+        properties(false), tokens, catalogTokens, repair, rest);
   }
 
   private void expectValidClients(MockRestServiceServer server) {
@@ -213,6 +223,35 @@ class KeycloakIdentityRuntimeContractTest {
         .expect(requestTo(Matchers.endsWith("/realms/cardo/authz/protection/resource_set")))
         .andExpect(method(GET))
         .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+    expectCatalogIsolation(server);
+  }
+
+  private void expectCatalogIsolation(MockRestServiceServer server) {
+    server
+        .expect(requestTo(Matchers.containsString("/admin/realms/cardo/clients?")))
+        .andExpect(method(GET))
+        .andRespond(withStatus(HttpStatus.FORBIDDEN));
+    server
+        .expect(requestTo(Matchers.containsString("/admin/realms/cardo/users?")))
+        .andExpect(method(GET))
+        .andRespond(withStatus(HttpStatus.FORBIDDEN));
+    server
+        .expect(requestTo(Matchers.endsWith("/clients/identity-uuid/protocol-mappers/models")))
+        .andExpect(method(GET))
+        .andRespond(withStatus(HttpStatus.FORBIDDEN));
+    server
+        .expect(requestTo(Matchers.endsWith("/clients/identity-uuid/roles")))
+        .andExpect(method(GET))
+        .andRespond(withStatus(HttpStatus.FORBIDDEN));
+  }
+
+  private String token(String authorizedParty, Map<String, Object> resourceAccess) {
+    return new PlainJWT(
+            new JWTClaimsSet.Builder()
+                .claim("azp", authorizedParty)
+                .claim("resource_access", resourceAccess)
+                .build())
+        .serialize();
   }
 
   static KeycloakProperties properties(boolean legacyMutation) {
@@ -221,6 +260,7 @@ class KeycloakIdentityRuntimeContractTest {
         "cardo",
         "runtime",
         "runtime-secret",
+        "authorization-secret",
         "setup",
         URI.create("https://app.example/invitations/completed"),
         List.of("runtime", "identity", "billing"),

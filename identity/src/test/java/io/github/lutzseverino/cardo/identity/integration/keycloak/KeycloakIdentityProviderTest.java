@@ -514,6 +514,7 @@ class KeycloakIdentityProviderTest {
             "cardo",
             "identity",
             "secret",
+            "authorization-secret",
             "cardo-web",
             URI.create("https://app.example/invitations/completed"),
             List.of(),

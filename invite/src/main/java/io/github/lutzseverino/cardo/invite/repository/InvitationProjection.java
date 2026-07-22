@@ -1,9 +1,7 @@
 package io.github.lutzseverino.cardo.invite.repository;
 
-import io.github.lutzseverino.cardo.invite.model.InvitationGrantSnapshot;
 import io.github.lutzseverino.cardo.invite.model.InvitationStatus;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 
 public interface InvitationProjection {
@@ -18,15 +16,9 @@ public interface InvitationProjection {
 
   String getTenantResourceType();
 
-  String getAccessProfile();
-
-  List<InvitationGrantSnapshot> getGrants();
-
   String getInvitedEmail();
 
   UUID getInvitedUserId();
-
-  String getInvitedAuthorizationSubject();
 
   UUID getInvitedBy();
 
@@ -41,8 +33,6 @@ public interface InvitationProjection {
   OffsetDateTime getAcceptedAt();
 
   OffsetDateTime getRevokedAt();
-
-  UUID getGrantReceiptId();
 
   OffsetDateTime getCreatedAt();
 

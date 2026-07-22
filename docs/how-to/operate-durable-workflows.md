@@ -149,8 +149,9 @@ normal access controls.
 
 - Keep Identity operations and provider mutations indefinitely by default.
   They fence idempotency, carry provider-effect evidence, and support audits.
-- Keep invitation completion rows for at least as long as their invitation and
-  grant-convergence history. Never delete active, failed, or revoked evidence.
+- Keep invitation completion rows for at least as long as their invitation
+  history. Never delete active, failed, or revoked evidence. Product-owned grant
+  convergence has its own receipt retention policy.
 - Keep grant receipts while an owning lifecycle can reference them. A failed
   receipt and every incomplete publication are repair evidence.
 - Keep Billing provisioning rows indefinitely by default; they prevent a

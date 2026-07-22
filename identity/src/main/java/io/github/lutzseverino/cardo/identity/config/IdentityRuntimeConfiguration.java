@@ -34,6 +34,14 @@ class IdentityRuntimeConfiguration {
       requireText("cardo.identity.keycloak.realm", keycloak.realm());
       requireText("cardo.identity.keycloak.client-id", keycloak.clientId());
       requireSecret("cardo.identity.keycloak.client-secret", keycloak.clientSecret());
+      requireSecret(
+          "cardo.identity.keycloak.authorization-client-secret",
+          keycloak.authorizationClientSecret());
+      if (keycloak.clientSecret().equals(keycloak.authorizationClientSecret())) {
+        throw invalid(
+            "cardo.identity.keycloak.authorization-client-secret",
+            "must be distinct from cardo.identity.keycloak.client-secret");
+      }
       requireText(
           "cardo.identity.keycloak.credential-setup-client-id", keycloak.credentialSetupClientId());
       requireRemoteHttps(
@@ -136,7 +144,15 @@ class IdentityRuntimeConfiguration {
   }
 
   private static void requireSecret(String property, String value) {
-    if (blank(value) || "cardo".equals(value)) {
+    if (blank(value)
+        || java.util.Set.of(
+                "cardo",
+                "change-me",
+                "changeme",
+                "placeholder",
+                "identity-runtime-secret",
+                "identity-resource-secret")
+            .contains(value.toLowerCase(java.util.Locale.ROOT))) {
       throw invalid(property, "must be supplied as a non-development secret");
     }
   }

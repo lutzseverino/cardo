@@ -17,7 +17,6 @@ import jakarta.persistence.LockModeType;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -36,15 +35,7 @@ class InvitationCompletionServiceTest {
     InvitationService invitations = mock(InvitationService.class);
     PendingInvitation pending =
         new PendingInvitation(
-            INVITATION_ID,
-            "clinic",
-            UUID.randomUUID(),
-            "clinic:clinic",
-            "clinic:employee",
-            List.of(),
-            USER_ID,
-            "subject-1",
-            EXPIRES_AT);
+            INVITATION_ID, "clinic", UUID.randomUUID(), "clinic:clinic", USER_ID, EXPIRES_AT);
     when(invitations.requirePendingForUpdate("token-1", "clinic")).thenReturn(pending);
     when(operations.findById(INVITATION_ID)).thenReturn(Optional.empty());
     when(operations.saveAndFlush(org.mockito.ArgumentMatchers.any()))

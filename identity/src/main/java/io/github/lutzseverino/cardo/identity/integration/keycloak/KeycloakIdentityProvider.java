@@ -45,7 +45,7 @@ public class KeycloakIdentityProvider implements IdentityProvider {
   KeycloakIdentityProvider(
       KeycloakProperties properties,
       KeycloakRealmAdminClient admin,
-      KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
+      @Qualifier("identityProviderRuntimeTokenProvider") KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
       @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
     this.properties = properties;
     this.admin = admin;

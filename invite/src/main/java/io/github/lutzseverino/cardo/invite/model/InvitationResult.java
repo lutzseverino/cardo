@@ -8,7 +8,6 @@ public record InvitationResult(
     UUID requestId,
     UUID tenantId,
     String tenantResourceType,
-    String accessProfile,
     String invitedEmail,
     UUID invitedUserId,
     UUID invitedBy,

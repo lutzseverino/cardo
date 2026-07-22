@@ -43,7 +43,7 @@ class InviteExceptionHandlerTest {
   }
 
   @Test
-  void returnsTheDocumentedIntegrityErrorForAMissingGrantReceipt() throws Exception {
+  void returnsTheDocumentedIntegrityError() throws Exception {
     try (AnnotationConfigWebApplicationContext context =
         new AnnotationConfigWebApplicationContext()) {
       context.setServletContext(new MockServletContext());
@@ -52,13 +52,12 @@ class InviteExceptionHandlerTest {
 
       MockMvc mvc = MockMvcBuilders.webAppContextSetup(context).build();
 
-      mvc.perform(get("/grant-convergence"))
+      mvc.perform(get("/integrity-error"))
           .andExpect(status().isInternalServerError())
           .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-          .andExpect(jsonPath("$.error.code").value("invitation_grant_receipt_missing"))
+          .andExpect(jsonPath("$.error.code").value("invitation_integrity_error"))
           .andExpect(
-              jsonPath("$.error.message")
-                  .value("The invitation grant receipt could not be resolved."))
+              jsonPath("$.error.message").value("The invitation state failed an integrity check."))
           .andExpect(jsonPath("$.error.details").isEmpty());
     }
   }
@@ -86,12 +85,10 @@ class InviteExceptionHandlerTest {
       throw ApiException.gone("invitation_expired", "Invitation expired.");
     }
 
-    @GetMapping("/grant-convergence")
-    void getGrantConvergence() {
+    @GetMapping("/integrity-error")
+    void getIntegrityError() {
       throw ApiException.of(
-          500,
-          "invitation_grant_receipt_missing",
-          "The invitation grant receipt could not be resolved.");
+          500, "invitation_integrity_error", "The invitation state failed an integrity check.");
     }
   }
 }

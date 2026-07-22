@@ -10,6 +10,7 @@ public record KeycloakProperties(
     String realm,
     String clientId,
     String clientSecret,
+    String authorizationClientSecret,
     String credentialSetupClientId,
     URI credentialSetupRedirectUri,
     List<String> userIdClaimClientIds,

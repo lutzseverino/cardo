@@ -16,15 +16,12 @@ import org.springframework.validation.annotation.Validated;
 @RequiredArgsConstructor
 public class AcceptInvitationWorkflow {
 
-  private final InvitationAcceptanceApplicator acceptance;
   private final InvitationService invitations;
 
   @Transactional
   public InvitationResult accept(
       UUID invitationId, @NotBlank String product, @NotNull OffsetDateTime acceptedAt) {
-    invitations
-        .prepareAcceptance(invitationId, product, acceptedAt)
-        .ifPresent(invitation -> acceptance.apply(invitation, acceptedAt));
+    invitations.accept(invitationId, product, acceptedAt);
     return invitations.get(invitationId, product);
   }
 }

@@ -81,13 +81,15 @@ require an exact cookie/header match. Unsafe product requests require it wheneve
 authentication is selected. A valid explicit Authorization header takes precedence over cookies
 and is not subject to CSRF validation because it is not ambient browser authentication.
 
-Authorization staging remains asynchronous. In the caller's transaction, the embedded
-authorization boundary persists and returns a stable grant-receipt identifier before publishing a
-receipt-bearing plan. Non-empty plans begin pending; empty plans are immediately applied. Provider
-application moves the durable receipt to applied or, after bounded attempts, failed. The
-application that stages a plan stores the identifier with its own lifecycle and exposes the status
-through its API. Once applied, the next uncached product exchange includes the new authorities.
-Identity does not infer product lifecycle or silently grant product access.
+Authorization staging remains asynchronous. As refined by ADR 0004, a product first records its
+acceptance intent and durable command, calls Invite acceptance idempotently, and then stages the
+product-owned plan, stores its receipt, and completes its product transition in one local
+transaction. The embedded authorization boundary persists and returns a stable grant-receipt
+identifier before publishing a receipt-bearing plan. Non-empty plans begin pending; empty plans are
+immediately applied. Provider application moves the durable receipt to applied or, after bounded
+attempts, failed. The product exposes that convergence status through its API. Once applied, the
+next uncached product exchange includes the new authorities. Identity and Invite do not infer
+product lifecycle or silently grant product access.
 
 `identity-product-auth` owns issuer and audience validation, session-cookie recognition, product
 token exchange, authority conversion, authenticated-user reading, CSRF enforcement, active-token
@@ -117,8 +119,8 @@ requests; products do not replace the chain or recreate Cardo-owned beans.
   | 5 | Polity | Product-auth adoption plus account and invitation convergence APIs |
   | 6 | Polity browser client | CSRF bootstrap/header handling and pending-access UX |
   | 7 | Polity deployment | Same-origin routing, production cookie mode, and Keycloak audience/client provisioning |
-- Invite orchestration remains product-owned until a second independent product demonstrates the
-  same durable integration ceremony.
+- Invitation grant planning, receipt retention, convergence, and recovery are product-owned;
+  Invite owns only its invitation lifecycle and is called idempotently by the product workflow.
 
 ## Alternatives Considered
 

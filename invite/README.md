@@ -1,8 +1,9 @@
 # Invite
 
 Invite owns cross-product invitation delivery and lifecycle mechanics: secret
-tokens, fixed creation-time expiry, provisional identity completion, revocation, and durable staging
-of the access grants captured when an invitation is created.
+tokens, fixed creation-time expiry, provisional identity completion, acceptance,
+and revocation. Invite does not own product access profiles, grant snapshots,
+grant application, or authorization convergence.
 
 ## Product Integration
 
@@ -18,8 +19,8 @@ cardo:
 ```
 
 Authenticated Invite operations accept product service tokens only. The OAuth
-client identifier is the product identifier and must match the prefix of every
-resource type and access-profile name supplied by that product. Token lookup is
+client identifier is the product identifier and must match the prefix of the
+tenant resource type supplied by that product. Token lookup is
 public; identity completion, acceptance, and revocation remain product-service
 operations.
 
@@ -51,15 +52,10 @@ invitation. A later create retry safely reuses it.
 Apply the same ordering to acceptance: commit the product's membership or other
 domain transition together with a durable command, then call
 `InvitationsClient.accept(...)`. This keeps a remote Invite call out of the
-product's database transaction and makes failure retryable. Invite acceptance
-atomically marks its own record accepted and stages the captured grant snapshot
-for asynchronous, idempotent authorization application. It retains the grant
-receipt internally and exposes its state through
-`GET /api/v1/invitations/{invitationId}/grant-convergence`. Products use the
-separate `InvitationGrantConvergenceClient` to poll `PENDING`, `APPLIED`,
-`FAILED` (with a stable failure code), or `UNKNOWN` for accepted legacy rows
-that predate receipt retention. Pending and revoked invitations do not have a
-convergence resource.
+product's database transaction and makes failure retryable. The product stages
+its own authorization plan and retains/exposes its own receipt alongside that
+domain transition. Invite acceptance only atomically marks Invite's lifecycle
+record accepted; it has no grant-convergence route or convergence client.
 
 Pass the timestamp committed with the product-domain acceptance to
 `InvitationsClient.accept(...)`. Invite validates expiry against that durable
@@ -106,6 +102,11 @@ may still be completed. Invite does not cancel a provider action, cancel or
 delete the shared provisional Identity user, or undo global Identity
 activation. Later worker callbacks preserve the terminal `REVOKED` completion,
 which remains readable after invitation revocation.
+
+Migration V6 preserves pre-release authorization columns and rows as explicitly
+named legacy evidence (`legacy_grant_receipt_id`, `legacy_access_profile`,
+`legacy_invited_authorization_subject`, and `legacy_invitation_grants`). Invite
+does not interpret or update that evidence after the migration.
 
 ## Documentation
 

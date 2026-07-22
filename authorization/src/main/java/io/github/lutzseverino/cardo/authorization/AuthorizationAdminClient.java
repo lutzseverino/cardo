@@ -17,7 +17,7 @@ public interface AuthorizationAdminClient {
 
   List<GrantedResourceAction> findResourceActionGrants(ResourceGrantQuery query);
 
-  void revokeResourceActionGrant(String ticketId);
+  void revokeResourceActionGrant(String resourceServerClientId, String ticketId);
 
   void ensureClientRolesAssigned(ClientRoleAssignment assignment);
 
