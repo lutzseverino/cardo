@@ -21,6 +21,9 @@ to application-owned inputs.
 Use `PatchFields.update(JsonNullable<T>)` to convert generator-owned presence information
 into the application-owned `FieldUpdate<T>` representation.
 
+`openapi-support` obtains that contract directly from `common-api`. Its enforced runtime graph does
+not include the full `common` compatibility aggregate or its persistence dependencies.
+
 Every product that exposes this PATCH shape follows the same boundary mechanics:
 
 1. PATCH request schemas use OpenAPI nullable fields where absence and explicit `null` differ.

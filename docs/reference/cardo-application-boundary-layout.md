@@ -66,9 +66,11 @@ status response directly because no application behavior or persistence access i
 
 ## Canonical Module Owners
 
-- `common-api` owns shared API error values, exceptions, and outbound error translation.
-- `common` is the compatibility aggregate for the remaining shared persistence, validation, web,
-  and value mechanics. It does not own product behavior or become a holding area for possible reuse.
+- `common-api` owns shared API error values, exceptions, outbound error translation,
+  `FieldUpdate`, and its Jakarta Validation value extractor.
+- `common` is the compatibility aggregate for those dependency-light contracts and the remaining
+  shared persistence, validation, web, and value mechanics. It does not own product behavior or
+  become a holding area for possible reuse.
 - `openapi-support` owns reusable generated-contract mechanics. It does not own any service's API
   vocabulary or application model.
 - `authorization-keycloak-client` owns client-credential and requesting-party-token HTTP mechanics.
@@ -96,9 +98,10 @@ These owners are semantic boundaries, not a requirement to expose one service cl
 - HTTP services consume another Cardo service through its stable `client` contract and a
   `client-http` adapter. They do not consume another service's generated server models, repositories,
   entities, or provider implementation.
-- Outbound client adapters use `common-api` and `authorization-keycloak-client` rather than the full
-  aggregates. Product-boundary authentication additionally uses `authorization-security`. Maven
-  enforcement keeps persistence, migrations, JDBC, and Modulith outside those consumer graphs.
+- Outbound client adapters and generated-contract support use `common-api` rather than the full
+  `common` aggregate. Outbound adapters use `authorization-keycloak-client`, while product-boundary
+  authentication additionally uses `authorization-security`. Maven enforcement keeps persistence,
+  migrations, JDBC, and Modulith outside those consumer graphs.
 - Embedded Authorization may be consumed directly through its intentional public Java contracts.
   Its persistence and Keycloak implementations remain internal mechanics unless a type is explicitly
   established as an integration contract.

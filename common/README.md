@@ -1,15 +1,16 @@
 # Common
 
 Common is the compatibility aggregate for small shared Java contracts that are
-not product behavior: API error types, personal-data markers, shared value
-objects, server error handling, and validation helpers.
+not product behavior: API error types, partial-update contracts, personal-data
+markers, shared value objects, server error handling, and validation helpers.
 
 ## Product Integration
 
 Products import `common` directly when they need the complete low-level surface.
 Outbound clients that need only API errors use `common-api`; its existing
-`io.github.lutzseverino.cardo.common.api` types remain available transitively
-from `common`.
+`io.github.lutzseverino.cardo.common.api`, `io.github.lutzseverino.cardo.common.model.FieldUpdate`,
+and `io.github.lutzseverino.cardo.common.validation.FieldUpdateValueExtractor` remain available
+transitively from `common`.
 There is no service owner, HTTP client, or product integration module.
 
 Keep product-specific validation, lifecycle decisions, and domain vocabulary in
@@ -21,8 +22,9 @@ the product. Common should stay boring and narrow.
 absence, explicit `null`, and a concrete value have different meanings. Do not use it for creates,
 complete replacements, non-nullable updates, results, or persisted domain state.
 
-Type-use Jakarta Bean Validation constraints apply to present values. `common` registers the
-`FieldUpdateValueExtractor`; consuming modules do not register their own extractors.
+Type-use Jakarta Bean Validation constraints apply to present values. `common-api` owns and
+registers the `FieldUpdateValueExtractor`; consuming modules do not register their own extractors.
+The full `common` aggregate continues exposing both types without a consumer migration.
 
 For example:
 
