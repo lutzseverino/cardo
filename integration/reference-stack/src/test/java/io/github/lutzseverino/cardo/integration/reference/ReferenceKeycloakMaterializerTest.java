@@ -63,6 +63,7 @@ class ReferenceKeycloakMaterializerTest {
           materializer.clientToken("identity", null), "identity", "identity", "uma_protection");
 
       String runtime = materializer.clientToken("cardo-identity", null);
+      String inviteRuntime = materializer.clientToken("cardo-invite", null);
       String catalog = materializer.clientToken("identity", null);
       String product = materializer.clientToken(ReferenceContract.PRODUCT_CLIENT, null);
       String outbound =
@@ -70,6 +71,7 @@ class ReferenceKeycloakMaterializerTest {
       assertThat(materializer.adminReadStatus(runtime)).isEqualTo(200);
       assertThat(materializer.adminReadStatus(catalog)).isEqualTo(403);
       assertThat(materializer.protectionReadStatus(catalog)).isEqualTo(200);
+      assertThat(materializer.protectionReadStatus(inviteRuntime)).isEqualTo(403);
       assertThat(materializer.adminReadStatus(product)).isEqualTo(403);
       assertThat(materializer.adminReadStatus(outbound)).isEqualTo(403);
       String identityRoles =

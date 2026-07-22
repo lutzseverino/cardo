@@ -54,6 +54,16 @@ class ReferenceStackIT {
       Browser ownerBrowser = login(stack, OWNER_EMAIL, OWNER_PASSWORD);
       assertThat(ownerBrowser.lastLogin().status()).isEqualTo(201);
       assertProductionCookies(ownerBrowser.lastLogin());
+      assertThat(
+              ownerBrowser
+                  .http()
+                  .request(
+                      "GET",
+                      stack.origin().resolve("/api/v1/identity/sessions/current"),
+                      null,
+                      Map.of())
+                  .status())
+          .isEqualTo(200);
       String ownerIdentityToken = ownerBrowser.cookie("__Host-cardo.session");
       String ownerRpt = rpt(stack, ownerIdentityToken);
       assertProductRpt(ownerRpt, ownerId);
@@ -89,6 +99,16 @@ class ReferenceStackIT {
                   Map.of("requestId", UUID.randomUUID(), "email", INVITED_EMAIL),
                   Map.of());
       assertThat(missingCsrf.status()).isEqualTo(403);
+      assertThat(
+              ownerBrowser
+                  .http()
+                  .request(
+                      "POST",
+                      stack.origin().resolve("/api/reference/invitations"),
+                      Map.of("requestId", UUID.randomUUID(), "email", INVITED_EMAIL),
+                      Map.of("X-CSRF-TOKEN", "mismatched-token"))
+                  .status())
+          .isEqualTo(403);
 
       UUID requestId = UUID.randomUUID();
       ReferenceHttp.Response created =
@@ -168,18 +188,30 @@ class ReferenceStackIT {
       assertThat(List.of(first.join().status(), second.join().status())).containsOnly(202);
       String inviteToken =
           stack.keycloak().clientToken(ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "cardo-invite");
-      await(
-          "remote Invite acceptance",
-          invitation -> "accepted".equalsIgnoreCase(string(invitation, "status")),
-          () ->
-              requireObject(
-                  internal.request(
+      Map<String, Object> remoteInvitation =
+          await(
+              "remote Invite acceptance",
+              invitation -> "accepted".equalsIgnoreCase(string(invitation, "status")),
+              () ->
+                  requireObject(
+                      internal.request(
+                          "GET",
+                          stack.inviteInternal("/api/v1/invitations/" + invitationId),
+                          null,
+                          bearer(inviteToken)),
+                      200,
+                      internal));
+      assertThat(remoteInvitation)
+          .doesNotContainKeys("grant", "grantSnapshot", "receiptId", "convergence");
+      assertThat(
+              internal
+                  .request(
                       "GET",
-                      stack.inviteInternal("/api/v1/invitations/" + invitationId),
+                      stack.inviteInternal("/api/v1/invitations/" + invitationId + "/convergence"),
                       null,
-                      bearer(inviteToken)),
-                  200,
-                  internal));
+                      bearer(inviteToken))
+                  .status())
+          .isEqualTo(404);
       assertThat(convergence(invitedBrowser, stack, invitationId).get("status"))
           .isEqualTo("NOT_STAGED");
       Map<String, Object> pending =
@@ -369,6 +401,10 @@ class ReferenceStackIT {
             .request(
                 "GET", stack.origin().resolve("/api/v1/identity/sessions/csrf"), null, Map.of());
     assertThat(csrf.status()).isEqualTo(204);
+    String csrfCookie = setCookie(csrf, "__Host-cardo.csrf");
+    assertThat(csrfCookie)
+        .contains("Path=/", "Secure", "SameSite=Lax")
+        .doesNotContain("Domain=", "HttpOnly");
     URI loginUri = stack.origin().resolve("/api/v1/identity/sessions");
     Map<String, String> credentials = Map.of("email", email, "password", password);
     assertThat(browser.http().request("POST", loginUri, credentials, Map.of()).status())
@@ -421,10 +457,14 @@ class ReferenceStackIT {
   }
 
   private void assertProductionCookies(ReferenceHttp.Response login) {
-    List<String> cookies = login.headers().getOrDefault("set-cookie", List.of());
-    assertThat(cookies).anyMatch(value -> value.startsWith("__Host-cardo.session="));
-    assertThat(cookies).anyMatch(value -> value.startsWith("__Secure-cardo.refresh="));
-    assertThat(cookies).allMatch(value -> value.contains("Secure") && value.contains("HttpOnly"));
+    String access = setCookie(login, "__Host-cardo.session");
+    assertThat(access)
+        .contains("Path=/", "Secure", "HttpOnly", "SameSite=Lax")
+        .doesNotContain("Domain=");
+    String refresh = setCookie(login, "__Secure-cardo.refresh");
+    assertThat(refresh)
+        .contains("Path=/api/v1/identity/sessions/current", "Secure", "HttpOnly", "SameSite=Lax")
+        .doesNotContain("Domain=");
   }
 
   private void assertExpiredCookies(ReferenceHttp.Response logout) {
@@ -435,17 +475,24 @@ class ReferenceStackIT {
   }
 
   private void assertExpired(List<String> cookies, String name, String path, boolean httpOnly) {
-    String cookie =
-        cookies.stream()
-            .filter(value -> value.startsWith(name + "="))
-            .findFirst()
-            .orElseThrow(() -> new AssertionError("Missing expired cookie " + name));
+    String cookie = setCookie(cookies, name);
     assertThat(cookie).contains("Max-Age=0", "Path=" + path, "Secure", "SameSite=Lax");
     if (httpOnly) {
       assertThat(cookie).contains("HttpOnly");
     } else {
       assertThat(cookie).doesNotContain("HttpOnly");
     }
+  }
+
+  private String setCookie(ReferenceHttp.Response response, String name) {
+    return setCookie(response.headers().getOrDefault("set-cookie", List.of()), name);
+  }
+
+  private String setCookie(List<String> cookies, String name) {
+    return cookies.stream()
+        .filter(value -> value.startsWith(name + "="))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("Missing Set-Cookie for " + name));
   }
 
   private static Map<String, String> bearer(String token) {
