@@ -12,8 +12,8 @@ the same wiring and the packaged shape can stay product-neutral.
 | Authorization | resource naming, permission evaluation, access profiles, grant staging, provider adapters | embedded Java APIs | none while authorization has no HTTP owner | embedded mechanics and docs |
 | Invite | invitation tokens, expiry, delivery, provisional identity completion, lifecycle state, grant-snapshot staging and convergence | `invite-client` | `invite-client-http` | none until multiple products repeat durable invite orchestration |
 | Billing | customers, entitlements, checkout, portal, provider webhooks | `billing-client` | `billing-client-http` | none until products repeat billing guard or flow wiring |
-| Common API | API errors and outbound client error translation | `common-api` | none | none |
-| Common | data markers, value objects, validation, server error handling, compatibility aggregation | `common` | none | none |
+| Common API | API errors, outbound client error translation, and partial-update value/validation contracts | `common-api` | none | none |
+| Common | data markers, remaining value/validation mechanics, server error handling, compatibility aggregation | `common` | none | none |
 | OpenAPI Support | generated transport mapping helpers and PATCH presence conversion | embedded Java APIs | none | none |
 
 ## Consumer Dependency Surfaces
@@ -29,6 +29,7 @@ The integration artifacts depend directly only on the responsibilities they exec
 | Identity, Invite, and Billing client-http | Spring Boot autoconfigure | conditional beans and configuration properties |
 | Identity, Invite, and Billing client-http | Spring Web | RestClient transport and bounded request factories |
 | Identity, Invite, and Billing client-http | Swagger annotations, Jakarta Validation, Jakarta Annotation | generated client source signatures |
+| openapi-support | common-api | dependency-light `FieldUpdate` partial-update contract |
 | identity-product-auth | authorization-keycloak-client | UMA requesting-party-token exchange contracts and client |
 | identity-product-auth | authorization-security | shared JWT validation, authority conversion, principal reading, and permission evaluation |
 | identity-product-auth | Spring Boot autoconfigure | opt-in host application wiring |
@@ -36,7 +37,7 @@ The integration artifacts depend directly only on the responsibilities they exec
 | identity-product-auth | Spring Web and Jakarta Servlet | request policy and servlet filter contracts |
 | All modules (optional, inherited) | Lombok | repository-wide compile-time annotation processing; optional and not transitively exposed |
 
-These four consumers opt into a transitive Maven Enforcer rule with an explicit database-stack
+These five consumers opt into a transitive Maven Enforcer rule with an explicit database-stack
 scope:
 
 - the full common and authorization aggregates;

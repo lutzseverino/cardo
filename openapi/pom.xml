@@ -17,10 +17,14 @@
   <name>Cardo OpenAPI Support</name>
   <description>Reusable OpenAPI transport mechanics for product services.</description>
 
+  <properties>
+    <cardo.consumer-dependency-enforcement.skip>false</cardo.consumer-dependency-enforcement.skip>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.github.lutzseverino.cardo</groupId>
-      <artifactId>common</artifactId>
+      <artifactId>common-api</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
