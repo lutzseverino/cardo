@@ -50,6 +50,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -111,7 +112,7 @@ class InvitationLifecyclePostgreSqlIntegrationTest {
     this.acceptance = acceptance;
     this.completionService = completionService;
     this.convergence = convergence;
-    this.grants = grants;
+    this.grants = AopTestUtils.getUltimateTargetObject(grants);
     this.completions = completions;
     this.invitations = invitations;
     this.invitationService = invitationService;
