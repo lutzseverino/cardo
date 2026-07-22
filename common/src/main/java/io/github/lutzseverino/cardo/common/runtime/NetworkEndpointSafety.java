@@ -15,6 +15,9 @@ public final class NetworkEndpointSafety {
       return true;
     }
     String normalized = normalize(host);
+    if (normalized.isBlank()) {
+      return true;
+    }
     if (normalized.equals("localhost") || normalized.endsWith(".localhost")) {
       return true;
     }

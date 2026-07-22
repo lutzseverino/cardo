@@ -10,6 +10,9 @@ class NetworkEndpointSafetyTest {
   @ParameterizedTest
   @ValueSource(
       strings = {
+        ".",
+        "..",
+        "[]",
         "localhost",
         "localhost.",
         "api.localhost.",

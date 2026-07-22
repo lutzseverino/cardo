@@ -9,8 +9,13 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -34,6 +39,30 @@ class InviteRuntimeConfigurationTest {
     assertThat(properties.allowedClientIds()).containsExactlyInAnyOrder("clinic", "polity");
     assertThatThrownBy(() -> properties.allowedClientIds().add("another"))
         .isInstanceOf(UnsupportedOperationException.class);
+  }
+
+  @Test
+  void preservesPublicConfigurationPropertiesContract() {
+    ConfigurationProperties annotation =
+        ProductCallerProperties.class.getAnnotation(ConfigurationProperties.class);
+
+    assertThat(annotation).isNotNull();
+    assertThat(annotation.prefix()).isEqualTo("cardo.invite.product-callers");
+  }
+
+  @Test
+  void publicPropertiesRemainDirectlyEnableableByConsumers() {
+    new ApplicationContextRunner()
+        .withUserConfiguration(PublicProductCallerPropertiesConfiguration.class)
+        .withPropertyValues(
+            "cardo.invite.product-callers.allowed-client-ids[0]=clinic",
+            "cardo.invite.product-callers.allowed-client-ids[1]=polity")
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed().hasSingleBean(ProductCallerProperties.class);
+              assertThat(context.getBean(ProductCallerProperties.class).allowedClientIds())
+                  .containsExactlyInAnyOrder("clinic", "polity");
+            });
   }
 
   @Test
@@ -61,6 +90,19 @@ class InviteRuntimeConfigurationTest {
                 policy(production(), new ProductCallerProperties(Set.of("clinic")), datasource)
                     .afterPropertiesSet())
         .hasMessageContaining("spring.datasource");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {".", "..", "[]"})
+  void rejectsSmtpHostsThatNormalizeToEmpty(String host) {
+    MockEnvironment smtp = productionEnvironment();
+    smtp.setProperty("spring.mail.host", host);
+
+    assertThatThrownBy(
+            () ->
+                policy(production(), new ProductCallerProperties(Set.of("clinic")), smtp)
+                    .afterPropertiesSet())
+        .hasMessageContaining("spring.mail.host");
   }
 
   @Test
@@ -101,11 +143,16 @@ class InviteRuntimeConfigurationTest {
         .run(
             context -> {
               assertThat(context).hasNotFailed();
+              assertThat(context).hasSingleBean(ProductCallerProperties.class);
               assertThat(context.getBean(ProductCallerProperties.class).allowedClientIds())
                   .isInstanceOf(Set.class)
                   .containsExactlyInAnyOrder("clinic", "polity");
             });
   }
+
+  @Configuration(proxyBeanMethods = false)
+  @EnableConfigurationProperties(ProductCallerProperties.class)
+  static class PublicProductCallerPropertiesConfiguration {}
 
   @Test
   void rejectsNonPositiveSmtpAndWorkflowBounds() {
