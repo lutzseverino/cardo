@@ -44,15 +44,18 @@ WHERE status IN ('REQUESTED', 'FAILED')
 ORDER BY status, next_attempt_at, created_at;
 ```
 
-An Identity operation claim writes a new opaque `lease_token` while preserving
-the existing `next_attempt_at` lease deadline. Provider mutations already use a
-token plus `lease_until`. Identity operations accept only the current,
-unexpired token. Provider mutations accept the current token while the row is
-`REQUESTED`; `lease_until` controls when another worker may reclaim it but does
-not by itself invalidate the current acknowledgement. After a crash the row
-becomes actionable when its retry time and provider lease have elapsed. A later
-claim changes the token, so the earlier worker is counted and logged as
-`stale-ack` and cannot overwrite the new result.
+Identity operation and Invite completion claims write a new opaque
+`lease_token` and set or replace `next_attempt_at` with the new lease deadline;
+that column is their combined scheduling and lease field. Provider mutations
+already use a token plus a separate `lease_until`. Identity and Invite accept
+only the current, unexpired token. Provider mutations accept the current token
+while the row is `REQUESTED`; `lease_until` controls when another worker may
+reclaim it but does not by itself invalidate the current acknowledgement. After
+a crash an Identity or Invite row becomes actionable at `next_attempt_at`; a
+provider mutation becomes actionable when `next_attempt_at` is due and
+`lease_until` is null or elapsed. A later claim changes the token, so the
+earlier worker is counted and logged as `stale-ack` and cannot overwrite the
+new result.
 
 For credential setup or provisional deletion, repair the provider/local cause,
 then repeat the existing idempotent request while its owner still permits it.
