@@ -33,6 +33,24 @@ class InviteRuntimeConfigurationTest {
   }
 
   @Test
+  void rejectsProductionWhenStartTlsRequiredIsMissingOrFalse() {
+    MockEnvironment missing = productionEnvironmentWithoutStartTlsRequired();
+    assertThatThrownBy(
+            () ->
+                policy(production(), new ProductCallerProperties(Set.of("clinic")), missing)
+                    .afterPropertiesSet())
+        .hasMessageContaining("spring.mail.properties.mail.smtp.starttls.required");
+
+    MockEnvironment disabled = productionEnvironmentWithoutStartTlsRequired();
+    disabled.setProperty("spring.mail.properties.mail.smtp.starttls.required", "false");
+    assertThatThrownBy(
+            () ->
+                policy(production(), new ProductCallerProperties(Set.of("clinic")), disabled)
+                    .afterPropertiesSet())
+        .hasMessageContaining("spring.mail.properties.mail.smtp.starttls.required");
+  }
+
+  @Test
   void preservesPublicSetConstructorAndAccessorContract() {
     ProductCallerProperties properties = new ProductCallerProperties(Set.of("clinic", "polity"));
 
@@ -265,6 +283,11 @@ class InviteRuntimeConfigurationTest {
   }
 
   private MockEnvironment productionEnvironment() {
+    return productionEnvironmentWithoutStartTlsRequired()
+        .withProperty("spring.mail.properties.mail.smtp.starttls.required", "true");
+  }
+
+  private MockEnvironment productionEnvironmentWithoutStartTlsRequired() {
     return new MockEnvironment()
         .withProperty(
             "spring.security.oauth2.resourceserver.jwt.issuer-uri",

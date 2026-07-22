@@ -72,7 +72,7 @@ must tolerate a duplicate delivery when a failure occurs after the provider has
 already accepted a message.
 
 The production adapter sends through SMTP. Configure `SMTP_HOST`, `SMTP_PORT`,
-`SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_AUTH`, `SMTP_STARTTLS`,
+`SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_AUTH`, `SMTP_STARTTLS`, `SMTP_STARTTLS_REQUIRED`,
 `SMTP_CONNECT_TIMEOUT`, `SMTP_READ_TIMEOUT`, `SMTP_WRITE_TIMEOUT`, and
 `INVITE_MAIL_FROM` for the deployment. Local defaults target an SMTP catcher on
 `localhost:1025`; delivery failures remain durable and are retried.
@@ -113,7 +113,9 @@ does not interpret or update that evidence after the migration.
 Set `INVITE_RUNTIME_MODE=production` with the remote Keycloak/issuer and Identity client, an
 authenticated STARTTLS SMTP service, at least one product caller, and an Invite-owned PostgreSQL
 database with distinct no-login owner and login application roles. Startup verifies the effective
-database and roles after Flyway completes. See the indexed
+database and requires the datasource to authenticate directly as the application role after Flyway
+completes. Set both `SMTP_STARTTLS=true` and `SMTP_STARTTLS_REQUIRED=true`; production startup
+rejects either flag when missing or false. See the indexed
 [runtime property reference](../docs/reference/runtime-properties.md) for the full contract.
 
 Start with the [Invite documentation index](docs/README.md). Cross-project

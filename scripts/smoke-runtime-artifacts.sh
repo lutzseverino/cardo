@@ -365,7 +365,7 @@ start_postgresql() {
   local service=$1
   postgres_container="cardo-runtime-smoke-${service}-postgres-${run_id}"
   containers+=("$postgres_container")
-  docker run --detach --rm \
+  docker run --detach \
     --name "$postgres_container" \
     --env POSTGRES_DB=cardo \
     --env POSTGRES_USER=cardo \
@@ -412,8 +412,8 @@ assert_runtime_contract() {
     | jq --exit-status '.status == "UP"' >/dev/null \
     || fail "$service liveness is not UP"
   curl --fail --silent "$base_url/actuator/health/readiness" \
-    | jq --exit-status '.status == "UP"' >/dev/null \
-    || fail "$service readiness is not UP"
+    | jq --exit-status '.status == "UP" and .components.db.status == "UP"' >/dev/null \
+    || fail "$service readiness or database component is not UP"
   info=$(curl --fail --silent "$base_url/actuator/info")
   jq --exit-status \
     --arg version "$project_version" \
@@ -432,6 +432,61 @@ assert_runtime_contract() {
     "$base_url/actuator/health/db")
   [[ "$component_status" == "401" ]] \
     || fail "$service unexpectedly permits an Actuator health component path ($component_status)"
+}
+
+assert_database_outage_withdraws_readiness() {
+  local service=$1
+  local readiness_url=$2
+  local response_file="$temporary_directory/readiness-outage.json"
+  local deadline=$((SECONDS + 45))
+  local status
+
+  docker stop --time 5 "$postgres_container" >/dev/null
+  while (( SECONDS < deadline )); do
+    status=$(curl --silent --max-time 5 --output "$response_file" --write-out '%{http_code}' \
+      "$readiness_url" || true)
+    if [[ "$status" == "503" ]] \
+      && jq --exit-status \
+        '.status != "UP" and .components.db.status != null and .components.db.status != "UP"' \
+        "$response_file" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 1
+  done
+  fail "$service readiness did not report the unavailable database"
+}
+
+assert_jar_database_outage() {
+  local service=$1
+  local jar=$2
+  local port log process
+  port=$(free_port)
+  log="$temporary_directory/$service-jar-database-outage.log"
+
+  env \
+    SERVER_PORT="$port" \
+    SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$postgres_port/cardo" \
+    SPRING_DATASOURCE_USERNAME=cardo \
+    SPRING_DATASOURCE_PASSWORD=cardo-smoke \
+    KEYCLOAK_BASE_URL="http://127.0.0.1:$provider_port" \
+    KEYCLOAK_ISSUER_URI="http://127.0.0.1:$provider_port/realms/cardo" \
+    KEYCLOAK_CLIENT_SECRET=cardo-smoke \
+    KEYCLOAK_IDENTITY_AUTHORIZATION_CLIENT_SECRET=cardo-catalog-smoke \
+    java -jar "$jar" >"$log" 2>&1 &
+  process=$!
+  processes+=("$process")
+  watched_process=$process
+
+  if ! assert_runtime_contract "$service database-outage JAR" "http://127.0.0.1:$port"; then
+    sed -n '1,260p' "$log" >&2
+    fail "$service database-outage JAR did not become ready"
+  fi
+  watched_process=""
+  assert_database_outage_withdraws_readiness \
+    "$service JAR" "http://127.0.0.1:$port/actuator/health/readiness"
+  kill -KILL "$process" 2>/dev/null || true
+  wait "$process" 2>/dev/null || true
+  forget_process "$process"
 }
 
 wait_for_process_exit_by() {
@@ -498,7 +553,6 @@ smoke_jar() {
     SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$postgres_port/cardo" \
     SPRING_DATASOURCE_USERNAME=cardo \
     SPRING_DATASOURCE_PASSWORD=cardo-smoke \
-    MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS=always \
     KEYCLOAK_BASE_URL="http://127.0.0.1:$provider_port" \
     KEYCLOAK_ISSUER_URI="http://127.0.0.1:$provider_port/realms/cardo" \
     KEYCLOAK_CLIENT_SECRET=cardo-smoke \
@@ -532,6 +586,7 @@ smoke_jar() {
   forget_process "$held_request_pid"
   [[ "$exit_code" == "0" || "$exit_code" == "143" ]] \
     || fail "$service JAR exited unexpectedly with $exit_code"
+  assert_jar_database_outage "$service" "$jar"
   stop_postgresql
   echo "smoked executable $service JAR"
 }
@@ -626,7 +681,6 @@ smoke_image() {
     --env SPRING_DATASOURCE_URL="jdbc:postgresql://$postgres_container:5432/cardo" \
     --env SPRING_DATASOURCE_USERNAME=cardo \
     --env SPRING_DATASOURCE_PASSWORD=cardo-smoke \
-    --env MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS=always \
     --env KEYCLOAK_BASE_URL="http://host.docker.internal:$provider_port" \
     --env KEYCLOAK_ISSUER_URI="http://host.docker.internal:$provider_port/realms/cardo" \
     --env KEYCLOAK_CLIENT_SECRET=cardo-smoke \

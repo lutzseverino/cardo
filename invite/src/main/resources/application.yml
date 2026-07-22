@@ -37,6 +37,7 @@ spring:
           auth: ${SMTP_AUTH:false}
           starttls:
             enable: ${SMTP_STARTTLS:false}
+            required: ${SMTP_STARTTLS_REQUIRED:false}
 
 cardo:
   api:
@@ -86,6 +87,10 @@ server:
 management:
   endpoint:
     health:
+      group:
+        readiness:
+          include: readinessState,db
+          show-components: always
       probes:
         enabled: true
   endpoints:
