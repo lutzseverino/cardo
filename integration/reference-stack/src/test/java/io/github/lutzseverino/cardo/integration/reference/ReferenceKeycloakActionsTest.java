@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ReferenceKeycloakActionsTest {
@@ -76,6 +78,85 @@ class ReferenceKeycloakActionsTest {
   }
 
   @Test
+  void completesConfirmationFormsAndTerminalInfoLink() throws IOException {
+    HttpServer provider = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    URI origin = URI.create("http://127.0.0.1:" + provider.getAddress().getPort());
+    URI expectedRedirect = origin.resolve("/invitations/completed");
+    List<String> requests = new ArrayList<>();
+    provider.createContext(
+        "/",
+        exchange -> {
+          requests.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+          switch (requests.size()) {
+            case 1 ->
+                respond(
+                    exchange,
+                    200,
+                    """
+                    <div id="kc-info-message">
+                      <p><a href="/realms/reference/login-actions/action-token?key=confirmed">Proceed</a></p>
+                    </div>
+                    """);
+            case 2 -> redirect(exchange, "/password");
+            case 3 ->
+                respond(
+                    exchange,
+                    200,
+                    """
+                    <form id="kc-passwd-update-form" action="/password">
+                      <input name="password-new"><input name="password-confirm">
+                    </form>
+                    """);
+            case 4 -> redirect(exchange, "/profile");
+            case 5 ->
+                respond(
+                    exchange,
+                    200,
+                    """
+                    <form id="kc-update-profile-form" action="/profile">
+                      <input name="firstName"><input name="lastName">
+                    </form>
+                    """);
+            case 6 ->
+                respond(
+                    exchange,
+                    200,
+                    """
+                    <div id="kc-info-message">
+                      <p><a href="%s">Back to application</a></p>
+                    </div>
+                    """
+                        .formatted(expectedRedirect));
+            default -> respond(exchange, 500, "Unexpected request");
+          }
+        });
+    provider.start();
+    try {
+      ReferenceKeycloakActions.Result result =
+          new ReferenceKeycloakActions()
+              .complete(
+                  origin.resolve("/realms/reference/login-actions/action-token?key=initial"),
+                  "password",
+                  "First",
+                  "Last",
+                  expectedRedirect);
+
+      assertThat(result)
+          .isEqualTo(new ReferenceKeycloakActions.Result(true, true, expectedRedirect));
+      assertThat(requests)
+          .containsExactly(
+              "GET /realms/reference/login-actions/action-token?key=initial",
+              "GET /realms/reference/login-actions/action-token?key=confirmed",
+              "GET /password",
+              "POST /password",
+              "GET /profile",
+              "POST /profile");
+    } finally {
+      provider.stop(0);
+    }
+  }
+
+  @Test
   void reportsFormlessProviderResponseWithoutItsTokenQuery() throws IOException {
     HttpServer provider = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     provider.createContext(
@@ -99,12 +180,34 @@ class ReferenceKeycloakActionsTest {
                   + "/realms/reference/login-actions/action-token?key=secret-token");
 
       assertThatThrownBy(
-              () -> new ReferenceKeycloakActions().complete(action, "password", "First", "Last"))
+              () ->
+                  new ReferenceKeycloakActions()
+                      .complete(
+                          action,
+                          "password",
+                          "First",
+                          "Last",
+                          URI.create("http://application.test/completed")))
           .hasMessageContaining(
               "status=400, path=/realms/reference/login-actions/action-token, error=Action expired. Start again.")
           .hasMessageNotContaining("secret-token");
     } finally {
       provider.stop(0);
     }
+  }
+
+  private static void redirect(com.sun.net.httpserver.HttpExchange exchange, String location)
+      throws IOException {
+    exchange.getResponseHeaders().add("Location", location);
+    exchange.sendResponseHeaders(302, -1);
+    exchange.close();
+  }
+
+  private static void respond(
+      com.sun.net.httpserver.HttpExchange exchange, int status, String content) throws IOException {
+    byte[] body = content.getBytes(StandardCharsets.UTF_8);
+    exchange.sendResponseHeaders(status, body.length);
+    exchange.getResponseBody().write(body);
+    exchange.close();
   }
 }

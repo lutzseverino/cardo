@@ -34,7 +34,8 @@ final class ReferenceKeycloakActions {
           .followRedirects(HttpClient.Redirect.NEVER)
           .build();
 
-  Result complete(URI actionLink, String password, String firstName, String lastName) {
+  Result complete(
+      URI actionLink, String password, String firstName, String lastName, URI expectedRedirect) {
     Page page = get(actionLink);
     boolean confirmationCompleted = false;
     boolean passwordCompleted = false;
@@ -43,10 +44,20 @@ final class ReferenceKeycloakActions {
       if (page.status() / 100 == 3) {
         URI redirect = page.uri().resolve(page.location());
         if (passwordCompleted && profileCompleted) {
+          if (!expectedRedirect.equals(redirect)) {
+            throw new IllegalStateException("Keycloak returned an unexpected completion redirect.");
+          }
           return new Result(true, true, redirect);
         }
         page = get(redirect);
         continue;
+      }
+      URI infoLink = infoLink(page.body(), page.uri());
+      if (passwordCompleted && profileCompleted && infoLink != null) {
+        if (!expectedRedirect.equals(infoLink)) {
+          throw new IllegalStateException("Keycloak returned an unexpected completion link.");
+        }
+        return new Result(true, true, infoLink);
       }
       URI continuation = continuation(page.body(), page.uri());
       if (continuation != null) {
@@ -84,7 +95,15 @@ final class ReferenceKeycloakActions {
       }
       page = post(form.action(), input);
     }
-    throw new IllegalStateException("Keycloak required actions did not complete.");
+    throw new IllegalStateException(
+        "Keycloak required actions did not complete: "
+            + describe(page)
+            + ", confirmationCompleted="
+            + confirmationCompleted
+            + ", passwordCompleted="
+            + passwordCompleted
+            + ", profileCompleted="
+            + profileCompleted);
   }
 
   static Form form(String html, URI page) {
@@ -109,6 +128,19 @@ final class ReferenceKeycloakActions {
   }
 
   static URI continuation(String html, URI page) {
+    URI target = infoLink(html, page);
+    if (target == null) {
+      return null;
+    }
+    return Objects.equals(target.getScheme(), page.getScheme())
+            && Objects.equals(target.getAuthority(), page.getAuthority())
+            && target.getPath().equals(page.getPath())
+            && target.getPath().endsWith("/action-token")
+        ? target
+        : null;
+  }
+
+  private static URI infoLink(String html, URI page) {
     Matcher info = INFO.matcher(html);
     if (!info.find()) {
       return null;
@@ -118,16 +150,7 @@ final class ReferenceKeycloakActions {
       return null;
     }
     String href = optionalAttribute(link.group(), "href");
-    if (href == null) {
-      return null;
-    }
-    URI target = page.resolve(htmlDecode(href));
-    return Objects.equals(target.getScheme(), page.getScheme())
-            && Objects.equals(target.getAuthority(), page.getAuthority())
-            && target.getPath().equals(page.getPath())
-            && target.getPath().endsWith("/action-token")
-        ? target
-        : null;
+    return href == null ? null : page.resolve(htmlDecode(href));
   }
 
   private static String describe(Page page) {

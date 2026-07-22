@@ -156,7 +156,12 @@ class ReferenceStackIT {
                   JOURNEY_TIMEOUT);
       ReferenceKeycloakActions.Result action =
           new ReferenceKeycloakActions()
-              .complete(actionLink, INVITED_PASSWORD, "Invited", "Reference");
+              .complete(
+                  actionLink,
+                  INVITED_PASSWORD,
+                  "Invited",
+                  "Reference",
+                  stack.origin().resolve("/invitations/completed"));
       assertThat(action.passwordCompleted()).isTrue();
       assertThat(action.profileCompleted()).isTrue();
       assertThat(action.redirect().getPath()).isEqualTo("/invitations/completed");
