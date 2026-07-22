@@ -453,7 +453,7 @@ assert_repeatable_image() {
   images+=("$repeated_image")
   volumes+=("$build_cache" "$launch_cache")
 
-  ./mvnw --batch-mode --no-transfer-progress -pl "$service" \
+  maven_with_revision --batch-mode --no-transfer-progress -pl "$service" \
     -DskipTests \
     -Dcardo.image.build-cache="$build_cache" \
     -Dcardo.image.launch-cache="$launch_cache" \
@@ -489,7 +489,7 @@ smoke_image() {
   containers+=("$container")
   volumes+=("$build_cache" "$launch_cache")
 
-  ./mvnw --batch-mode --no-transfer-progress -pl "$service" \
+  maven_with_revision --batch-mode --no-transfer-progress -pl "$service" \
     -DskipTests \
     -Dcardo.image.build-cache="$build_cache" \
     -Dcardo.image.launch-cache="$launch_cache" \
@@ -555,13 +555,44 @@ docker network create "$network" >/dev/null
 
 project_version=$(./mvnw --quiet --no-transfer-progress help:evaluate \
   -Dexpression=project.version -DforceStdout)
-source_revision=$(git rev-parse HEAD)
+if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+  [[ -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]] \
+    || fail "GITHUB_EVENT_PATH must identify the pull-request event payload"
+  source_revision=$(jq --raw-output '.pull_request.head.sha // empty' "$GITHUB_EVENT_PATH") \
+    || fail "could not read the pull-request head revision from $GITHUB_EVENT_PATH"
+  checkout_revision=$(git rev-parse HEAD)
+  if [[ "$source_revision" == "$checkout_revision" ]]; then
+    checkout_source_revision=$checkout_revision
+  else
+    checkout_source_revision=$(git rev-parse --verify 'HEAD^2^{commit}' 2>/dev/null) \
+      || fail "checked-out pull-request merge does not expose its source parent"
+  fi
+else
+  source_revision=$(git rev-parse HEAD)
+fi
+[[ "$source_revision" =~ ^[0-9a-f]{40}$ ]] \
+  || fail "expected source revision is not a full lowercase Git SHA: $source_revision"
+if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+  [[ "$checkout_source_revision" =~ ^[0-9a-f]{40}$ ]] \
+    || fail "checked-out pull-request source is not a full lowercase Git SHA: $checkout_source_revision"
+  [[ "$source_revision" == "$checkout_source_revision" ]] \
+    || fail "pull-request event head $source_revision does not match checked-out source $checkout_source_revision"
+fi
+maven_with_revision() {
+  ./mvnw -DbuildNumber="$source_revision" "$@"
+}
+maven_source_revision=$(maven_with_revision --quiet --no-transfer-progress initialize help:evaluate \
+  -Dexpression=buildNumber -DforceStdout)
+[[ "$maven_source_revision" =~ ^[0-9a-f]{40}$ ]] \
+  || fail "Maven buildNumber is not a full lowercase Git SHA: $maven_source_revision"
+[[ "$maven_source_revision" == "$source_revision" ]] \
+  || fail "Maven buildNumber $maven_source_revision does not match expected source revision $source_revision"
 start_provider_stub
 
-./mvnw --batch-mode --no-transfer-progress -DskipTests install
+maven_with_revision --batch-mode --no-transfer-progress -DskipTests install
 
 for service in identity invite billing; do
-  ./mvnw --batch-mode --no-transfer-progress -pl "$service" -DskipTests clean package
+  maven_with_revision --batch-mode --no-transfer-progress -pl "$service" -DskipTests clean package
   sha256_file "$service/target/$service-$project_version.jar" \
     >"$temporary_directory/$service-jar.sha256"
 done
