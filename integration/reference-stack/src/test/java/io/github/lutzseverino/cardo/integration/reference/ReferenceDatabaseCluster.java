@@ -39,7 +39,10 @@ final class ReferenceDatabaseCluster implements AutoCloseable {
         sql.execute("revoke connect on database " + database.name() + " from public");
         sql.execute("revoke create on database " + database.name() + " from public");
         sql.execute(
-            "grant connect on database " + database.name() + " to " + database.application());
+            "grant connect, create on database "
+                + database.name()
+                + " to "
+                + database.application());
       }
     } catch (SQLException failure) {
       throw new IllegalStateException("Could not create isolated reference databases.", failure);
@@ -48,21 +51,7 @@ final class ReferenceDatabaseCluster implements AutoCloseable {
       try (Connection connection =
               DriverManager.getConnection(jdbcUrl(database.name()), ADMIN_USER, ADMIN_PASSWORD);
           Statement sql = connection.createStatement()) {
-        sql.execute("create extension if not exists pgcrypto");
         sql.execute("grant usage, create on schema public to " + database.application());
-        if (database.authorizationSchema() != null) {
-          sql.execute(
-              "create schema "
-                  + database.authorizationSchema()
-                  + " authorization "
-                  + database.owner());
-          sql.execute("revoke all on schema " + database.authorizationSchema() + " from public");
-          sql.execute(
-              "grant usage, create on schema "
-                  + database.authorizationSchema()
-                  + " to "
-                  + database.application());
-        }
       } catch (SQLException failure) {
         throw new IllegalStateException(
             "Could not grant the reference application database role.", failure);
@@ -147,38 +136,23 @@ final class ReferenceDatabaseCluster implements AutoCloseable {
     databases.put(
         "identity",
         new Database(
-            "cardo_identity",
-            "cardo_identity_owner",
-            "cardo_identity_app",
-            "identity-db-secret",
-            "identity_events"));
+            "cardo_identity", "cardo_identity_owner", "cardo_identity_app", "identity-db-secret"));
     databases.put(
         "invite",
-        new Database(
-            "cardo_invite",
-            "cardo_invite_owner",
-            "cardo_invite_app",
-            "invite-db-secret",
-            "invite_events"));
+        new Database("cardo_invite", "cardo_invite_owner", "cardo_invite_app", "invite-db-secret"));
     databases.put(
         "billing",
         new Database(
-            "cardo_billing",
-            "cardo_billing_owner",
-            "cardo_billing_app",
-            "billing-db-secret",
-            null));
+            "cardo_billing", "cardo_billing_owner", "cardo_billing_app", "billing-db-secret"));
     databases.put(
         "product",
         new Database(
             "reference_product",
             "reference_product_owner",
             "reference_product_app",
-            "product-db-secret",
-            "reference_events"));
+            "product-db-secret"));
     return Map.copyOf(databases);
   }
 
-  record Database(
-      String name, String owner, String application, String password, String authorizationSchema) {}
+  record Database(String name, String owner, String application, String password) {}
 }
