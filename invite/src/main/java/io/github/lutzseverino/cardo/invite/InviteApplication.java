@@ -5,13 +5,16 @@ import io.github.lutzseverino.cardo.invite.config.InvitationDeliveryProperties;
 import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
 import io.github.lutzseverino.cardo.invite.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.invite.config.ProductCallerProperties;
+import io.github.lutzseverino.cardo.openapi.mapping.UriResponseConversions;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
+@Import(UriResponseConversions.class)
 @EnableConfigurationProperties({
   InvitationCompletionProperties.class,
   InvitationDeliveryProperties.class,

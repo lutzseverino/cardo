@@ -62,7 +62,11 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             requests ->
                 requests
-                    .requestMatchers("/actuator/health", "/actuator/info")
+                    .requestMatchers(
+                        "/actuator/health",
+                        "/actuator/health/liveness",
+                        "/actuator/health/readiness",
+                        "/actuator/info")
                     .permitAll()
                     .requestMatchers(
                         "/openapi.json", "/docs/**", "/swagger-ui/**", "/v3/api-docs/**")

@@ -45,6 +45,14 @@
     <mapstruct.version>1.6.3</mapstruct.version>
     <maven-enforcer.version>3.6.2</maven-enforcer.version>
     <openapi-generator.version>7.22.0</openapi-generator.version>
+    <cardo.buildpack.builder>paketobuildpacks/builder-noble-java-tiny@sha256:3c0ad71c3dc975e4c7d5e3a704c04307beb93a1c75a663f70ac6437414f6ed12</cardo.buildpack.builder>
+    <cardo.buildpack.run-image>paketobuildpacks/ubuntu-noble-run-tiny@sha256:ce96dbed676cede92b8c043bf6892edfcf6c96e825437fdd92a179ffa66fad5e</cardo.buildpack.run-image>
+    <cardo.image.build-cache>cardo-${project.artifactId}-build-cache</cardo.image.build-cache>
+    <cardo.image.launch-cache>cardo-${project.artifactId}-launch-cache</cardo.image.launch-cache>
+    <cardo.image.name>cardo/${project.artifactId}:${project.version}</cardo.image.name>
+    <cardo.source-date-epoch>315532802</cardo.source-date-epoch>
+    <buildnumber-maven-plugin.version>3.3.0</buildnumber-maven-plugin.version>
+    <project.build.outputTimestamp>1980-01-01T00:00:02Z</project.build.outputTimestamp>
     <springdoc.version>3.0.3</springdoc.version>
     <spring-modulith.version>2.0.6</spring-modulith.version>
     <spotless.version>3.4.0</spotless.version>
@@ -81,6 +89,83 @@
   </dependencies>
 
   <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>buildnumber-maven-plugin</artifactId>
+          <version>${buildnumber-maven-plugin.version}</version>
+          <executions>
+            <execution>
+              <id>source-revision</id>
+              <phase>initialize</phase>
+              <goals>
+                <goal>create</goal>
+              </goals>
+            </execution>
+          </executions>
+          <configuration>
+            <doCheck>false</doCheck>
+            <doUpdate>false</doUpdate>
+            <getRevisionOnlyOnce>true</getRevisionOnlyOnce>
+            <ignoreEmptyScmUrl>true</ignoreEmptyScmUrl>
+            <scmDirectory>${maven.multiModuleProjectDirectory}</scmDirectory>
+            <scmProvider>git</scmProvider>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <executions>
+            <execution>
+              <id>build-info</id>
+              <goals>
+                <goal>build-info</goal>
+              </goals>
+              <configuration>
+                <additionalProperties>
+                  <sourceRevision>${buildNumber}</sourceRevision>
+                </additionalProperties>
+                <excludeInfoProperties>
+                  <excludeInfoProperty>time</excludeInfoProperty>
+                </excludeInfoProperties>
+              </configuration>
+            </execution>
+          </executions>
+          <configuration>
+            <image>
+              <name>${cardo.image.name}</name>
+              <builder>${cardo.buildpack.builder}</builder>
+              <runImage>${cardo.buildpack.run-image}</runImage>
+              <createdDate>${project.build.outputTimestamp}</createdDate>
+              <buildpacks>
+                <buildpack>urn:cnb:builder:paketo-buildpacks/java</buildpack>
+                <buildpack>urn:cnb:builder:paketo-buildpacks/image-labels</buildpack>
+              </buildpacks>
+              <buildCache>
+                <volume>
+                  <name>${cardo.image.build-cache}</name>
+                </volume>
+              </buildCache>
+              <env>
+                <BP_OCI_DESCRIPTION>${project.description}</BP_OCI_DESCRIPTION>
+                <BP_OCI_LICENSES>MIT</BP_OCI_LICENSES>
+                <BP_OCI_REVISION>${buildNumber}</BP_OCI_REVISION>
+                <BP_OCI_SOURCE>https://github.com/lutzseverino/cardo</BP_OCI_SOURCE>
+                <BP_OCI_TITLE>${project.name}</BP_OCI_TITLE>
+                <BP_OCI_VERSION>${project.version}</BP_OCI_VERSION>
+                <SOURCE_DATE_EPOCH>${cardo.source-date-epoch}</SOURCE_DATE_EPOCH>
+              </env>
+              <launchCache>
+                <volume>
+                  <name>${cardo.image.launch-cache}</name>
+                </volume>
+              </launchCache>
+            </image>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

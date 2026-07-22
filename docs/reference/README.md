@@ -38,3 +38,4 @@ Use the [reference template](../_templates/reference.template.md) for new refere
 - [Generated Client Code](generated-client-code.md)
 - [Method Naming](method-naming.md)
 - [Product Integration](product-integration.md)
+- [Runtime Artifacts](runtime-artifacts.md)

@@ -1,6 +1,8 @@
 spring:
   application:
     name: cardo-invite
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cardo}
     username: ${SPRING_DATASOURCE_USERNAME:cardo}
@@ -67,12 +69,20 @@ cardo:
 
 server:
   port: ${INVITE_PORT:8083}
+  shutdown: graceful
 
 management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:
         include: health,info
+  info:
+    build:
+      enabled: true
 
 springdoc:
   api-docs:

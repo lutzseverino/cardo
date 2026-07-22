@@ -3,13 +3,16 @@ package io.github.lutzseverino.cardo.billing;
 import io.github.lutzseverino.cardo.billing.config.CustomerProvisioningProperties;
 import io.github.lutzseverino.cardo.billing.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.billing.config.StripeProperties;
+import io.github.lutzseverino.cardo.openapi.mapping.UriResponseConversions;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
+@Import(UriResponseConversions.class)
 @EnableConfigurationProperties({
   KeycloakProperties.class,
   StripeProperties.class,
