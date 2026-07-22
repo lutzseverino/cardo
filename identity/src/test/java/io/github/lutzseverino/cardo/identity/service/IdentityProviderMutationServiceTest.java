@@ -270,7 +270,7 @@ class IdentityProviderMutationServiceTest {
         new IdentityProviderMutationService(
             terminalRepository,
             new IdentityProviderMutationProperties(
-                Duration.ofSeconds(5), Duration.ZERO, Duration.ofMinutes(1), 1, 50),
+                Duration.ofSeconds(5), Duration.ofNanos(1), Duration.ofMinutes(1), 1, 50),
             mock(IdentityWorkflowMetrics.class));
     assertThat(
             terminalService.recordFailure(
@@ -298,7 +298,7 @@ class IdentityProviderMutationServiceTest {
     when(repository.findReadyIds(
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
         .thenReturn(List.of(mutation.getId()));
-    IdentityProviderMutationService service = service(repository, Duration.ZERO);
+    IdentityProviderMutationService service = service(repository, Duration.ofNanos(1));
 
     PasswordProvisioningIntent newOwner =
         service.requestPasswordProvision("user@example.com", "User");

@@ -1,5 +1,7 @@
 package io.github.lutzseverino.cardo.billing;
 
+import io.github.lutzseverino.cardo.billing.config.BillingDatastoreProperties;
+import io.github.lutzseverino.cardo.billing.config.BillingRuntimeProperties;
 import io.github.lutzseverino.cardo.billing.config.CustomerProvisioningProperties;
 import io.github.lutzseverino.cardo.billing.config.KeycloakProperties;
 import io.github.lutzseverino.cardo.billing.config.StripeProperties;
@@ -14,6 +16,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @Import(UriResponseConversions.class)
 @EnableConfigurationProperties({
+  BillingRuntimeProperties.class,
+  BillingDatastoreProperties.class,
   KeycloakProperties.class,
   StripeProperties.class,
   CustomerProvisioningProperties.class

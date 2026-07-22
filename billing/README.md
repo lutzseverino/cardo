@@ -21,5 +21,11 @@ must not silently grant product-domain access.
 
 ## Documentation
 
+Set `BILLING_RUNTIME_MODE=production` with a remote HTTPS Keycloak issuer, Stripe credentials and
+catalogue, and a Billing-owned PostgreSQL database with distinct no-login owner and login
+application roles. Startup verifies the effective database and roles after Flyway completes. Stripe and issuer/JWK calls have
+positive finite connection and response bounds; Stripe automatic network retries are disabled.
+See the indexed [runtime property reference](../docs/reference/runtime-properties.md).
+
 Start with the [Billing documentation index](docs/README.md). Cross-project
 architecture and conventions remain in the [Cardo documentation](../docs/README.md).

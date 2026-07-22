@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -46,11 +47,11 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       KeycloakProperties properties,
       KeycloakRealmAdminClient admin,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,
-      RestClient.Builder rest) {
+      @Qualifier("identityOutboundRestClientBuilder") RestClient.Builder rest) {
     this.properties = properties;
     this.admin = admin;
     this.clientCredentialsTokens = clientCredentialsTokens;
-    this.rest = rest.baseUrl(properties.baseUrl()).build();
+    this.rest = rest.clone().baseUrl(properties.baseUrl()).build();
   }
 
   @Override

@@ -1,0 +1,6 @@
+cardo:
+  invite:
+    product-callers:
+      allowed-client-ids:
+        - clinic
+        - clinic

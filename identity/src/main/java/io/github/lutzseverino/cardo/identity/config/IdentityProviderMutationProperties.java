@@ -13,4 +13,18 @@ public record IdentityProviderMutationProperties(
     @NotNull Duration retryBaseDelay,
     @NotNull Duration claimLease,
     @Positive int maxAttempts,
-    @Positive int batchSize) {}
+    @Positive int batchSize) {
+
+  public IdentityProviderMutationProperties {
+    positive(dispatchDelay, "dispatch-delay");
+    positive(retryBaseDelay, "retry-base-delay");
+    positive(claimLease, "claim-lease");
+  }
+
+  private static void positive(Duration value, String property) {
+    if (value != null && (value.isZero() || value.isNegative())) {
+      throw new IllegalArgumentException(
+          "cardo.identity.provider-mutations." + property + " must be positive.");
+    }
+  }
+}

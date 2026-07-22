@@ -41,3 +41,4 @@ Use the [reference template](../_templates/reference.template.md) for new refere
 - [Product Integration](product-integration.md)
 - [Releases](releases.md)
 - [Runtime Artifacts](runtime-artifacts.md)
+- [Runtime Properties](runtime-properties.md)

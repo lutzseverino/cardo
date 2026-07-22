@@ -193,7 +193,19 @@ class KeycloakClientCredentialsTokenProviderTest {
                 new KeycloakClientCredentialsTokenSettings(
                     Duration.ZERO, Duration.ofSeconds(1), Duration.ZERO))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("connectTimeout must be positive.");
+        .hasMessage("connectTimeout must be between 1ms and 2147483647ms.");
+    assertThatThrownBy(
+            () ->
+                new KeycloakClientCredentialsTokenSettings(
+                    Duration.ofNanos(1), Duration.ofSeconds(1), Duration.ZERO))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("between 1ms");
+    assertThatThrownBy(
+            () ->
+                new KeycloakClientCredentialsTokenSettings(
+                    Duration.ofSeconds(Long.MAX_VALUE), Duration.ofSeconds(1), Duration.ZERO))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("between 1ms");
     assertThatThrownBy(
             () ->
                 new KeycloakClientCredentialsTokenSettings(

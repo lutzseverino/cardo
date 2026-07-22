@@ -43,6 +43,18 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   invite:
+    datastore:
+      database-name: ${INVITE_DATABASE_NAME:cardo_invite}
+      owner-role: ${INVITE_DATABASE_OWNER_ROLE:cardo_invite_owner}
+      application-role: ${INVITE_DATABASE_APPLICATION_ROLE:cardo_invite_app}
+    runtime:
+      mode: ${INVITE_RUNTIME_MODE:local}
+      connect-timeout: ${INVITE_PROVIDER_CONNECT_TIMEOUT:2s}
+      read-timeout: ${INVITE_PROVIDER_READ_TIMEOUT:2s}
+    smtp:
+      connect-timeout: ${SMTP_CONNECT_TIMEOUT:2s}
+      read-timeout: ${SMTP_READ_TIMEOUT:2s}
+      write-timeout: ${SMTP_WRITE_TIMEOUT:2s}
     completion:
       dispatch-delay: ${INVITATION_COMPLETION_DISPATCH_DELAY:5s}
       poll-delay: ${INVITATION_COMPLETION_POLL_DELAY:15s}

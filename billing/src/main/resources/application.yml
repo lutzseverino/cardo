@@ -25,6 +25,14 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   billing:
+    datastore:
+      database-name: ${BILLING_DATABASE_NAME:cardo_billing}
+      owner-role: ${BILLING_DATABASE_OWNER_ROLE:cardo_billing_owner}
+      application-role: ${BILLING_DATABASE_APPLICATION_ROLE:cardo_billing_app}
+    runtime:
+      mode: ${BILLING_RUNTIME_MODE:local}
+      jwk-connect-timeout: ${BILLING_JWK_CONNECT_TIMEOUT:2s}
+      jwk-read-timeout: ${BILLING_JWK_READ_TIMEOUT:2s}
     customer-provisioning:
       dispatch-delay: ${BILLING_CUSTOMER_PROVISIONING_DISPATCH_DELAY:5s}
       retry-base-delay: ${BILLING_CUSTOMER_PROVISIONING_RETRY_BASE_DELAY:10s}
@@ -37,6 +45,8 @@ cardo:
     stripe:
       secret-key: ${STRIPE_SECRET_KEY:}
       webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+      connect-timeout: ${STRIPE_CONNECT_TIMEOUT:2s}
+      read-timeout: ${STRIPE_READ_TIMEOUT:2s}
       checkout-prices: []
 
 server:

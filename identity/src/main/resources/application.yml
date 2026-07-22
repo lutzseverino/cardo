@@ -32,6 +32,14 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   identity:
+    datastore:
+      database-name: ${IDENTITY_DATABASE_NAME:cardo_identity}
+      owner-role: ${IDENTITY_DATABASE_OWNER_ROLE:cardo_identity_owner}
+      application-role: ${IDENTITY_DATABASE_APPLICATION_ROLE:cardo_identity_app}
+    runtime:
+      mode: ${IDENTITY_RUNTIME_MODE:local}
+      connect-timeout: ${IDENTITY_PROVIDER_CONNECT_TIMEOUT:2s}
+      read-timeout: ${IDENTITY_PROVIDER_READ_TIMEOUT:2s}
     session:
       mode: ${IDENTITY_SESSION_MODE:local}
       access-cookie-name: ${IDENTITY_ACCESS_COOKIE_NAME:cardo.session}
