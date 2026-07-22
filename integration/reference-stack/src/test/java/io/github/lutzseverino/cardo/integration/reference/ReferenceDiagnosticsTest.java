@@ -18,4 +18,22 @@ class ReferenceDiagnosticsTest {
         .doesNotContain("eyJabc.def.ghi", "hunter2", "session-value", "code=secret")
         .contains("[redacted]", "[redacted-action-link]");
   }
+
+  @Test
+  void redactsTheEntireKeycloakActionTokenLink() {
+    String input =
+        "Follow https://identity.test/realms/cardo/login-actions/action-token?key=keycloak-secret&client_id=identity&tab_id=tab-secret now.";
+
+    assertThat(ReferenceDiagnostics.sanitize(input))
+        .isEqualTo("Follow [redacted-action-link] now.");
+  }
+
+  @Test
+  void redactsTheEntireInvitationAcceptanceLink() {
+    String input =
+        "Open https://app.test/invitations/accept/invitation-secret?locale=en to accept.";
+
+    assertThat(ReferenceDiagnostics.sanitize(input))
+        .isEqualTo("Open [redacted-action-link] to accept.");
+  }
 }

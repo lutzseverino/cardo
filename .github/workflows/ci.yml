@@ -109,12 +109,9 @@ jobs:
           ./scripts/smoke-reference-stack.sh
           ./scripts/smoke-reference-stack.sh
       - name: Upload sanitized reference diagnostics
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: reference-stack-diagnostics
           if-no-files-found: warn
-          path: |
-            integration/reference-stack/target/reference-stack/
-            integration/reference-stack/target/surefire-reports/
-            integration/reference-stack/target/failsafe-reports/
+          path: integration/reference-stack/target/reference-stack/

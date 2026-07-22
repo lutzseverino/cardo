@@ -10,7 +10,8 @@ final class ReferenceDiagnostics {
       Pattern.compile(
           "(?i)(client[_-]?secret|password|authorization|cookie|set-cookie|token)([=:]\\s*)([^\\s,;]+)");
   private static final Pattern ACTION_LINK =
-      Pattern.compile("(?i)https?://[^\\s]+(?:action-token|code|token)=[^\\s]+");
+      Pattern.compile(
+          "(?i)https?://[^\\s\"'<>]*(?:/login-actions/action-token\\?[^\\s\"'<>]*|/invitations/accept/[^\\s\"'<>]+|[?&](?:code|token)=[^\\s\"'<>]+)");
 
   private ReferenceDiagnostics() {}
 
