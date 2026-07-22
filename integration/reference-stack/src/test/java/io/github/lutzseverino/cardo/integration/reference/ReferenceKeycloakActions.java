@@ -91,8 +91,7 @@ final class ReferenceKeycloakActions {
       if (continuation != null) {
         if (confirmationCompleted) {
           throw new IllegalStateException(
-              "Keycloak action confirmation was repeated: "
-                  + browserState(page.uri(), continuation));
+              "Keycloak action confirmation was repeated: " + browserState(page, continuation));
         }
         confirmationCompleted = true;
         page = get(continuation);
@@ -275,7 +274,7 @@ final class ReferenceKeycloakActions {
         .collect(java.util.stream.Collectors.joining("; "));
   }
 
-  private String browserState(URI page, URI target) {
+  private String browserState(Page page, URI target) {
     String stored =
         cookies.getCookieStore().getCookies().stream()
             .map(
@@ -283,6 +282,8 @@ final class ReferenceKeycloakActions {
                     cookie.getName()
                         + "[path="
                         + cookie.getPath()
+                        + ",domain="
+                        + cookie.getDomain()
                         + ",secure="
                         + cookie.getSecure()
                         + ",version="
@@ -303,19 +304,23 @@ final class ReferenceKeycloakActions {
     } catch (IOException failure) {
       selected = "unavailable";
     }
-    return "stored="
+    return "status="
+        + page.status()
+        + ", path="
+        + page.uri().getPath()
+        + ", stored="
         + stored
         + ", selected="
         + selected
         + ", pageQuery="
-        + queryNames(page)
+        + queryNames(page.uri())
         + ", targetQuery="
         + queryNames(target)
         + ", sameOrigin="
-        + (Objects.equals(page.getScheme(), target.getScheme())
-            && Objects.equals(page.getAuthority(), target.getAuthority()))
+        + (Objects.equals(page.uri().getScheme(), target.getScheme())
+            && Objects.equals(page.uri().getAuthority(), target.getAuthority()))
         + ", samePath="
-        + Objects.equals(page.getPath(), target.getPath());
+        + Objects.equals(page.uri().getPath(), target.getPath());
   }
 
   private static String queryNames(URI uri) {

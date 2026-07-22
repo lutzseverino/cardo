@@ -104,7 +104,7 @@ class ReferenceKeycloakActionsTest {
                   200,
                   """
                     <div id="kc-info-message">
-                      <p><a href="/realms/reference/login-actions/action-token?key=confirmed">Proceed</a></p>
+                      <p><a href="/realms/reference/login-actions/action-token?key=confirmed&amp;client_id=browser&amp;tab_id=tab">Proceed</a></p>
                     </div>
                     """);
             }
@@ -157,7 +157,7 @@ class ReferenceKeycloakActionsTest {
       assertThat(requests)
           .containsExactly(
               "GET /realms/reference/login-actions/action-token?key=initial",
-              "GET /realms/reference/login-actions/action-token?key=confirmed",
+              "GET /realms/reference/login-actions/action-token?key=confirmed&client_id=browser&tab_id=tab",
               "GET /realms/reference/login-actions/password",
               "POST /realms/reference/login-actions/password",
               "GET /realms/reference/login-actions/profile",
