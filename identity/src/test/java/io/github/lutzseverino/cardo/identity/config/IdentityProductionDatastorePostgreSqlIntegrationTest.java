@@ -34,6 +34,8 @@ class IdentityProductionDatastorePostgreSqlIntegrationTest {
     executeAdmin(
         "create role cardo_identity_owner nologin",
         "create role cardo_identity_app login password 'service-secret'",
+        "create role cardo_identity_deployer login password 'deployer-secret'",
+        "grant cardo_identity_app to cardo_identity_deployer",
         "create role foreign_owner nologin",
         "create database cardo_identity owner cardo_identity_owner",
         "create database cardo_foreign owner foreign_owner",
@@ -71,21 +73,44 @@ class IdentityProductionDatastorePostgreSqlIntegrationTest {
         .hasMessageContaining("permission denied for database");
   }
 
+  @Test
+  void productionStartupRejectsAPrivilegedSessionThatAssumesTheApplicationRole() {
+    context(
+            "cardo_identity_deployer",
+            "deployer-secret",
+            "spring.datasource.hikari.connection-init-sql=set role cardo_identity_app")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasRootCauseMessage(
+                        "Invalid production property cardo.identity.datastore.application-role: "
+                            + "must match both the authenticated and effective database roles."));
+  }
+
   private ApplicationContextRunner context() {
-    return new ApplicationContextRunner()
-        .withConfiguration(
-            AutoConfigurations.of(DataSourceAutoConfiguration.class, FlywayAutoConfiguration.class))
-        .withUserConfiguration(TestConfiguration.class)
-        .withPropertyValues(
-            "cardo.identity.runtime.mode=production",
-            "spring.datasource.url=" + jdbcUrl("cardo_identity"),
-            "spring.datasource.username=cardo_identity_app",
-            "spring.datasource.password=service-secret",
-            "spring.flyway.table=flyway_schema_history_identity",
-            "spring.flyway.baseline-on-migrate=true",
-            "spring.flyway.baseline-version=0",
-            "spring.flyway.locations=classpath:db/migration,classpath:db/authorization/publications",
-            "spring.flyway.placeholders.authorizationSchema=identity_events");
+    return context("cardo_identity_app", "service-secret");
+  }
+
+  private ApplicationContextRunner context(String username, String password, String... properties) {
+    ApplicationContextRunner runner =
+        new ApplicationContextRunner()
+            .withConfiguration(
+                AutoConfigurations.of(
+                    DataSourceAutoConfiguration.class, FlywayAutoConfiguration.class))
+            .withUserConfiguration(TestConfiguration.class)
+            .withPropertyValues(
+                "cardo.identity.runtime.mode=production",
+                "spring.datasource.url=" + jdbcUrl("cardo_identity"),
+                "spring.datasource.username=" + username,
+                "spring.datasource.password=" + password,
+                "spring.flyway.table=flyway_schema_history_identity",
+                "spring.flyway.baseline-on-migrate=true",
+                "spring.flyway.baseline-version=0",
+                "spring.flyway.locations=classpath:db/migration,classpath:db/authorization/publications",
+                "spring.flyway.placeholders.authorizationSchema=identity_events");
+    return runner.withPropertyValues(properties);
   }
 
   private static void executeAdmin(String... commands) throws SQLException {

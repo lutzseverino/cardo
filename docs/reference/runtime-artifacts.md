@@ -56,7 +56,7 @@ paths support orchestration and artifact inspection:
 | Path | Meaning |
 | --- | --- |
 | `/actuator/health/liveness` | The process is live. Restart it when this is not healthy. |
-| `/actuator/health/readiness` | The process can accept traffic. Route traffic only while this is healthy. |
+| `/actuator/health/readiness` | The process and its database can accept traffic. Route traffic only while the overall status and `components.db.status` are `UP`. |
 | `/actuator/info` | Build version and full source revision metadata. |
 
 Application routes keep their existing security contract. Other Actuator
@@ -67,6 +67,8 @@ withdrawn and the embedded server stops accepting new work while active requests
 finish. The web-server shutdown phase has a 20-second bound. An orchestrator
 should send `SIGTERM`, stop routing immediately, and allow at least 25 seconds
 before forcing termination to account for observation and process-exit overhead.
+Readiness also fails when the service database is unavailable; liveness remains isolated so a
+database outage withdraws traffic without creating a restart loop.
 
 ## Image Metadata
 
@@ -101,7 +103,7 @@ Docker-compatible daemon:
 The smoke installs the reactor locally, starts an isolated disposable PostgreSQL
 for each artifact, packages and starts every JAR, builds and starts every image,
 and verifies reproducibility, metadata, non-root image ownership, exact public
-probe paths, information, readiness withdrawal, bounded termination, and
+probe paths, database-backed readiness, readiness withdrawal, bounded termination, and
 cleanup. Identity uses a local protocol stub containing the exact clients,
 canonical claim mappers, fixed Identity roles, and provider read capabilities
 required by its startup contract. The stub returns `403` for mapper and role

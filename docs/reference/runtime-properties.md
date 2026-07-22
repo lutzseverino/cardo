@@ -20,7 +20,7 @@ fails startup before traffic is served, and errors name the property without ech
 | Identity | `cardo.api.base-path` | string | `/api/${cardo.api.version}` | optional | no | Base path used by security and OpenAPI routing. |
 | Identity | `cardo.identity.datastore.database-name` | string | `cardo_identity` | required | no | Must equal `current_database()` at startup. |
 | Identity | `cardo.identity.datastore.owner-role` | string | `cardo_identity_owner` | required | no | Must equal the PostgreSQL database owner and differ from the application role. |
-| Identity | `cardo.identity.datastore.application-role` | string | `cardo_identity_app` | required | no | Must equal `current_user`; must not own the database. |
+| Identity | `cardo.identity.datastore.application-role` | string | `cardo_identity_app` | required | no | Must equal both `session_user` and `current_user`; must not own the database. |
 | Identity | `cardo.identity.session.mode` | enum | `local` | `production` | no | Production cookie policy must be selected. |
 | Identity | `cardo.identity.session.access-cookie-name` | string | `cardo.session` | `__Host-cardo.session` | no | Required production host-prefixed access cookie. |
 | Identity | `cardo.identity.session.refresh-cookie-name` | string | `cardo.refresh` | `__Secure-cardo.refresh` | no | Required production secure-prefixed refresh cookie. |
@@ -63,7 +63,7 @@ fails startup before traffic is served, and errors name the property without ech
 | Invite | `cardo.api.base-path` | string | `/api/${cardo.api.version}` | optional | no | Base path used by security and OpenAPI routing. |
 | Invite | `cardo.invite.datastore.database-name` | string | `cardo_invite` | required | no | Must equal `current_database()` at startup. |
 | Invite | `cardo.invite.datastore.owner-role` | string | `cardo_invite_owner` | required | no | Must equal the PostgreSQL database owner and differ from the application role. |
-| Invite | `cardo.invite.datastore.application-role` | string | `cardo_invite_app` | required | no | Must equal `current_user`; must not own the database. |
+| Invite | `cardo.invite.datastore.application-role` | string | `cardo_invite_app` | required | no | Must equal both `session_user` and `current_user`; must not own the database. |
 | Invite | `cardo.invite.keycloak.base-url` | URI | `http://localhost:8080` | required | no | Remote HTTPS; canonical local endpoints rejected. |
 | Invite | `cardo.invite.keycloak.realm` | string | `cardo` | required | no | Non-blank; forms the expected issuer. |
 | Invite | `cardo.invite.keycloak.client-id` | string | `cardo-invite` | required | no | Non-blank exact Invite audience/client. |
@@ -89,7 +89,8 @@ fails startup before traffic is served, and errors name the property without ech
 | Invite | `spring.mail.username` | string | blank | required | no | Non-blank SMTP user. |
 | Invite | `spring.mail.password` | string | blank | required | yes | Non-blank, non-development credential. |
 | Invite | `spring.mail.properties.mail.smtp.auth` | boolean | `false` | `true` | no | SMTP authentication required. |
-| Invite | `spring.mail.properties.mail.smtp.starttls.enable` | boolean | `false` | `true` | no | STARTTLS required. |
+| Invite | `spring.mail.properties.mail.smtp.starttls.enable` | boolean | `false` | `true` | no | Enables STARTTLS. |
+| Invite | `spring.mail.properties.mail.smtp.starttls.required` | boolean | `false` | `true` | no | Rejects SMTP connections that cannot negotiate STARTTLS. |
 
 ## Billing service
 
@@ -102,7 +103,7 @@ fails startup before traffic is served, and errors name the property without ech
 | Billing | `cardo.api.base-path` | string | `/api/${cardo.api.version}` | optional | no | Base path used by security and OpenAPI routing. |
 | Billing | `cardo.billing.datastore.database-name` | string | `cardo_billing` | required | no | Must equal `current_database()` at startup. |
 | Billing | `cardo.billing.datastore.owner-role` | string | `cardo_billing_owner` | required | no | Must equal the PostgreSQL database owner and differ from the application role. |
-| Billing | `cardo.billing.datastore.application-role` | string | `cardo_billing_app` | required | no | Must equal `current_user`; must not own the database. |
+| Billing | `cardo.billing.datastore.application-role` | string | `cardo_billing_app` | required | no | Must equal both `session_user` and `current_user`; must not own the database. |
 | Billing | `cardo.billing.keycloak.base-url` | URI | `http://localhost:8080` | required | no | Remote HTTPS; canonical local endpoints rejected. |
 | Billing | `cardo.billing.keycloak.realm` | string | `cardo` | required | no | Non-blank; forms the expected issuer. |
 | Billing | `cardo.billing.stripe.secret-key` | string | blank | required | yes | Non-blank, non-development Stripe credential. |
@@ -121,13 +122,13 @@ fails startup before traffic is served, and errors name the property without ech
 | Owner | Property | Type | Default | Production requirement | Secret | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
 | Identity | `spring.datasource.url` | JDBC URL | `jdbc:postgresql://localhost:5432/cardo` | required | no | Remote host; connected database must match `cardo.identity.datastore.database-name`. |
-| Identity | `spring.datasource.username` | string | `cardo` | required | no | Effective role must match `cardo.identity.datastore.application-role`. |
+| Identity | `spring.datasource.username` | string | `cardo` | required | no | Must authenticate directly as `cardo.identity.datastore.application-role`; role switching is rejected. |
 | Identity | `spring.datasource.password` | string | `cardo` | required | yes | Non-blank, non-development credential. |
 | Invite | `spring.datasource.url` | JDBC URL | `jdbc:postgresql://localhost:5432/cardo` | required | no | Remote host; connected database must match `cardo.invite.datastore.database-name`. |
-| Invite | `spring.datasource.username` | string | `cardo` | required | no | Effective role must match `cardo.invite.datastore.application-role`. |
+| Invite | `spring.datasource.username` | string | `cardo` | required | no | Must authenticate directly as `cardo.invite.datastore.application-role`; role switching is rejected. |
 | Invite | `spring.datasource.password` | string | `cardo` | required | yes | Non-blank, non-development credential. |
 | Billing | `spring.datasource.url` | JDBC URL | `jdbc:postgresql://localhost:5432/cardo` | required | no | Remote host; connected database must match `cardo.billing.datastore.database-name`. |
-| Billing | `spring.datasource.username` | string | `cardo` | required | no | Effective role must match `cardo.billing.datastore.application-role`. |
+| Billing | `spring.datasource.username` | string | `cardo` | required | no | Must authenticate directly as `cardo.billing.datastore.application-role`; role switching is rejected. |
 | Billing | `spring.datasource.password` | string | `cardo` | required | yes | Non-blank, non-development credential. |
 | Identity | `spring.security.oauth2.resourceserver.jwt.issuer-uri` | URI | Identity realm URI | required | no | Remote HTTPS and exact `<base-url>/realms/<realm>` match. |
 | Invite | `spring.security.oauth2.resourceserver.jwt.issuer-uri` | URI | Invite realm URI | required | no | Remote HTTPS and exact `<base-url>/realms/<realm>` match. |
@@ -137,10 +138,17 @@ Provision one database owner role without login and one login application role f
 Grant the application role only `CONNECT` and the schema/database privileges required for that
 service's Flyway migrations and runtime queries. Revoke `CONNECT` from `PUBLIC` and grant no access
 to the other service databases. Production startup runs Flyway first, then verifies
-`current_database()`, `current_user`, the database owner, and that owner/application roles differ.
+`current_database()`, `session_user`, `current_user`, the database owner, and that
+owner/application roles differ. Production datasource credentials must log in directly as the
+configured application role; a privileged login followed by `SET ROLE` is rejected.
 The repository integration tests exercise this policy and cross-owner denial for Identity, Invite,
 and Billing. A deployment repository remains responsible for creating the databases, roles, grants,
 and secrets; Cardo does not prescribe a host-per-service topology.
+
+Before deploying this runtime over an existing production installation, configure
+`SMTP_STARTTLS_REQUIRED=true` for Invite and replace any privileged datasource login with direct
+credentials for the service application role. Apply those settings before starting the new binary
+so its fail-fast production checks do not interrupt the rollout.
 
 Identity constructs its decoder eagerly. Invite and Billing retain lazy issuer discovery, so an
 issuer outage does not prevent public health startup; the first protected request fails closed

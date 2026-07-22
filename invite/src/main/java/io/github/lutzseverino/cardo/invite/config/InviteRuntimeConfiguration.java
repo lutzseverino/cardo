@@ -117,6 +117,11 @@ class InviteRuntimeConfiguration {
       throw invalid(
           "spring.mail.properties.mail.smtp.starttls.enable", "must be true in production");
     }
+    if (!environment.getProperty(
+        "spring.mail.properties.mail.smtp.starttls.required", Boolean.class, false)) {
+      throw invalid(
+          "spring.mail.properties.mail.smtp.starttls.required", "must be true in production");
+    }
     requireText("spring.mail.username", environment.getProperty("spring.mail.username"));
     requireSecret("spring.mail.password", environment.getProperty("spring.mail.password"));
   }

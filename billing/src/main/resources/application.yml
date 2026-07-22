@@ -56,6 +56,9 @@ server:
 management:
   endpoint:
     health:
+      group:
+        readiness:
+          include: readinessState,db
       probes:
         enabled: true
   endpoints:
