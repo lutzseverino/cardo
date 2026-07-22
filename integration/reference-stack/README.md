@@ -7,7 +7,7 @@ digest-pinned PostgreSQL, Keycloak, Mailpit, and Caddy dependencies.
 
 The reference product owns a tenant membership transition, persists its own
 invitation command and authorization receipt, embeds Authorization, and consumes
-only the stable Identity, Invite, and Billing clients. A single HTTPS browser
+only the stable Invite and Billing clients. A single HTTPS browser
 origin exposes the product plus Identity session routes. Caddy explicitly hides
 the test-control paths before applying its product fallback.
 
@@ -17,10 +17,8 @@ The test realm deliberately separates the product's credentials:
 
 - `reference-product` owns the product resource server, UMA catalog, PAT, and
   introspection credential;
-- `reference-product-outbound` owns only the optional `identity`, `cardo-invite`,
-  and `billing` scopes used by stable outbound clients. Its Identity token has
-  only `profile:read`, which resolves the immutable invited user before
-  acceptance.
+- `reference-product-outbound` owns only the optional `cardo-invite` and
+  `billing` scopes used by stable outbound clients.
 
 The split prevents Keycloak's automatic `uma_protection` role from contaminating
 scoped outbound tokens. It belongs only to this executable fixture and is not a
@@ -38,10 +36,11 @@ same read-only, header-only CSRF check. Tenant, Billing, invitation creation,
 and every other product route stay on `identity-product-auth` and require the
 normal product RPT path.
 
-Before recording acceptance, the product compares Invite's immutable
-`invitedUserId`, Identity's stable user record, and the authenticated Cardo user.
-It then binds the authorization subject to the durable acceptance intent;
-convergence is visible only to that bound subject.
+Before recording acceptance, the product compares its durable `invitedUserId`
+with the authenticated Cardo user from the signed Identity session, then checks
+that Invite still reports the same immutable user identifier. It binds the
+trusted authorization subject to the durable acceptance intent; convergence is
+visible only to that bound subject.
 
 ## Guarantees Exercised
 

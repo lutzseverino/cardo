@@ -1,7 +1,6 @@
 package io.github.lutzseverino.cardo.integration.reference;
 
 import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUser;
-import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
 import io.github.lutzseverino.cardo.invite.client.CreateInvitation;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletion;
 import io.github.lutzseverino.cardo.invite.client.InvitationToken;
@@ -20,7 +19,6 @@ class ReferenceWorkflow {
 
   private final ReferenceProductStore store;
   private final InvitationsClient invitations;
-  private final IdentityUsersClient identityUsers;
   private final ReferenceAcceptanceCommitter acceptanceCommitter;
   private final URI acceptUrl;
   private final AtomicBoolean failAfterRemoteAccept = new AtomicBoolean();
@@ -28,12 +26,10 @@ class ReferenceWorkflow {
   ReferenceWorkflow(
       ReferenceProductStore store,
       InvitationsClient invitations,
-      IdentityUsersClient identityUsers,
       ReferenceAcceptanceCommitter acceptanceCommitter,
       @Value("${reference.accept-url}") URI acceptUrl) {
     this.store = store;
     this.invitations = invitations;
-    this.identityUsers = identityUsers;
     this.acceptanceCommitter = acceptanceCommitter;
     this.acceptUrl = acceptUrl;
   }
@@ -50,6 +46,9 @@ class ReferenceWorkflow {
   ReferenceProductStore.InvitationState requireOwnedInvitation(
       UUID invitationId, AuthenticatedUser user) {
     ReferenceProductStore.InvitationState state = store.invitation(invitationId);
+    if (state.invitedUserId() == null || !state.invitedUserId().equals(user.id())) {
+      throw new AccessDeniedException("Invitation belongs to another Cardo user.");
+    }
     if (state.acceptedSubject() != null) {
       if (!state.acceptedSubject().equals(user.authorizationSubject())) {
         throw new AccessDeniedException("Invitation belongs to another Cardo user.");
@@ -59,12 +58,6 @@ class ReferenceWorkflow {
     var remote = invitations.get(state.remoteInvitationId());
     if (state.invitedUserId() == null || !state.invitedUserId().equals(remote.invitedUserId())) {
       throw new IllegalStateException("Remote invitation user identifier changed.");
-    }
-    var identity = identityUsers.get(state.invitedUserId());
-    if (!state.invitedUserId().equals(user.id())
-        || !identity.id().equals(user.id())
-        || !identity.authorizationSubject().equals(user.authorizationSubject())) {
-      throw new AccessDeniedException("Invitation belongs to another Cardo user.");
     }
     return state;
   }

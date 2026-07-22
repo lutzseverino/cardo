@@ -11,8 +11,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUser;
-import io.github.lutzseverino.cardo.identity.client.IdentityUser;
-import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;
 import io.github.lutzseverino.cardo.invite.client.CreatedInvitation;
 import io.github.lutzseverino.cardo.invite.client.Invitation;
 import io.github.lutzseverino.cardo.invite.client.InvitationsClient;
@@ -36,7 +34,6 @@ class ReferenceWorkflowTest {
   void dispatchesDurableCreateThroughTheStableInviteClientWithoutRetainingToken() {
     ReferenceProductStore store = mock(ReferenceProductStore.class);
     InvitationsClient invitations = mock(InvitationsClient.class);
-    IdentityUsersClient identity = mock(IdentityUsersClient.class);
     ReferenceAcceptanceCommitter committer = mock(ReferenceAcceptanceCommitter.class);
     ReferenceProductStore.ReferenceCommand command =
         new ReferenceProductStore.ReferenceCommand(
@@ -53,7 +50,7 @@ class ReferenceWorkflowTest {
     when(created.acceptUrl()).thenReturn(URI.create("https://secret.example/token"));
     when(invitations.create(any())).thenReturn(created);
 
-    ReferenceWorkflow workflow = workflow(store, invitations, identity, committer);
+    ReferenceWorkflow workflow = workflow(store, invitations, committer);
     workflow.dispatch(command);
 
     ArgumentCaptor<io.github.lutzseverino.cardo.invite.client.CreateInvitation> request =
@@ -81,7 +78,6 @@ class ReferenceWorkflowTest {
   void retriesAfterRemoteSuccessAndCommitsLocallyExactlyOnce() {
     ReferenceProductStore store = mock(ReferenceProductStore.class);
     InvitationsClient invitations = mock(InvitationsClient.class);
-    IdentityUsersClient identity = mock(IdentityUsersClient.class);
     ReferenceAcceptanceCommitter committer = mock(ReferenceAcceptanceCommitter.class);
     ReferenceProductStore.ReferenceCommand command =
         new ReferenceProductStore.ReferenceCommand(
@@ -102,7 +98,7 @@ class ReferenceWorkflowTest {
                 "provider-subject",
                 null));
 
-    ReferenceWorkflow workflow = workflow(store, invitations, identity, committer);
+    ReferenceWorkflow workflow = workflow(store, invitations, committer);
     workflow.failNextAfterRemoteAccept();
     assertThatThrownBy(() -> workflow.dispatch(command))
         .isInstanceOf(IllegalStateException.class)
@@ -117,17 +113,9 @@ class ReferenceWorkflowTest {
   void rejectsAcceptanceByAUserOtherThanTheImmutableInvitee() {
     ReferenceProductStore store = mock(ReferenceProductStore.class);
     InvitationsClient invitations = mock(InvitationsClient.class);
-    IdentityUsersClient identity = mock(IdentityUsersClient.class);
     ReferenceAcceptanceCommitter committer = mock(ReferenceAcceptanceCommitter.class);
     when(store.invitation(INVITATION)).thenReturn(invitation(null));
-    Invitation remote = mock(Invitation.class);
-    when(remote.invitedUserId()).thenReturn(INVITED_USER);
-    when(invitations.get(REMOTE)).thenReturn(remote);
-    IdentityUser invited = mock(IdentityUser.class);
-    when(invited.id()).thenReturn(INVITED_USER);
-    when(invited.authorizationSubject()).thenReturn("invited-subject");
-    when(identity.get(INVITED_USER)).thenReturn(invited);
-    ReferenceWorkflow workflow = workflow(store, invitations, identity, committer);
+    ReferenceWorkflow workflow = workflow(store, invitations, committer);
 
     assertThatThrownBy(
             () ->
@@ -137,16 +125,33 @@ class ReferenceWorkflowTest {
                     ACCEPTED_AT))
         .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     verify(store, never()).recordAcceptanceIntent(any(), any(), any());
+    verifyNoInteractions(invitations);
+  }
+
+  @Test
+  void acceptsTheImmutableInviteeFromTheTrustedIdentitySession() {
+    ReferenceProductStore store = mock(ReferenceProductStore.class);
+    InvitationsClient invitations = mock(InvitationsClient.class);
+    ReferenceAcceptanceCommitter committer = mock(ReferenceAcceptanceCommitter.class);
+    when(store.invitation(INVITATION)).thenReturn(invitation(null));
+    Invitation remote = mock(Invitation.class);
+    when(remote.invitedUserId()).thenReturn(INVITED_USER);
+    when(invitations.get(REMOTE)).thenReturn(remote);
+    ReferenceWorkflow workflow = workflow(store, invitations, committer);
+
+    workflow.accept(
+        INVITATION, new AuthenticatedUser(INVITED_USER, "invited-subject", "Invited"), ACCEPTED_AT);
+
+    verify(store).recordAcceptanceIntent(INVITATION, "invited-subject", ACCEPTED_AT);
   }
 
   @Test
   void bindsConvergenceToTheAcceptedSubjectWithoutRepeatingRemoteLookups() {
     ReferenceProductStore store = mock(ReferenceProductStore.class);
     InvitationsClient invitations = mock(InvitationsClient.class);
-    IdentityUsersClient identity = mock(IdentityUsersClient.class);
     ReferenceAcceptanceCommitter committer = mock(ReferenceAcceptanceCommitter.class);
     when(store.invitation(INVITATION)).thenReturn(invitation("invited-subject"));
-    ReferenceWorkflow workflow = workflow(store, invitations, identity, committer);
+    ReferenceWorkflow workflow = workflow(store, invitations, committer);
 
     assertThat(
             workflow.requireOwnedInvitation(
@@ -157,7 +162,7 @@ class ReferenceWorkflowTest {
                 workflow.requireOwnedInvitation(
                     INVITATION, new AuthenticatedUser(UUID.randomUUID(), "other-subject", "Other")))
         .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-    verifyNoInteractions(invitations, identity);
+    verifyNoInteractions(invitations);
   }
 
   private ReferenceProductStore.InvitationState invitation(String acceptedSubject) {
@@ -175,13 +180,8 @@ class ReferenceWorkflowTest {
   private ReferenceWorkflow workflow(
       ReferenceProductStore store,
       InvitationsClient invitations,
-      IdentityUsersClient identity,
       ReferenceAcceptanceCommitter committer) {
     return new ReferenceWorkflow(
-        store,
-        invitations,
-        identity,
-        committer,
-        URI.create("https://reference.example/invitations/accept"));
+        store, invitations, committer, URI.create("https://reference.example/invitations/accept"));
   }
 }

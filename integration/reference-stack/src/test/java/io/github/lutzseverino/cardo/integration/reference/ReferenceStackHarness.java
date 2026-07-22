@@ -211,7 +211,6 @@ final class ReferenceStackHarness implements AutoCloseable {
                             + "/realms/"
                             + ReferenceKeycloakMaterializer.REALM
                             + "/protocol/openid-connect/token/introspect"),
-                    Map.entry("IDENTITY_BASE_URL", "http://127.0.0.1:" + identityPort + "/api/v1"),
                     Map.entry("INVITE_BASE_URL", "http://127.0.0.1:" + invitePort + "/api/v1"),
                     Map.entry("BILLING_BASE_URL", "http://127.0.0.1:" + billingPort + "/api/v1"),
                     Map.entry("REFERENCE_COMMANDS_DISPATCH_DELAY", "1s"))));

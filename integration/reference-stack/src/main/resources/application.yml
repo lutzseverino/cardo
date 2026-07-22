@@ -38,9 +38,6 @@ cardo:
         cache-max-entries: 128
         connect-timeout: 2s
         read-timeout: 2s
-    client:
-      base-url: ${IDENTITY_BASE_URL}
-      service-token-scope: identity
   invite:
     client:
       base-url: ${INVITE_BASE_URL}

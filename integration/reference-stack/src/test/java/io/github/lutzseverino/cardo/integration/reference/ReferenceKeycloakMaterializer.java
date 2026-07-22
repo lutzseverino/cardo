@@ -129,15 +129,12 @@ final class ReferenceKeycloakMaterializer {
     ensureAudienceScope(admin, "billing");
     attachDefaultScope(admin, "cardo-identity", "identity");
     attachOptionalScope(admin, "cardo-invite", "identity");
-    attachOptionalScope(admin, ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "identity");
     attachOptionalScope(admin, ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "cardo-invite");
     attachOptionalScope(admin, ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "billing");
     grantClientRoles(
         admin, "cardo-identity", "realm-management", List.of("manage-users", "view-clients"));
     grantClientRoles(admin, "identity", "identity", List.of("uma_protection"));
     grantClientRoles(admin, "cardo-invite", "identity", List.of("user:provision"));
-    grantClientRoles(
-        admin, ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "identity", List.of("profile:read"));
     grantClientRoles(
         admin,
         ReferenceContract.PRODUCT_OUTBOUND_CLIENT,

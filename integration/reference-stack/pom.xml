@@ -33,17 +33,6 @@
     </dependency>
     <dependency>
       <groupId>io.github.lutzseverino.cardo</groupId>
-      <artifactId>identity-client</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.github.lutzseverino.cardo</groupId>
-      <artifactId>identity-client-http</artifactId>
-      <version>${project.version}</version>
-      <scope>runtime</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>invite-client</artifactId>
       <version>${project.version}</version>
     </dependency>
