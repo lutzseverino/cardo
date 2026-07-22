@@ -23,6 +23,7 @@ target/
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 dependency-reduced-pom.xml
+.flattened-pom.xml
 
 # Repository contract tooling
 node_modules/
