@@ -28,11 +28,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,16 +35,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
 @Service
 public class UserService {
-
-  private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
   private final UserRepository users;
   private final UserApplicationMapper mapper;
@@ -141,26 +132,47 @@ public class UserService {
     return getResult(user.getId());
   }
 
-  @Transactional
   @PreAuthorize("hasAuthority('" + IdentityPermissions.USER_PROVISION_AUTHORITY + "')")
   public UserResult createProvisional(@Valid CreateProvisionalUserInput input) {
     EmailAddress email = EmailAddress.of(input.email());
-    return users
-        .findProjectedByEmail(email.value())
-        .map(mapper::toResult)
-        .orElseGet(
-            () ->
-                createIdentityUser(
-                    () -> identityProvider.provisionProvisionalIdentity(email.value()),
-                    identity -> User.invited(identity.subject(), email.value()),
-                    () ->
-                        users
-                            .findProjectedByEmail(email.value())
-                            .map(mapper::toResult)
-                            .orElseThrow(
-                                () ->
-                                    ApiException.conflict(
-                                        "user_exists", "A user with this email exists."))));
+    Optional<UserProjection> existing = users.findProjectedByEmail(email.value());
+    if (existing.isPresent()) {
+      return mapper.toResult(existing.orElseThrow());
+    }
+
+    IdentityProviderMutationWork work;
+    try {
+      work = providerMutations.requestProvisionalProvision(email.value());
+    } catch (ApiException provisioningState) {
+      return users
+          .findProjectedByEmail(email.value())
+          .map(mapper::toResult)
+          .orElseThrow(() -> provisioningState);
+    }
+
+    IdentityProvider.ProvisionedIdentity identity = provisionProvisionalIdentity(work);
+    try {
+      return transactions.execute(status -> completeProvisionalProvision(work, identity.subject()));
+    } catch (DataIntegrityViolationException conflict) {
+      return resolveProvisionalProvisionConflict(work, identity.subject(), conflict);
+    } catch (ApiException conflict) {
+      if (conflict.status() != 409) {
+        providerMutations.recordFailure(
+            work, conflict, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
+        throw conflict;
+      }
+      return resolveProvisionalProvisionConflict(work, identity.subject(), conflict);
+    } catch (RuntimeException failure) {
+      providerMutations.recordFailure(
+          work, failure, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
+      throw failure;
+    }
+  }
+
+  @Transactional
+  public UserResult recoverProvisionalProvision(
+      IdentityProviderMutationWork work, String providerSubject) {
+    return completeProvisionalProvision(work, providerSubject);
   }
 
   @PreAuthorize(
@@ -276,26 +288,6 @@ public class UserService {
             .stream().filter(Objects::nonNull).filter(subject -> !subject.isBlank()).toList();
   }
 
-  private UserResult createIdentityUser(
-      Supplier<IdentityProvider.ProvisionedIdentity> provision,
-      Function<IdentityProvider.ProvisionedIdentity, User> factory,
-      Supplier<UserResult> duplicateUser) {
-    IdentityProvider.ProvisionedIdentity identity = provision.get();
-    AtomicBoolean compensated = deleteIdentityOnRollback(identity.subject());
-    try {
-      User created = users.saveAndFlush(factory.apply(identity));
-      identityProvider.bindUserId(identity.subject(), created.getId());
-      grants.stage(identityGrantPlanner.creation(created));
-      return getResult(created.getId());
-    } catch (DataIntegrityViolationException exception) {
-      deleteIdentity(identity.subject(), compensated, exception);
-      return duplicateUser.get();
-    } catch (RuntimeException exception) {
-      deleteIdentity(identity.subject(), compensated, exception);
-      throw exception;
-    }
-  }
-
   private IdentityProvider.ProvisionedIdentity provisionPasswordIdentity(
       PasswordProvisioningIntent intent, String password) {
     try {
@@ -304,7 +296,7 @@ public class UserService {
     } catch (RuntimeException dispatchFailure) {
       try {
         Optional<IdentityProvider.ProvisionedIdentity> recovered =
-            identityProvider.findPasswordIdentityByCorrelationMarker(intent.correlationMarker());
+            identityProvider.findIdentityByCorrelationMarker(intent.correlationMarker());
         if (recovered.isPresent()) {
           return recovered.orElseThrow();
         }
@@ -377,6 +369,74 @@ public class UserService {
     return getResult(userId);
   }
 
+  private IdentityProvider.ProvisionedIdentity provisionProvisionalIdentity(
+      IdentityProviderMutationWork work) {
+    try {
+      return identityProvider.provisionProvisionalIdentity(work.email(), work.correlationMarker());
+    } catch (RuntimeException dispatchFailure) {
+      try {
+        Optional<IdentityProvider.ProvisionedIdentity> recovered =
+            identityProvider.findIdentityByCorrelationMarker(work.correlationMarker());
+        if (recovered.isPresent()) {
+          return recovered.orElseThrow();
+        }
+      } catch (RuntimeException recoveryFailure) {
+        dispatchFailure.addSuppressed(recoveryFailure);
+      }
+      if (permanentProviderFailure(dispatchFailure)) {
+        providerMutations.recordTerminalFailure(
+            work, dispatchFailure, IdentityProviderMutationTerminalReason.PROVIDER_REJECTED);
+      } else {
+        providerMutations.recordFailure(
+            work, dispatchFailure, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
+      }
+      throw dispatchFailure;
+    }
+  }
+
+  private UserResult completeProvisionalProvision(
+      IdentityProviderMutationWork work, String providerSubject) {
+    Optional<UserProjection> existing = users.findProjectedByEmail(work.email());
+    User user;
+    if (existing.isPresent()) {
+      UserProjection projection = existing.orElseThrow();
+      if (!providerSubject.equals(projection.getKeycloakSubject())) {
+        throw ApiException.conflict(
+            "user_provisioning_conflict",
+            "Provisioned identity conflicts with an existing local user.");
+      }
+      user =
+          users
+              .findById(projection.getId())
+              .orElseThrow(() -> ApiException.notFound("user_not_found", "User not found."));
+    } else {
+      user = users.saveAndFlush(User.invited(providerSubject, work.email()));
+    }
+    providerMutations.completeProvisionalProvision(work, providerSubject, user.getId());
+    grants.stage(identityGrantPlanner.creation(user));
+    return getResult(user.getId());
+  }
+
+  private UserResult resolveProvisionalProvisionConflict(
+      IdentityProviderMutationWork work, String providerSubject, RuntimeException failure) {
+    Optional<UserProjection> existing = users.findProjectedByEmail(work.email());
+    if (existing.isEmpty()) {
+      providerMutations.recordFailure(
+          work, failure, IdentityProviderMutationTerminalReason.RETRY_EXHAUSTED);
+      throw failure;
+    }
+    if (providerSubject.equals(existing.orElseThrow().getKeycloakSubject())) {
+      return transactions.execute(status -> completeProvisionalProvision(work, providerSubject));
+    }
+
+    ApiException conflict =
+        ApiException.conflict("user_exists", "A user with this email already exists.");
+    conflict.addSuppressed(failure);
+    providerMutations.recordTerminalFailure(
+        work, conflict, IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT);
+    throw conflict;
+  }
+
   private ApiException passwordProvisionConflict() {
     return ApiException.conflict("user_exists", "A user with this email already exists.");
   }
@@ -398,43 +458,17 @@ public class UserService {
     return PasswordProvisioningFailure.RECOVERABLE;
   }
 
+  private boolean permanentProviderFailure(RuntimeException failure) {
+    if (!(failure instanceof ApiException api)) {
+      return false;
+    }
+    int status = api.status();
+    return status >= 400 && status < 500 && status != 408 && status != 425 && status != 429;
+  }
+
   private enum PasswordProvisioningFailure {
     RECOVERABLE,
     CREDENTIAL_REJECTED,
     PROVIDER_REJECTED
-  }
-
-  private AtomicBoolean deleteIdentityOnRollback(String subject) {
-    AtomicBoolean compensated = new AtomicBoolean();
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      return compensated;
-    }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCompletion(int status) {
-            if (status != STATUS_COMMITTED && compensated.compareAndSet(false, true)) {
-              try {
-                identityProvider.deleteIdentity(subject);
-              } catch (RuntimeException exception) {
-                logger.error(
-                    "Failed to delete provisioned identity {} after rollback", subject, exception);
-              }
-            }
-          }
-        });
-    return compensated;
-  }
-
-  private void deleteIdentity(
-      String subject, AtomicBoolean compensated, RuntimeException original) {
-    if (!compensated.compareAndSet(false, true)) {
-      return;
-    }
-    try {
-      identityProvider.deleteIdentity(subject);
-    } catch (RuntimeException compensationFailure) {
-      original.addSuppressed(compensationFailure);
-    }
   }
 }

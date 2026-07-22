@@ -109,6 +109,33 @@ class KeycloakIdentityProviderTest {
   }
 
   @Test
+  void provisionsProvisionalIdentityWithTheExactCorrelationMarker() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/admin/realms/cardo/users"))
+        .andExpect(method(POST))
+        .andExpect(
+            content()
+                .json(
+                    """
+                    {"username":"user@example.com","email":"user@example.com",
+                     "enabled":true,
+                     "attributes":{"cardo_provisioning_correlation":["marker-1"]}}
+                    """,
+                    JsonCompareMode.LENIENT))
+        .andRespond(
+            withCreatedEntity(
+                URI.create("https://keycloak.example/admin/realms/cardo/users/subject-1")));
+
+    assertThat(provider.provisionProvisionalIdentity("user@example.com", "marker-1"))
+        .isEqualTo(new IdentityProvider.ProvisionedIdentity("subject-1"));
+
+    server.verify();
+  }
+
+  @Test
   void mapsProvisionalProvisioningConflictToConflict() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
@@ -117,7 +144,7 @@ class KeycloakIdentityProviderTest {
         .expect(requestTo("https://keycloak.example/admin/realms/cardo/users"))
         .andRespond(withStatus(HttpStatus.CONFLICT));
 
-    assertThatThrownBy(() -> provider.provisionProvisionalIdentity("user@example.com"))
+    assertThatThrownBy(() -> provider.provisionProvisionalIdentity("user@example.com", "marker-1"))
         .isInstanceOfSatisfying(
             ApiException.class,
             exception -> {
@@ -164,13 +191,42 @@ class KeycloakIdentityProviderTest {
         .andRespond(
             withSuccess(
                 """
-                [{"id":"subject-1","attributes":{
-                  "cardo_provisioning_correlation":["marker-1"]}}]
+                [{"id":"unrelated-subject","email":"user@example.com","attributes":{}},
+                 {"id":"subject-1","attributes":{
+                   "cardo_provisioning_correlation":["marker-1"]}}]
                 """,
                 MediaType.APPLICATION_JSON));
 
-    assertThat(provider.findPasswordIdentityByCorrelationMarker("marker-1"))
+    assertThat(provider.findIdentityByCorrelationMarker("marker-1"))
         .contains(new IdentityProvider.ProvisionedIdentity("subject-1"));
+
+    server.verify();
+  }
+
+  @Test
+  void refusesAmbiguousExactCorrelationMatches() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo(containsString("/admin/realms/cardo/users?")))
+        .andRespond(
+            withSuccess(
+                """
+                [{"id":"subject-1","attributes":{
+                   "cardo_provisioning_correlation":["marker-1"]}},
+                 {"id":"subject-2","attributes":{
+                   "cardo_provisioning_correlation":["marker-1"]}}]
+                """,
+                MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(() -> provider.findIdentityByCorrelationMarker("marker-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> {
+              assertThat(failure.status()).isEqualTo(502);
+              assertThat(failure.code()).isEqualTo("identity_provider_correlation_invalid");
+            });
 
     server.verify();
   }

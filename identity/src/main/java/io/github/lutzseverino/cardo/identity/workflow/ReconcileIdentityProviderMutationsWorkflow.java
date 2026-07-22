@@ -43,6 +43,7 @@ public class ReconcileIdentityProviderMutationsWorkflow {
     try {
       switch (work.type()) {
         case PROVISION_PASSWORD_USER -> recoverPasswordProvision(work);
+        case PROVISION_PROVISIONAL_USER -> recoverProvisionalProvision(work);
         case BIND_USER_ID -> {
           provider.bindUserId(work.providerSubject(), work.userId());
           complete(work);
@@ -60,7 +61,7 @@ public class ReconcileIdentityProviderMutationsWorkflow {
 
   private void recoverPasswordProvision(IdentityProviderMutationWork work) {
     Optional<IdentityProvider.ProvisionedIdentity> identity =
-        provider.findPasswordIdentityByCorrelationMarker(work.correlationMarker());
+        provider.findIdentityByCorrelationMarker(work.correlationMarker());
     if (identity.isEmpty()) {
       boolean terminal =
           mutations.recordFailure(
@@ -72,6 +73,32 @@ public class ReconcileIdentityProviderMutationsWorkflow {
       return;
     }
     users.recoverPasswordProvision(work, identity.orElseThrow().subject());
+    logger.info(
+        "identity_provider_mutation_completed id={} type={} recovered=true",
+        work.id(),
+        work.type());
+  }
+
+  private void recoverProvisionalProvision(IdentityProviderMutationWork work) {
+    Optional<IdentityProvider.ProvisionedIdentity> identity =
+        provider.findIdentityByCorrelationMarker(work.correlationMarker());
+    if (identity.isEmpty()) {
+      try {
+        identity =
+            Optional.of(
+                provider.provisionProvisionalIdentity(work.email(), work.correlationMarker()));
+      } catch (RuntimeException dispatchFailure) {
+        try {
+          identity = provider.findIdentityByCorrelationMarker(work.correlationMarker());
+        } catch (RuntimeException recoveryFailure) {
+          dispatchFailure.addSuppressed(recoveryFailure);
+        }
+        if (identity.isEmpty()) {
+          throw dispatchFailure;
+        }
+      }
+    }
+    users.recoverProvisionalProvision(work, identity.orElseThrow().subject());
     logger.info(
         "identity_provider_mutation_completed id={} type={} recovered=true",
         work.id(),
@@ -98,7 +125,9 @@ public class ReconcileIdentityProviderMutationsWorkflow {
   private void recordFailure(IdentityProviderMutationWork work, RuntimeException failure) {
     if (permanent(failure)) {
       IdentityProviderMutationTerminalReason reason =
-          failure instanceof ApiException api && api.status() == 409
+          failure instanceof ApiException api
+                  && api.status() == 409
+                  && "user_provisioning_conflict".equals(api.code())
               ? IdentityProviderMutationTerminalReason.LOCAL_STATE_CONFLICT
               : IdentityProviderMutationTerminalReason.PROVIDER_REJECTED;
       if (mutations.recordTerminalFailure(work, failure, reason)) {

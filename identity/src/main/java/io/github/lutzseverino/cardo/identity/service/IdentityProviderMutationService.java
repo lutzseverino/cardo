@@ -57,6 +57,32 @@ public class IdentityProviderMutationService {
   }
 
   @Transactional
+  public IdentityProviderMutationWork requestProvisionalProvision(String email) {
+    OffsetDateTime now = now();
+    IdentityProviderMutation mutation =
+        mutations
+            .findFirstEntityByEmailAndTypeOrderByCreatedAtDesc(
+                email, IdentityProviderMutationType.PROVISION_PROVISIONAL_USER)
+            .map(existing -> reusableProvisionalProvision(existing, now))
+            .orElseGet(
+                () ->
+                    IdentityProviderMutation.provisionalProvision(
+                        UUID.randomUUID(), email, UUID.randomUUID().toString(), now));
+    if (!mutation.ready(now)) {
+      throw ApiException.conflict(
+          "user_provisioning_in_progress", "User provisioning is already in progress.");
+    }
+    UUID leaseToken = mutation.claim(now.plus(properties.claimLease()));
+    try {
+      mutations.saveAndFlush(mutation);
+    } catch (DataIntegrityViolationException failure) {
+      throw ApiException.conflict(
+          "user_provisioning_in_progress", "User provisioning is already in progress.");
+    }
+    return toWork(mutation, leaseToken);
+  }
+
+  @Transactional
   public UUID completePasswordProvision(
       PasswordProvisioningIntent intent, String providerSubject, UUID userId) {
     IdentityProviderMutation mutation = requireLocked(intent.mutationId());
@@ -69,6 +95,17 @@ public class IdentityProviderMutationService {
 
   @Transactional
   public UUID completeRecoveredPasswordProvision(
+      IdentityProviderMutationWork work, String providerSubject, UUID userId) {
+    IdentityProviderMutation mutation = requireLocked(work.id());
+    mutation.bindProvisionedUser(work.leaseToken(), providerSubject, userId, now());
+    IdentityProviderMutation binding =
+        IdentityProviderMutation.bindUser(UUID.randomUUID(), userId, providerSubject, now());
+    mutations.save(binding);
+    return binding.getId();
+  }
+
+  @Transactional
+  public UUID completeProvisionalProvision(
       IdentityProviderMutationWork work, String providerSubject, UUID userId) {
     IdentityProviderMutation mutation = requireLocked(work.id());
     mutation.bindProvisionedUser(work.leaseToken(), providerSubject, userId, now());
@@ -199,6 +236,23 @@ public class IdentityProviderMutationService {
           "user_provisioning_in_progress", "User provisioning is already in progress.");
     }
     mutation.resumePasswordProvision(now);
+    return mutation;
+  }
+
+  private IdentityProviderMutation reusableProvisionalProvision(
+      IdentityProviderMutation mutation, OffsetDateTime now) {
+    if (IdentityProviderMutationStatus.COMPLETED.equals(mutation.getStatus())) {
+      throw ApiException.conflict("user_exists", "A user with this email already exists.");
+    }
+    if (IdentityProviderMutationStatus.FAILED.equals(mutation.getStatus())) {
+      throw ApiException.conflict(
+          "user_provisioning_failed",
+          "User provisioning failed and requires operator repair before retrying.");
+    }
+    if (mutation.hasActiveLease(now)) {
+      throw ApiException.conflict(
+          "user_provisioning_in_progress", "User provisioning is already in progress.");
+    }
     return mutation;
   }
 
