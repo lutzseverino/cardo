@@ -18,12 +18,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.openapitools.jackson.nullable.JsonNullableJackson3Module;
 import org.openapitools.jackson.nullable.JsonNullableModule;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.properties.SpringDocConfigProperties;
 import org.springdoc.core.providers.ObjectMapperProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.JacksonModule;
 
 @Configuration(proxyBeanMethods = false)
 @OpenAPIDefinition(
@@ -56,6 +58,11 @@ import org.springframework.context.annotation.Configuration;
     in = SecuritySchemeIn.HEADER,
     paramName = "X-CSRF-TOKEN")
 public class OpenApiConfiguration {
+
+  @Bean
+  JacksonModule jsonNullableRuntimeSupport() {
+    return new JsonNullableJackson3Module();
+  }
 
   @Bean
   ObjectMapperProvider springdocObjectMapperProvider(SpringDocConfigProperties properties) {
