@@ -103,15 +103,33 @@
                     <exclude>io.github.lutzseverino.cardo:authorization</exclude>
                     <exclude>jakarta.persistence:*</exclude>
                     <exclude>org.hibernate.orm:*</exclude>
+                    <exclude>org.eclipse.persistence:*</exclude>
                     <exclude>org.springframework.data:*</exclude>
                     <exclude>org.flywaydb:*</exclude>
+                    <exclude>org.liquibase:*</exclude>
                     <exclude>org.springframework.modulith:*</exclude>
                     <exclude>org.springframework:spring-jdbc</exclude>
+                    <exclude>org.springframework:spring-orm</exclude>
+                    <exclude>org.springframework:spring-r2dbc</exclude>
                     <exclude>org.springframework.boot:spring-boot-jdbc</exclude>
                     <exclude>org.springframework.boot:spring-boot-starter-jdbc</exclude>
                     <exclude>org.springframework.boot:spring-boot-starter-data-jpa</exclude>
                     <exclude>org.springframework.boot:spring-boot-flyway</exclude>
+                    <exclude>org.springframework.boot:spring-boot-liquibase</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-liquibase</exclude>
+                    <exclude>org.springframework.boot:spring-boot-r2dbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-data-r2dbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-data-r2dbc</exclude>
+                    <exclude>org.springframework.boot:spring-boot-jooq</exclude>
+                    <exclude>org.springframework.boot:spring-boot-starter-jooq</exclude>
+                    <exclude>io.r2dbc:*</exclude>
+                    <exclude>org.jooq:*</exclude>
+                    <exclude>org.mybatis:*</exclude>
+                    <exclude>org.mybatis.spring.boot:*</exclude>
+                    <exclude>org.jdbi:*</exclude>
                     <exclude>com.zaxxer:HikariCP</exclude>
+                    <exclude>org.apache.tomcat:tomcat-jdbc</exclude>
+                    <exclude>org.apache.commons:commons-dbcp2</exclude>
                   </excludes>
                 </bannedDependencies>
               </rules>

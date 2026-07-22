@@ -22,7 +22,8 @@ behavior or provide a generic plugin framework.
 | Authorization | Resource vocabulary, permission evaluation, durable grant staging, and provider adapters |
 | Invite | Resource-scoped invitation delivery, expiry, provisional identity completion, lifecycle state, and grant-snapshot staging |
 | Billing | Customers, Stripe checkout and portal integration, entitlements, and stable billing clients |
-| Common | Shared API errors, audit and personal-data markers, value objects, and validation |
+| Common API | API error contracts and outbound client error translation |
+| Common | Audit and personal-data markers, value objects, validation, server error handling, and compatibility aggregation |
 | OpenAPI Support | Reusable generated-transport and PATCH conversion helpers |
 
 ## Integration Contract
