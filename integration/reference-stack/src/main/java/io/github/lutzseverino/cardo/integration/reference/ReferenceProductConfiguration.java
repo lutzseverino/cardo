@@ -12,10 +12,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
 class ReferenceProductConfiguration {
+
+  private static final Duration OUTBOUND_CONNECT_TIMEOUT = Duration.ofSeconds(2);
+  private static final Duration OUTBOUND_READ_TIMEOUT = Duration.ofSeconds(2);
+
+  @Bean
+  RestClient.Builder referenceRestClientBuilder() {
+    return RestClient.builder()
+        .requestFactory(requestFactory(OUTBOUND_CONNECT_TIMEOUT, OUTBOUND_READ_TIMEOUT));
+  }
 
   @Bean
   @Primary
@@ -82,5 +92,12 @@ class ReferenceProductConfiguration {
         rest.clone(),
         new KeycloakClientCredentialsTokenSettings(
             Duration.ofSeconds(2), Duration.ofSeconds(2), Duration.ofSeconds(5)));
+  }
+
+  private SimpleClientHttpRequestFactory requestFactory(Duration connect, Duration read) {
+    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+    factory.setConnectTimeout(connect);
+    factory.setReadTimeout(read);
+    return factory;
   }
 }
