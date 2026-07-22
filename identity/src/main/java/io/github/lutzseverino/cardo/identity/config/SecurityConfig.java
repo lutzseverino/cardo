@@ -5,6 +5,7 @@ import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakAuthoritiesCo
 import io.github.lutzseverino.cardo.authorization.spring.RequiredExpirationValidator;
 import io.github.lutzseverino.cardo.authorization.spring.ResourcePermissionEvaluator;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +23,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.web.client.RestOperations;
 
 @Configuration
 @EnableMethodSecurity
@@ -69,8 +71,10 @@ public class SecurityConfig {
 
   @Bean
   JwtDecoder jwtDecoder(
-      @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer) {
-    NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
+      @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer,
+      @Qualifier("identityJwkRestOperations") RestOperations rest) {
+    NimbusJwtDecoder decoder =
+        NimbusJwtDecoder.withIssuerLocation(issuer).restOperations(rest).build();
     decoder.setJwtValidator(
         new DelegatingOAuth2TokenValidator<>(
             JwtValidators.createDefaultWithIssuer(issuer),

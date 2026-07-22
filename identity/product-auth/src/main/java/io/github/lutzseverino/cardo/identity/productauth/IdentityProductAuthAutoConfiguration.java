@@ -44,6 +44,8 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestOperations;
+import org.springframework.web.client.RestTemplate;
 
 @AutoConfiguration(
     before = {
@@ -100,8 +102,12 @@ public class IdentityProductAuthAutoConfiguration {
       @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:}") String jwkSetUri) {
     NimbusJwtDecoder signatureDecoder =
         jwkSetUri == null || jwkSetUri.isBlank()
-            ? NimbusJwtDecoder.withIssuerLocation(issuer).build()
-            : NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+            ? NimbusJwtDecoder.withIssuerLocation(issuer)
+                .restOperations(jwkRestOperations(properties.tokenExchange()))
+                .build()
+            : NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
+                .restOperations(jwkRestOperations(properties.tokenExchange()))
+                .build();
     signatureDecoder.setJwtValidator(
         new DelegatingOAuth2TokenValidator<>(
             JwtValidators.createDefaultWithIssuer(issuer), new RequiredExpirationValidator()));
@@ -260,5 +266,10 @@ public class IdentityProductAuthAutoConfiguration {
     factory.setConnectTimeout(connectTimeout);
     factory.setReadTimeout(readTimeout);
     return factory;
+  }
+
+  private RestOperations jwkRestOperations(TokenExchange timeouts) {
+    timeouts.validate();
+    return new RestTemplate(requestFactory(timeouts.connectTimeout(), timeouts.readTimeout()));
   }
 }

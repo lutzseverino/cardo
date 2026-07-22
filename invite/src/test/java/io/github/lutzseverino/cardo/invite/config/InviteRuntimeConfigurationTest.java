@@ -1,0 +1,157 @@
+package io.github.lutzseverino.cardo.invite.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.net.ServerSocket;
+import java.time.Duration;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
+
+class InviteRuntimeConfigurationTest {
+
+  @Test
+  void acceptsLocalAndIsolatedProductionConfigurations() throws Exception {
+    policy(
+            new InviteRuntimeProperties(null, null, null),
+            new ProductCallerProperties(Set.of()),
+            new MockEnvironment())
+        .afterPropertiesSet();
+    policy(production(), new ProductCallerProperties(Set.of("clinic")), productionEnvironment())
+        .afterPropertiesSet();
+  }
+
+  @Test
+  void rejectsDuplicateProductionAllowlistWithoutDisclosingSecrets() {
+    MockEnvironment environment = productionEnvironment();
+    environment.setProperty("cardo.invite.product-callers.allowed-client-ids", "clinic,clinic");
+    environment.setProperty("spring.mail.password", "smtp-secret-value");
+
+    assertThatThrownBy(
+            () ->
+                policy(production(), new ProductCallerProperties(Set.of("clinic")), environment)
+                    .afterPropertiesSet())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("allowed-client-ids")
+        .hasMessageNotContaining("smtp-secret-value");
+  }
+
+  @Test
+  void rejectsNonPositiveSmtpAndWorkflowBounds() {
+    assertThatThrownBy(() -> new SmtpTimeoutProperties(Duration.ZERO, null, null))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("connect-timeout");
+    assertThatThrownBy(
+            () ->
+                new InvitationCompletionProperties(
+                    Duration.ofSeconds(1),
+                    Duration.ZERO,
+                    Duration.ofSeconds(1),
+                    Duration.ofMinutes(1),
+                    3,
+                    10))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("poll-delay");
+  }
+
+  @Test
+  void generatedMetadataContainsRuntimeAndSmtpProperties() throws Exception {
+    String metadata =
+        new String(
+            getClass()
+                .getResourceAsStream("/META-INF/spring-configuration-metadata.json")
+                .readAllBytes());
+    assertThat(metadata)
+        .contains("cardo.invite.runtime.connect-timeout")
+        .contains("cardo.invite.smtp.write-timeout");
+  }
+
+  @Test
+  void smtpReadBoundStopsAStalledServerGreeting() throws Exception {
+    CountDownLatch connectionAccepted = new CountDownLatch(1);
+    CountDownLatch releaseServer = new CountDownLatch(1);
+    try (ServerSocket server = new ServerSocket(0);
+        var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+      executor.submit(
+          () -> {
+            try (var socket = server.accept()) {
+              connectionAccepted.countDown();
+              releaseServer.await(5, TimeUnit.SECONDS);
+            }
+            return null;
+          });
+      org.springframework.boot.mail.autoconfigure.MailProperties mail =
+          new org.springframework.boot.mail.autoconfigure.MailProperties();
+      mail.setHost("localhost");
+      mail.setPort(server.getLocalPort());
+      var sender =
+          new InviteRuntimeConfiguration()
+              .javaMailSender(
+                  mail,
+                  new SmtpTimeoutProperties(
+                      Duration.ofMillis(100), Duration.ofMillis(100), Duration.ofMillis(100)));
+      org.springframework.mail.SimpleMailMessage message =
+          new org.springframework.mail.SimpleMailMessage();
+      message.setFrom("sender@example.com");
+      message.setTo("recipient@example.com");
+      message.setSubject("bounded");
+      message.setText("bounded");
+
+      try {
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+            Duration.ofSeconds(2),
+            () ->
+                assertThatThrownBy(() -> sender.send(message))
+                    .isInstanceOf(org.springframework.mail.MailException.class));
+        assertThat(connectionAccepted.await(1, TimeUnit.SECONDS)).isTrue();
+      } finally {
+        releaseServer.countDown();
+      }
+    }
+  }
+
+  private org.springframework.beans.factory.InitializingBean policy(
+      InviteRuntimeProperties runtime,
+      ProductCallerProperties callers,
+      MockEnvironment environment) {
+    return new InviteRuntimeConfiguration()
+        .inviteProductionConfigurationPolicy(
+            runtime,
+            new KeycloakProperties(
+                runtime.mode() == InviteRuntimeProperties.Mode.PRODUCTION
+                    ? "https://id.example.com"
+                    : "http://localhost:8080",
+                "cardo",
+                "cardo-invite",
+                runtime.mode() == InviteRuntimeProperties.Mode.PRODUCTION ? "invite-secret" : ""),
+            callers,
+            environment);
+  }
+
+  private InviteRuntimeProperties production() {
+    return new InviteRuntimeProperties(
+        InviteRuntimeProperties.Mode.PRODUCTION, Duration.ofSeconds(1), Duration.ofSeconds(2));
+  }
+
+  private MockEnvironment productionEnvironment() {
+    return new MockEnvironment()
+        .withProperty(
+            "spring.security.oauth2.resourceserver.jwt.issuer-uri",
+            "https://id.example.com/realms/cardo")
+        .withProperty("cardo.invite.product-callers.allowed-client-ids", "clinic")
+        .withProperty("cardo.identity.client.base-url", "https://identity.example.com/api/v1")
+        .withProperty("cardo.identity.client.service-token-scope", "identity")
+        .withProperty("spring.mail.host", "smtp.example.com")
+        .withProperty("spring.mail.port", "587")
+        .withProperty("spring.mail.username", "mailer")
+        .withProperty("spring.mail.password", "smtp-secret")
+        .withProperty("spring.mail.properties.mail.smtp.auth", "true")
+        .withProperty("spring.mail.properties.mail.smtp.starttls.enable", "true")
+        .withProperty("spring.datasource.url", "jdbc:postgresql://db.example.com:5432/cardo_invite")
+        .withProperty("spring.datasource.username", "cardo_invite_app")
+        .withProperty("spring.datasource.password", "invite-db-secret");
+  }
+}

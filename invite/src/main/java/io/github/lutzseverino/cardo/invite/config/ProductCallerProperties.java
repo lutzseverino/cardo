@@ -7,11 +7,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record ProductCallerProperties(Set<String> allowedClientIds) {
 
   public ProductCallerProperties {
-    allowedClientIds =
-        allowedClientIds == null
-            ? Set.of()
-            : allowedClientIds.stream()
-                .filter(clientId -> clientId != null && !clientId.isBlank())
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    if (allowedClientIds == null) {
+      allowedClientIds = Set.of();
+    } else {
+      if (allowedClientIds.stream().anyMatch(clientId -> clientId == null || clientId.isBlank())) {
+        throw new IllegalArgumentException(
+            "cardo.invite.product-callers.allowed-client-ids must not contain blank values.");
+      }
+      allowedClientIds = Set.copyOf(allowedClientIds);
+    }
   }
 }

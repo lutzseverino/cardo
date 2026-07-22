@@ -19,7 +19,9 @@ class StripeCheckoutCatalogTest {
                 "whsec_123",
                 List.of(
                     new StripeProperties.CheckoutPrice("price_clinic", "clinic"),
-                    new StripeProperties.CheckoutPrice("price_polity", "polity"))));
+                    new StripeProperties.CheckoutPrice("price_polity", "polity")),
+                null,
+                null));
 
     StripeProperties.CheckoutPrice price = catalog.findByProduct("clinic");
     StripeProperties.CheckoutPrice polityPrice = catalog.findByProduct("polity");
@@ -31,7 +33,8 @@ class StripeCheckoutCatalogTest {
   @Test
   void rejectsUnconfiguredProductPrice() {
     StripeCheckoutCatalog catalog =
-        new StripeCheckoutCatalog(new StripeProperties("sk_test_123", "whsec_123", List.of()));
+        new StripeCheckoutCatalog(
+            new StripeProperties("sk_test_123", "whsec_123", List.of(), null, null));
 
     assertThatThrownBy(() -> catalog.findByProduct("clinic"))
         .isInstanceOf(ApiException.class)

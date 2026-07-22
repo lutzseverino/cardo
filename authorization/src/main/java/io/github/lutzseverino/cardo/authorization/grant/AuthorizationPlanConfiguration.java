@@ -80,6 +80,9 @@ public class AuthorizationPlanConfiguration {
   AuthorizationPlanRecovery authorizationPlanRecovery(
       IncompleteEventPublications publications,
       @Value("${cardo.authorization.plans.retry-delay:PT1M}") Duration retryDelay) {
+    if (retryDelay == null || retryDelay.isZero() || retryDelay.isNegative()) {
+      throw new IllegalArgumentException("authorization plan retry delay must be positive");
+    }
     return new AuthorizationPlanRecovery(publications, retryDelay);
   }
 

@@ -43,6 +43,14 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   invite:
+    runtime:
+      mode: ${INVITE_RUNTIME_MODE:local}
+      connect-timeout: ${INVITE_PROVIDER_CONNECT_TIMEOUT:2s}
+      read-timeout: ${INVITE_PROVIDER_READ_TIMEOUT:2s}
+    smtp:
+      connect-timeout: ${SMTP_CONNECT_TIMEOUT:2s}
+      read-timeout: ${SMTP_READ_TIMEOUT:2s}
+      write-timeout: ${SMTP_WRITE_TIMEOUT:2s}
     completion:
       dispatch-delay: ${INVITATION_COMPLETION_DISPATCH_DELAY:5s}
       poll-delay: ${INVITATION_COMPLETION_POLL_DELAY:15s}

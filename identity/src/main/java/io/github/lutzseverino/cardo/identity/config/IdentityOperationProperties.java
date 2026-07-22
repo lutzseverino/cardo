@@ -15,4 +15,20 @@ public record IdentityOperationProperties(
     @NotNull Duration retryBaseDelay,
     @NotNull Duration claimLease,
     @Positive int maxAttempts,
-    @Positive int batchSize) {}
+    @Positive int batchSize) {
+
+  public IdentityOperationProperties {
+    positive(dispatchDelay, "dispatch-delay");
+    positive(pollDelay, "poll-delay");
+    positive(credentialSetupTimeout, "credential-setup-timeout");
+    positive(retryBaseDelay, "retry-base-delay");
+    positive(claimLease, "claim-lease");
+  }
+
+  private static void positive(Duration value, String property) {
+    if (value != null && (value.isZero() || value.isNegative())) {
+      throw new IllegalArgumentException(
+          "cardo.identity.operations." + property + " must be positive.");
+    }
+  }
+}

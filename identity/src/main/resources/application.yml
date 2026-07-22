@@ -32,6 +32,10 @@ cardo:
     version: v1
     base-path: /api/${cardo.api.version}
   identity:
+    runtime:
+      mode: ${IDENTITY_RUNTIME_MODE:local}
+      connect-timeout: ${IDENTITY_PROVIDER_CONNECT_TIMEOUT:2s}
+      read-timeout: ${IDENTITY_PROVIDER_READ_TIMEOUT:2s}
     session:
       mode: ${IDENTITY_SESSION_MODE:local}
       access-cookie-name: ${IDENTITY_ACCESS_COOKIE_NAME:cardo.session}

@@ -298,7 +298,7 @@ class IdentityProviderMutationServiceTest {
     when(repository.findReadyIds(
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
         .thenReturn(List.of(mutation.getId()));
-    IdentityProviderMutationService service = service(repository, Duration.ZERO);
+    IdentityProviderMutationService service = service(repository, Duration.ofNanos(1));
 
     PasswordProvisioningIntent newOwner =
         service.requestPasswordProvision("user@example.com", "User");

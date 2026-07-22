@@ -24,8 +24,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.web.client.RestTemplate;
 
 class SecurityConfigTest {
 
@@ -68,7 +70,8 @@ class SecurityConfigTest {
             .jwtDecoder(
                 issuer,
                 new KeycloakProperties(
-                    "https://identity.example.com", "cardo", "custom-invite", "secret"));
+                    "https://identity.example.com", "cardo", "custom-invite", "secret"),
+                boundedRestOperations());
 
     assertThat(decoder.decode(token(issuer, List.of("custom-invite"), true)).getAudience())
         .containsExactly("custom-invite");
@@ -93,7 +96,8 @@ class SecurityConfigTest {
             .jwtDecoder(
                 issuer,
                 new KeycloakProperties(
-                    "https://identity.example.com", "cardo", "cardo-invite", "secret"));
+                    "https://identity.example.com", "cardo", "cardo-invite", "secret"),
+                boundedRestOperations());
 
     assertThat(decoder).isNotNull();
     server.stop(0);
@@ -118,6 +122,13 @@ class SecurityConfigTest {
             new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test-key").build(), claims.build());
     token.sign(new RSASSASigner(keys.getPrivate()));
     return token.serialize();
+  }
+
+  private RestTemplate boundedRestOperations() {
+    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+    factory.setConnectTimeout(java.time.Duration.ofSeconds(1));
+    factory.setReadTimeout(java.time.Duration.ofSeconds(1));
+    return new RestTemplate(factory);
   }
 
   private void respond(com.sun.net.httpserver.HttpExchange exchange, String body)

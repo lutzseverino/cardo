@@ -17,15 +17,21 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.web.client.RestTemplate;
 
 class SecurityConfigTest {
 
@@ -63,7 +69,7 @@ class SecurityConfigTest {
 
   @Test
   void decoderRequiresIssuerExpirationAndExactBillingAudience() throws Exception {
-    var decoder = new SecurityConfig().jwtDecoder(issuer);
+    var decoder = new SecurityConfig().jwtDecoder(issuer, boundedRestOperations());
 
     assertThat(decoder.decode(token(issuer, List.of("billing"), true)).getAudience())
         .containsExactly("billing");
@@ -80,13 +86,57 @@ class SecurityConfigTest {
 
   @Test
   void issuerDiscoveryFailureFailsClosedOnFirstDecodeWithoutPreventingStartup() throws Exception {
-    var decoder = new SecurityConfig().jwtDecoder(issuer);
+    var decoder = new SecurityConfig().jwtDecoder(issuer, boundedRestOperations());
 
     assertThat(decoder).isNotNull();
     server.stop(0);
 
     assertThatThrownBy(() -> decoder.decode(token(issuer, List.of("billing"), true)))
         .isInstanceOf(JwtDecoderInitializationException.class);
+  }
+
+  @Test
+  void lazyDecoderBoundsAStalledJwkResponse() throws Exception {
+    String jwkPath = "/realms/cardo/protocol/openid-connect/certs";
+    CountDownLatch requestEntered = new CountDownLatch(1);
+    CountDownLatch releaseResponse = new CountDownLatch(1);
+    AtomicInteger requests = new AtomicInteger();
+    server.removeContext(jwkPath);
+    server.createContext(
+        jwkPath,
+        exchange -> {
+          requests.incrementAndGet();
+          requestEntered.countDown();
+          try {
+            releaseResponse.await(5, TimeUnit.SECONDS);
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+          } finally {
+            exchange.close();
+          }
+        });
+    var rest =
+        new BillingRuntimeConfiguration()
+            .billingJwkRestOperations(
+                new BillingRuntimeProperties(
+                    BillingRuntimeProperties.Mode.LOCAL,
+                    Duration.ofMillis(100),
+                    Duration.ofMillis(100)));
+    var decoder = new SecurityConfig().jwtDecoder(issuer, rest);
+
+    assertThat(decoder).isNotNull();
+    assertThat(requests).hasValue(0);
+    try {
+      org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+          Duration.ofSeconds(2),
+          () ->
+              assertThatThrownBy(() -> decoder.decode(token(issuer, List.of("billing"), true)))
+                  .isInstanceOf(JwtDecoderInitializationException.class));
+      assertThat(requestEntered.await(1, TimeUnit.SECONDS)).isTrue();
+      assertThat(requests).hasValue(1);
+    } finally {
+      releaseResponse.countDown();
+    }
   }
 
   private String token(String tokenIssuer, List<String> audiences, boolean expiring)
@@ -105,6 +155,13 @@ class SecurityConfigTest {
             new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test-key").build(), claims.build());
     token.sign(new RSASSASigner(keys.getPrivate()));
     return token.serialize();
+  }
+
+  private RestTemplate boundedRestOperations() {
+    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+    factory.setConnectTimeout(java.time.Duration.ofSeconds(1));
+    factory.setReadTimeout(java.time.Duration.ofSeconds(1));
+    return new RestTemplate(factory);
   }
 
   private void respond(com.sun.net.httpserver.HttpExchange exchange, String body)
