@@ -20,6 +20,9 @@ final class ReferenceKeycloakActions {
 
   private static final Pattern FORM = Pattern.compile("(?is)<form\\b[^>]*>.*?</form>");
   private static final Pattern INPUT = Pattern.compile("(?is)<input\\b[^>]*>");
+  private static final Pattern ERROR =
+      Pattern.compile("(?is)<[^>]+id=[\"']kc-error-message[\"'][^>]*>(.*?)</[^>]+>");
+  private static final Pattern ELEMENT = Pattern.compile("(?is)<[^>]+>");
   private final HttpClient browser =
       HttpClient.newBuilder()
           .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
@@ -40,7 +43,13 @@ final class ReferenceKeycloakActions {
         page = get(redirect);
         continue;
       }
-      Form form = form(page.body(), page.uri());
+      Form form;
+      try {
+        form = form(page.body(), page.uri());
+      } catch (IllegalStateException missing) {
+        throw new IllegalStateException(
+            "Keycloak required-action form was missing: " + describe(page), missing);
+      }
       Map<String, String> input = new LinkedHashMap<>(form.values());
       if ("kc-passwd-update-form".equals(form.id())) {
         input.put("password-new", password);
@@ -77,6 +86,17 @@ final class ReferenceKeycloakActions {
       }
     }
     return new Form(id, page.resolve(action), Map.copyOf(values));
+  }
+
+  private static String describe(Page page) {
+    Matcher error = ERROR.matcher(page.body());
+    String detail = error.find() ? ELEMENT.matcher(error.group(1)).replaceAll(" ") : "";
+    detail = htmlDecode(detail).replaceAll("\\s+", " ").trim();
+    return "status="
+        + page.status()
+        + ", path="
+        + page.uri().getPath()
+        + (detail.isEmpty() ? "" : ", error=" + detail);
   }
 
   private Page get(URI uri) {
