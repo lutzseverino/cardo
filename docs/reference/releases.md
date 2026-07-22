@@ -30,6 +30,12 @@ executable JARs are not published to Maven Central. Neither the internal
 `openapi-support:tests` classifier nor generated client transport packages are
 part of the supported Java compatibility baseline.
 
+The direct root module `integration/reference-stack` is an unpublished,
+test-only executable fixture. It has `maven.deploy.skip=true` and is excluded
+from the BOM, supported-artifact list, compatibility baseline, Central bundle,
+service-image set, and release manifest. Its presence in the reactor must not
+change any public artifact coordinate or image.
+
 A product imports the BOM and omits versions from individual Cardo dependencies:
 
 ```xml

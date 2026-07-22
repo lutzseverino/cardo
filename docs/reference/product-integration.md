@@ -234,3 +234,13 @@ When another Cardo capability starts to leak repeated product ceremony, first
 convert one active product and then a second independent consumer. If the shape
 is still clear, keep it. If it only makes modules look uniform, leave the
 ceremony documented instead.
+
+## Executable Reference
+
+`integration/reference-stack` is the repository's unpublished executable
+consumer. Its product persists the invitation intent and retained Authorization
+receipt, calls Invite and Billing only through stable clients, exchanges an
+Identity browser session for a product RPT, and exposes product-owned
+convergence. The fixture is proof of this contract, not an additional public
+artifact or a substitute for a real product's domain decisions. Run it with
+the [portable reference-stack procedure](../how-to/run-reference-stack.md).

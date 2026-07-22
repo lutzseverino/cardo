@@ -206,3 +206,10 @@ but do not replace the shared filter chain or redeclare Cardo-owned security bea
 one coordinated cookie selector, cookie authentication filter, header-only bearer resolver, and
 read-only CSRF repository; generic product `BearerTokenResolver` or `CsrfTokenRepository` beans are
 not supported customization seams.
+
+The unpublished reference stack executes this topology through one real Caddy
+HTTPS origin, production cookie names, Identity session routes, a product-owned
+CSRF-protected mutation, uncached UMA exchange, and active RPT introspection.
+It also proves that direct Identity bearers are rejected by the product and
+that provider session revocation invalidates a previously accepted explicit
+RPT after the bounded positive cache expires.

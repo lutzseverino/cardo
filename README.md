@@ -39,6 +39,8 @@ Deployments consume the executable JAR and OCI image process contract described
 in the [runtime artifact reference](docs/reference/runtime-artifacts.md).
 Released consumers align supported libraries through the
 [`cardo-bom` and immutable release contract](docs/reference/releases.md).
+Maintainers can exercise those boundaries together through the unpublished
+[portable reference stack](integration/reference-stack/README.md).
 
 ## Development
 

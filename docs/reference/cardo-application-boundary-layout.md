@@ -93,6 +93,14 @@ status response directly because no application behavior or persistence access i
 
 These owners are semantic boundaries, not a requirement to expose one service class per bullet.
 
+The `integration/reference-stack` module is a direct root child and an explicit
+test-only exception. It owns one small product domain solely to prove the public
+Cardo integration path across real checkout artifacts. It may compose stable
+clients and embedded Authorization, but it does not define reusable production
+APIs, become an integration aggregator, or establish package conventions for
+consumer products. It is unpublished and excluded from the BOM, compatibility
+baseline, and release inventory.
+
 ## Platform And Dependency Boundaries
 
 - HTTP services consume another Cardo service through its stable `client` contract and a
