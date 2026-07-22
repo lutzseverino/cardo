@@ -80,7 +80,7 @@ class ReferenceKeycloakActionsTest {
   @Test
   void completesConfirmationFormsAndTerminalInfoLink() throws IOException {
     HttpServer provider = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    URI origin = URI.create("http://127.0.0.1:" + provider.getAddress().getPort());
+    URI origin = URI.create("http://localhost:" + provider.getAddress().getPort());
     URI expectedRedirect = origin.resolve("/invitations/completed");
     List<String> requests = new ArrayList<>();
     List<String> cookies = new ArrayList<>();
@@ -93,7 +93,12 @@ class ReferenceKeycloakActionsTest {
             case 1 -> {
               exchange
                   .getResponseHeaders()
-                  .add("Set-Cookie", "AUTH_SESSION_ID=session; Version=1; Path=/");
+                  .add("Set-Cookie", "AUTH_SESSION_ID=session; Version=1; Path=/realms/reference/");
+              exchange
+                  .getResponseHeaders()
+                  .add(
+                      "Set-Cookie",
+                      "KC_AUTH_SESSION_HASH=hash; Version=1; Path=/realms/reference/");
               respond(
                   exchange,
                   200,
@@ -103,23 +108,23 @@ class ReferenceKeycloakActionsTest {
                     </div>
                     """);
             }
-            case 2 -> redirect(exchange, "/password");
+            case 2 -> redirect(exchange, "/realms/reference/login-actions/password");
             case 3 ->
                 respond(
                     exchange,
                     200,
                     """
-                    <form id="kc-passwd-update-form" action="/password">
+                    <form id="kc-passwd-update-form" action="/realms/reference/login-actions/password">
                       <input name="password-new"><input name="password-confirm">
                     </form>
                     """);
-            case 4 -> redirect(exchange, "/profile");
+            case 4 -> redirect(exchange, "/realms/reference/login-actions/profile");
             case 5 ->
                 respond(
                     exchange,
                     200,
                     """
-                    <form id="kc-update-profile-form" action="/profile">
+                    <form id="kc-update-profile-form" action="/realms/reference/login-actions/profile">
                       <input name="firstName"><input name="lastName">
                     </form>
                     """);
@@ -153,11 +158,16 @@ class ReferenceKeycloakActionsTest {
           .containsExactly(
               "GET /realms/reference/login-actions/action-token?key=initial",
               "GET /realms/reference/login-actions/action-token?key=confirmed",
-              "GET /password",
-              "POST /password",
-              "GET /profile",
-              "POST /profile");
-      assertThat(cookies.subList(1, cookies.size())).containsOnly("AUTH_SESSION_ID=session");
+              "GET /realms/reference/login-actions/password",
+              "POST /realms/reference/login-actions/password",
+              "GET /realms/reference/login-actions/profile",
+              "POST /realms/reference/login-actions/profile");
+      assertThat(cookies.subList(1, cookies.size()))
+          .allSatisfy(
+              cookie ->
+                  assertThat(cookie)
+                      .contains("AUTH_SESSION_ID=session", "KC_AUTH_SESSION_HASH=hash")
+                      .doesNotContain("$", "\""));
     } finally {
       provider.stop(0);
     }

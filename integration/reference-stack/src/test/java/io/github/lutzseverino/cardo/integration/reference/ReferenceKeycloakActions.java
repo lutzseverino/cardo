@@ -1,6 +1,7 @@
 package io.github.lutzseverino.cardo.integration.reference;
 
 import java.io.IOException;
+import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.URI;
@@ -28,9 +29,31 @@ final class ReferenceKeycloakActions {
       Pattern.compile("(?is)<div\\b[^>]+id=[\"']kc-error-message[\"'][^>]*>(.*?)</div>");
   private static final Pattern ELEMENT = Pattern.compile("(?is)<[^>]+>");
   private final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+  private final CookieHandler browserCookies =
+      new CookieHandler() {
+        @Override
+        public Map<String, java.util.List<String>> get(
+            URI uri, Map<String, java.util.List<String>> requestHeaders) throws IOException {
+          Map<String, java.util.List<String>> selected = cookies.get(uri, requestHeaders);
+          java.util.List<String> cookie = selected.get("Cookie");
+          if (cookie == null) {
+            return selected;
+          }
+          Map<String, java.util.List<String>> normalized = new LinkedHashMap<>(selected);
+          normalized.put(
+              "Cookie", cookie.stream().map(ReferenceKeycloakActions::browserCookie).toList());
+          return Map.copyOf(normalized);
+        }
+
+        @Override
+        public void put(URI uri, Map<String, java.util.List<String>> responseHeaders)
+            throws IOException {
+          cookies.put(uri, responseHeaders);
+        }
+      };
   private final HttpClient browser =
       HttpClient.newBuilder()
-          .cookieHandler(cookies)
+          .cookieHandler(browserCookies)
           .connectTimeout(Duration.ofSeconds(2))
           .followRedirects(HttpClient.Redirect.NEVER)
           .build();
@@ -185,7 +208,6 @@ final class ReferenceKeycloakActions {
   private Page send(HttpRequest request) {
     try {
       HttpResponse<String> response = browser.send(request, HttpResponse.BodyHandlers.ofString());
-      cookies.getCookieStore().getCookies().forEach(cookie -> cookie.setVersion(0));
       return new Page(
           response.uri(),
           response.statusCode(),
@@ -230,6 +252,21 @@ final class ReferenceKeycloakActions {
 
   private static String encode(String value) {
     return URLEncoder.encode(value, StandardCharsets.UTF_8);
+  }
+
+  private static String browserCookie(String header) {
+    return java.util.Arrays.stream(header.split(";\\s*"))
+        .filter(attribute -> !attribute.startsWith("$"))
+        .map(
+            cookie -> {
+              int separator = cookie.indexOf('=');
+              String value = cookie.substring(separator + 1);
+              if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                value = value.substring(1, value.length() - 1);
+              }
+              return cookie.substring(0, separator + 1) + value;
+            })
+        .collect(java.util.stream.Collectors.joining("; "));
   }
 
   record Result(boolean passwordCompleted, boolean profileCompleted, URI redirect) {}
