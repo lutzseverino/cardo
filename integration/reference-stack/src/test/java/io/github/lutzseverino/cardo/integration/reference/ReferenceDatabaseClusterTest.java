@@ -38,6 +38,30 @@ class ReferenceDatabaseClusterTest {
           }
           assertThatThrownBy(() -> connection.createStatement().execute("create extension hstore"))
               .isInstanceOf(SQLException.class);
+          if (database.authorizationSchema() == null) {
+            assertThat(service).isEqualTo("billing");
+          } else {
+            try (var query =
+                connection
+                    .createStatement()
+                    .executeQuery(
+                        "select schema_owner, "
+                            + "has_schema_privilege(current_user, '"
+                            + database.authorizationSchema()
+                            + "', 'USAGE'), "
+                            + "has_schema_privilege(current_user, '"
+                            + database.authorizationSchema()
+                            + "', 'CREATE') "
+                            + "from information_schema.schemata where schema_name = '"
+                            + database.authorizationSchema()
+                            + "'")) {
+              assertThat(query.next()).isTrue();
+              assertThat(query.getString(1)).isEqualTo(database.owner());
+              assertThat(query.getBoolean(2)).isTrue();
+              assertThat(query.getBoolean(3)).isTrue();
+              assertThat(query.next()).isFalse();
+            }
+          }
         }
       }
       ReferenceDatabaseCluster.Database identity = cluster.database("identity");

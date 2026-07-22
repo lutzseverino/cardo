@@ -46,21 +46,25 @@ class ReferenceKeycloakMaterializerTest {
 
       assertToken(
           materializer.clientToken("cardo-invite", "identity"),
+          "cardo-invite",
           "identity",
           "identity",
           "user:provision");
       assertToken(
           materializer.clientToken(ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "cardo-invite"),
+          ReferenceContract.PRODUCT_OUTBOUND_CLIENT,
           "cardo-invite",
           "cardo-invite",
           "product-service");
       assertToken(
           materializer.clientToken(ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "billing"),
+          ReferenceContract.PRODUCT_OUTBOUND_CLIENT,
           "billing",
           "billing",
           "entitlement:read");
       assertToken(
           materializer.clientToken(ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "identity"),
+          ReferenceContract.PRODUCT_OUTBOUND_CLIENT,
           "identity",
           "identity",
           "profile:read");
@@ -94,9 +98,11 @@ class ReferenceKeycloakMaterializerTest {
   }
 
   @SuppressWarnings("unchecked")
-  private void assertToken(String token, String audience, String resource, String role)
+  private void assertToken(
+      String token, String authorizedParty, String audience, String resource, String role)
       throws Exception {
     var claims = JWTParser.parse(token).getJWTClaimsSet();
+    assertThat(claims.getStringClaim("azp")).isEqualTo(authorizedParty);
     assertThat(claims.getAudience()).containsExactly(audience);
     Map<String, Object> resourceAccess = (Map<String, Object>) claims.getClaim("resource_access");
     assertThat(resourceAccess).containsOnlyKeys(resource);

@@ -17,7 +17,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 
 class ReferenceStackIT {
 
@@ -463,7 +462,9 @@ class ReferenceStackIT {
 
   private String rpt(ReferenceStackHarness stack, String identityToken) {
     return new KeycloakRequestingPartyTokenClient(
-            stack.keycloakBaseUrl(), ReferenceKeycloakMaterializer.REALM, RestClient.builder())
+            stack.keycloakBaseUrl(),
+            ReferenceKeycloakMaterializer.REALM,
+            ReferenceKeycloakMaterializer.boundedRestClient())
         .authorize(
             RequestingPartyTokenRequest.allPermissions(
                 identityToken, ReferenceContract.PRODUCT_CLIENT))

@@ -15,11 +15,15 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 final class ReferenceKeycloakMaterializer {
+
+  private static final Duration PROVIDER_CONNECT_TIMEOUT = Duration.ofSeconds(2);
+  private static final Duration PROVIDER_READ_TIMEOUT = Duration.ofSeconds(2);
 
   static final String REALM = "cardo-reference";
   static final String ADMIN_USERNAME = "reference-bootstrap";
@@ -63,7 +67,7 @@ final class ReferenceKeycloakMaterializer {
 
   ReferenceKeycloakMaterializer(String baseUrl) {
     this.baseUrl = baseUrl;
-    this.rest = RestClient.builder().baseUrl(baseUrl).build();
+    this.rest = boundedRestClient().baseUrl(baseUrl).build();
   }
 
   void bootstrap(String smtpHost, int smtpPort, String redirectUri) {
@@ -141,9 +145,9 @@ final class ReferenceKeycloakMaterializer {
         List.of("product-service"));
     grantClientRoles(
         admin, ReferenceContract.PRODUCT_OUTBOUND_CLIENT, "billing", List.of("entitlement:read"));
-    mapRoleToScope(admin, "identity", "identity", "user:provision");
-    mapRoleToScope(admin, "cardo-invite", "cardo-invite", "product-service");
-    mapRoleToScope(admin, "billing", "billing", "entitlement:read");
+    mapRolesToScope(admin, "identity", "identity", List.of("profile:read", "user:provision"));
+    mapRolesToScope(admin, "cardo-invite", "cardo-invite", List.of("product-service"));
+    mapRolesToScope(admin, "billing", "billing", List.of("entitlement:read"));
     ensureReferenceResource();
     return snapshot(admin);
   }
@@ -155,7 +159,7 @@ final class ReferenceKeycloakMaterializer {
             REALM,
             clientId,
             SECRETS.get(clientId),
-            RestClient.builder(),
+            boundedRestClient(),
             new KeycloakClientCredentialsTokenSettings(
                 Duration.ofSeconds(2), Duration.ofSeconds(2), Duration.ZERO));
     return scope == null ? tokens.clientCredentialsToken() : tokens.clientCredentialsToken(scope);
@@ -230,14 +234,14 @@ final class ReferenceKeycloakMaterializer {
             REALM,
             ReferenceContract.PRODUCT_CLIENT,
             PRODUCT_SECRET,
-            RestClient.builder(),
+            boundedRestClient(),
             new KeycloakClientCredentialsTokenSettings(
                 Duration.ofSeconds(2), Duration.ofSeconds(2), Duration.ZERO));
     new KeycloakAuthorizationClient(
             baseUrl,
             REALM,
             ReferenceContract.PRODUCT_CLIENT,
-            RestClient.builder(),
+            boundedRestClient(),
             tokens::clientCredentialsToken,
             () -> {
               throw new IllegalStateException("Reference catalog has no realm token.");
@@ -434,11 +438,17 @@ final class ReferenceKeycloakMaterializer {
     }
   }
 
-  private void mapRoleToScope(
-      String admin, String scopeName, String targetClientId, String roleName) {
+  private void mapRolesToScope(
+      String admin, String scopeName, String targetClientId, List<String> roleNames) {
     String targetUuid = clientUuid(admin, targetClientId);
-    Map<String, Object> role =
-        map(admin, "/admin/realms/" + REALM + "/clients/" + targetUuid + "/roles/" + roleName);
+    List<Map<String, Object>> roles =
+        roleNames.stream()
+            .map(
+                roleName ->
+                    map(
+                        admin,
+                        "/admin/realms/" + REALM + "/clients/" + targetUuid + "/roles/" + roleName))
+            .toList();
     post(
         admin,
         "/admin/realms/"
@@ -447,7 +457,14 @@ final class ReferenceKeycloakMaterializer {
             + scopeUuid(admin, scopeName)
             + "/scope-mappings/clients/"
             + targetUuid,
-        List.of(role));
+        roles);
+  }
+
+  static RestClient.Builder boundedRestClient() {
+    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+    factory.setConnectTimeout(PROVIDER_CONNECT_TIMEOUT);
+    factory.setReadTimeout(PROVIDER_READ_TIMEOUT);
+    return RestClient.builder().requestFactory(factory);
   }
 
   private Snapshot snapshot(String admin) {

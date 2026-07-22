@@ -17,10 +17,13 @@ The unpublished reference product demonstrates a least-privilege split that a
 product may need with Keycloak Authorization Services: `reference-product`
 owns the UMA resource server, PAT, and introspection credential, while
 `reference-product-outbound` has no realm or Authorization Services roles and
-receives only the optional Invite `product-service` and Billing
-`entitlement:read` scopes. This prevents the automatic `uma_protection` role
-from appearing in scoped outbound tokens. These client names are fixture-local,
-not public Cardo configuration.
+receives only the optional Identity `profile:read`, Invite `product-service`,
+and Billing `entitlement:read` scopes. The Identity client scope permits both
+`profile:read` and `user:provision`, while Keycloak's client-role intersection
+keeps the reference product's Identity token at `profile:read` and Invite's
+Identity token at `user:provision`. This prevents the automatic
+`uma_protection` role from appearing in scoped outbound tokens. These client
+names are fixture-local, not public Cardo configuration.
 
 The clients have distinct responsibilities:
 

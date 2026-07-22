@@ -36,18 +36,23 @@ final class ReferenceProcess implements AutoCloseable {
     if (!Files.isRegularFile(jar)) {
       throw new IllegalStateException("Checkout executable JAR is missing for " + name + ".");
     }
-    ProcessBuilder builder =
-        new ProcessBuilder(
-                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-jar",
-                jar.toString())
-            .redirectErrorStream(true);
+    ProcessBuilder builder = processBuilder(jar);
     configureEnvironment(builder.environment(), environment);
     try {
       return new ReferenceProcess(name, builder.start());
     } catch (IOException failure) {
       throw new IllegalStateException("Could not start checkout JAR for " + name + ".", failure);
     }
+  }
+
+  static ProcessBuilder processBuilder(Path jar) {
+    Path executable = jar.toAbsolutePath().normalize();
+    return new ProcessBuilder(
+            Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+            "-jar",
+            executable.toString())
+        .directory(executable.getParent().toFile())
+        .redirectErrorStream(true);
   }
 
   static void configureEnvironment(

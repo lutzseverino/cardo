@@ -50,6 +50,19 @@ final class ReferenceDatabaseCluster implements AutoCloseable {
           Statement sql = connection.createStatement()) {
         sql.execute("create extension if not exists pgcrypto");
         sql.execute("grant usage, create on schema public to " + database.application());
+        if (database.authorizationSchema() != null) {
+          sql.execute(
+              "create schema "
+                  + database.authorizationSchema()
+                  + " authorization "
+                  + database.owner());
+          sql.execute("revoke all on schema " + database.authorizationSchema() + " from public");
+          sql.execute(
+              "grant usage, create on schema "
+                  + database.authorizationSchema()
+                  + " to "
+                  + database.application());
+        }
       } catch (SQLException failure) {
         throw new IllegalStateException(
             "Could not grant the reference application database role.", failure);
@@ -134,23 +147,38 @@ final class ReferenceDatabaseCluster implements AutoCloseable {
     databases.put(
         "identity",
         new Database(
-            "cardo_identity", "cardo_identity_owner", "cardo_identity_app", "identity-db-secret"));
+            "cardo_identity",
+            "cardo_identity_owner",
+            "cardo_identity_app",
+            "identity-db-secret",
+            "identity_events"));
     databases.put(
         "invite",
-        new Database("cardo_invite", "cardo_invite_owner", "cardo_invite_app", "invite-db-secret"));
+        new Database(
+            "cardo_invite",
+            "cardo_invite_owner",
+            "cardo_invite_app",
+            "invite-db-secret",
+            "invite_events"));
     databases.put(
         "billing",
         new Database(
-            "cardo_billing", "cardo_billing_owner", "cardo_billing_app", "billing-db-secret"));
+            "cardo_billing",
+            "cardo_billing_owner",
+            "cardo_billing_app",
+            "billing-db-secret",
+            null));
     databases.put(
         "product",
         new Database(
             "reference_product",
             "reference_product_owner",
             "reference_product_app",
-            "product-db-secret"));
+            "product-db-secret",
+            "reference_events"));
     return Map.copyOf(databases);
   }
 
-  record Database(String name, String owner, String application, String password) {}
+  record Database(
+      String name, String owner, String application, String password, String authorizationSchema) {}
 }
