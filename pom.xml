@@ -58,6 +58,7 @@
     <spotless.version>3.4.0</spotless.version>
     <stripe-java.version>31.0.0</stripe-java.version>
     <cardo.consumer-dependency-enforcement.skip>true</cardo.consumer-dependency-enforcement.skip>
+    <swagger-parser.version>2.1.45</swagger-parser.version>
   </properties>
 
   <dependencyManagement>

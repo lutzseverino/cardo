@@ -57,7 +57,9 @@ management:
       enabled: true
 
 springdoc:
+  paths-to-match: ${cardo.api.base-path}/**
   api-docs:
     path: /openapi.json
+    version: OPENAPI_3_0
   swagger-ui:
     path: /docs

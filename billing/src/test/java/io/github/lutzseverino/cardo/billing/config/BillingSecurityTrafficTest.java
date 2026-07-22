@@ -1,8 +1,10 @@
 package io.github.lutzseverino.cardo.billing.config;
 
+import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader;
@@ -66,7 +68,10 @@ class BillingSecurityTrafficTest {
   @Test
   void keepsPublicAndProtectedRoutesDistinct() throws Exception {
     mvc.perform(get("/api/v1/billing")).andExpect(status().isOk());
-    mvc.perform(get("/api/v1/traffic/user")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/v1/traffic/user"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")))
+        .andExpect(content().string(""));
   }
 
   @Test
@@ -75,12 +80,14 @@ class BillingSecurityTrafficTest {
         .andExpect(status().isOk())
         .andExpect(content().string(USER_ID.toString()));
     mvc.perform(get("/api/v1/traffic/user").header("Authorization", "Bearer service-token"))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().string(""));
 
     mvc.perform(get("/api/v1/traffic/service").header("Authorization", "Bearer service-token"))
         .andExpect(status().isOk());
     mvc.perform(get("/api/v1/traffic/service").header("Authorization", "Bearer user-token"))
-        .andExpect(status().isForbidden());
+        .andExpect(status().isForbidden())
+        .andExpect(content().string(""));
   }
 
   private Jwt.Builder jwt(String value) {

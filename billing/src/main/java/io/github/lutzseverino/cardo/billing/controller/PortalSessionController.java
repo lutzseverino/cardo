@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,7 +25,7 @@ public class PortalSessionController implements PortalSessionsApi {
 
   @Override
   public ResponseEntity<PortalSessionResponse> createPortalSession(
-      @Valid CreatePortalSessionRequest request) {
+      @Valid @RequestBody CreatePortalSessionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             mapper.toResponse(

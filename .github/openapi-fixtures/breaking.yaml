@@ -1,0 +1,13 @@
+openapi: 3.0.3
+info:
+  title: Compatibility fixture
+  version: 2.0.0
+paths: {}
+components:
+  schemas:
+    Widget:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string

@@ -3,6 +3,9 @@ info:
   title: Cardo Common API Errors
   version: 0.1.0
   description: Shared HTTP error envelope used by Cardo services.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
 paths: {}
 components:
   responses:
@@ -13,13 +16,13 @@ components:
           schema:
             $ref: "#/components/schemas/ApiError"
     Unauthorized:
-      description: Authentication is required or credentials are invalid.
+      description: Authentication is required or credentials are invalid. Spring Security filter-chain rejections may return this status without a response body.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiError"
     Forbidden:
-      description: The authenticated principal does not have the required permission.
+      description: The authenticated principal does not have the required permission. Spring Security authorization or CSRF filter-chain rejections may return this status without a response body.
       content:
         application/json:
           schema:

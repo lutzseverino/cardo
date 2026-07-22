@@ -30,6 +30,13 @@
     </dependency>
     <dependency>
       <groupId>io.github.lutzseverino.cardo</groupId>
+      <artifactId>openapi-support</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.lutzseverino.cardo</groupId>
       <artifactId>authorization</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -95,6 +102,11 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-data-jpa-test</artifactId>
       <scope>test</scope>
     </dependency>
@@ -111,6 +123,12 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.swagger.parser.v3</groupId>
+      <artifactId>swagger-parser</artifactId>
+      <version>${swagger-parser.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

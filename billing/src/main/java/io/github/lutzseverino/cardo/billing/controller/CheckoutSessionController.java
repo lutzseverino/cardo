@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,7 +25,7 @@ public class CheckoutSessionController implements CheckoutSessionsApi {
 
   @Override
   public ResponseEntity<CheckoutSessionResponse> createCheckoutSession(
-      @Valid CreateCheckoutSessionRequest request) {
+      @Valid @RequestBody CreateCheckoutSessionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             mapper.toResponse(

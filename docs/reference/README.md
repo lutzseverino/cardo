@@ -37,5 +37,6 @@ Use the [reference template](../_templates/reference.template.md) for new refere
 - [Data Protection Contracts](data-protection-contracts.md)
 - [Generated Client Code](generated-client-code.md)
 - [Method Naming](method-naming.md)
+- [OpenAPI Contract Changes](openapi-contract-changes.md)
 - [Product Integration](product-integration.md)
 - [Runtime Artifacts](runtime-artifacts.md)

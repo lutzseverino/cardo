@@ -1,9 +1,11 @@
 package io.github.lutzseverino.cardo.invite.config;
 
+import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.lutzseverino.cardo.authorization.spring.CardoJwtClaims;
@@ -78,7 +80,10 @@ class InviteSecurityTrafficTest {
     mvc.perform(get("/api/v1/invitation-tokens/secret"))
         .andExpect(status().isOk())
         .andExpect(content().string("public"));
-    mvc.perform(post("/api/v1/invitations")).andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/v1/invitations"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")))
+        .andExpect(content().string(""));
   }
 
   @Test
@@ -87,12 +92,18 @@ class InviteSecurityTrafficTest {
         .andExpect(status().isOk())
         .andExpect(content().string("polity"));
     mvc.perform(post("/api/v1/invitations").header("Authorization", "Bearer user-token"))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")))
+        .andExpect(content().string(""));
     mvc.perform(
             post("/api/v1/invitations").header("Authorization", "Bearer roleless-service-token"))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")))
+        .andExpect(content().string(""));
     mvc.perform(post("/api/v1/invitations").header("Authorization", "Bearer unknown-service-token"))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")))
+        .andExpect(content().string(""));
   }
 
   private Jwt serviceToken(String caller, boolean withRole) {

@@ -20,7 +20,57 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 2
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install contract tools
+        env:
+          OASDIFF_SHA256: 76f0307718c9196f44b5efc2a8b27e8a7ccde9beddd456159b8fb18377801636
+          OASDIFF_VERSION: 1.24.0
+        run: |
+          npm ci
+          archive="$RUNNER_TEMP/oasdiff.tar.gz"
+          curl --fail --location --silent --show-error \
+            "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
+            --output "$archive"
+          echo "$OASDIFF_SHA256  $archive" | sha256sum --check
+          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" oasdiff
+      - name: Validate OpenAPI contracts
+        run: |
+          .github/scripts/test-openapi-fixtures.sh "$RUNNER_TEMP/oasdiff"
+          .github/scripts/bundle-openapi.sh . target/openapi-bundles
+          python3 .github/scripts/test-check-pr-policy.py
+      - name: Compare OpenAPI contracts with pull-request base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          base_checkout="$RUNNER_TEMP/base"
+          base_bundles="$RUNNER_TEMP/base-bundles"
+          reports="$RUNNER_TEMP/openapi-reports"
+          mkdir -p "$base_checkout"
+          git archive "$BASE_SHA" | tar --extract --directory "$base_checkout"
+          .github/scripts/bundle-openapi.sh "$base_checkout" "$base_bundles" --bundle-only
+          set +e
+          .github/scripts/compare-openapi.sh \
+            "$RUNNER_TEMP/oasdiff" \
+            "$base_bundles" \
+            target/openapi-bundles \
+            "$reports"
+          comparison_status=$?
+          set -e
+          if [[ $comparison_status -eq 10 ]]; then
+            OPENAPI_BREAKING=true python3 .github/scripts/check-pr-policy.py
+          elif [[ $comparison_status -ne 0 ]]; then
+            exit "$comparison_status"
+          fi
       - name: Set up Java
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
