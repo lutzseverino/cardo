@@ -81,12 +81,14 @@ Every image carries the following OCI labels:
 - `org.opencontainers.image.description`
 - `org.opencontainers.image.version`
 - `org.opencontainers.image.revision`
-- `org.opencontainers.image.source`
 - `org.opencontainers.image.licenses`
 
 The revision label and `/actuator/info` source revision are the full Git commit
-used by Maven. The version is the Maven project version. No deployment endpoint,
-credential, topology, or secret is included in this metadata.
+used by Maven. The version is the Maven project version. The OCI source label is
+deliberately absent so GHCR cannot automatically link private runtime packages
+to the public repository; exact revision, version, manifest, tag, and GitHub
+attestations retain release traceability. No deployment endpoint, credential,
+topology, or secret is included in this metadata.
 
 Maven archives and OCI creation timestamps use a fixed source epoch. The smoke
 rebuilds every service JAR and rebuilds one representative image with fresh

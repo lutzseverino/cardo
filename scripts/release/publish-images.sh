@@ -16,31 +16,8 @@ digest_output=$3
 previous_manifest=${4:-}
 command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
-command -v gh >/dev/null || { echo "gh is required" >&2; exit 1; }
-: "${GH_TOKEN:?GH_TOKEN is required to verify private package visibility}"
+: "${GHCR_PUBLISH_TOKEN:?GHCR_PUBLISH_TOKEN is required to publish GHCR images}"
 scripts/release/validate-version.py "$version"
-
-package_visibility() {
-  local service=$1
-  local error_file=$2
-  gh api "/users/lutzseverino/packages/container/cardo%2F$service" \
-    --jq .visibility 2>"$error_file"
-}
-
-require_private_package() {
-  local service=$1
-  local error_file=$2
-  local visibility
-  visibility=$(package_visibility "$service" "$error_file") || {
-    cat "$error_file" >&2
-    echo "could not verify GHCR package visibility for cardo/$service" >&2
-    exit 1
-  }
-  [[ $visibility == private ]] || {
-    echo "GHCR package cardo/$service is $visibility; refusing private runtime publication" >&2
-    exit 1
-  }
-}
 
 registry_digest() {
   docker manifest inspect --verbose "$1" \
@@ -50,29 +27,51 @@ registry_digest() {
        else .Descriptor.digest end'
 }
 
+record_digest() {
+  local service=$1
+  local digest=$2
+  local temporary_output="$digest_output.tmp"
+  jq --arg service "$service" --arg digest "$digest" \
+    '. + {($service): $digest}' "$digest_output" >"$temporary_output"
+  mv "$temporary_output" "$digest_output"
+  echo "recorded $service GHCR digest $digest"
+}
+
+require_anonymous_denial() {
+  local reference=$1
+  local error_file=$2
+  local anonymous_config=$3
+  : >"$error_file"
+  if DOCKER_CONFIG="$anonymous_config" docker pull "$reference" \
+    >"$error_file" 2>&1; then
+    echo "anonymous pull unexpectedly succeeded for $reference" >&2
+    exit 1
+  fi
+  grep --ignore-case --extended-regexp \
+    'denied|unauthorized|authentication required|insufficient_scope' \
+    "$error_file" >/dev/null || {
+      cat "$error_file" >&2
+      echo "could not prove anonymous access denial for $reference" >&2
+      exit 1
+    }
+}
+
 remote_error=$(mktemp "${TMPDIR:-/tmp}/cardo-registry-check.XXXXXX")
-trap 'rm -f "$remote_error" "$remote_error.package"' EXIT
+anonymous_config=$(mktemp -d "${TMPDIR:-/tmp}/cardo-anonymous-docker.XXXXXX")
+trap 'docker logout ghcr.io >/dev/null 2>&1 || true; rm -f "$remote_error"; rm -rf "$anonymous_config"' EXIT
 
 printf '{}\n' >"$digest_output"
 for service in identity invite billing; do
   name="ghcr.io/lutzseverino/cardo/$service"
   reference="$name:$version"
+  printf '%s' "$GHCR_PUBLISH_TOKEN" \
+    | docker login ghcr.io --username lutzseverino --password-stdin >/dev/null
   local_id=$(jq --exit-status --raw-output --arg service "$service" \
     '.images[] | select(.service == $service) | .localContentId' "$candidate_manifest")
   [[ $(docker image inspect --format '{{.Id}}' "$reference") == "$local_id" ]] \
     || { echo "local $reference bytes differ from the validated candidate" >&2; exit 1; }
 
-  package_error="$remote_error.package"
-  if visibility=$(package_visibility "$service" "$package_error"); then
-    [[ $visibility == private ]] || {
-      echo "GHCR package cardo/$service is $visibility; refusing to inspect or push a tag" >&2
-      exit 1
-    }
-  elif ! grep --ignore-case --extended-regexp 'HTTP 404|not found' "$package_error" >/dev/null; then
-    cat "$package_error" >&2
-    echo "could not prove GHCR package state for cardo/$service; refusing to push" >&2
-    exit 1
-  fi
+  scripts/release/check-ghcr-package-state.sh --allow-absent "$service"
 
   : >"$remote_error"
   if remote=$(registry_digest "$reference" 2>"$remote_error"); then
@@ -96,7 +95,6 @@ for service in identity invite billing; do
   elif grep --ignore-case --extended-regexp 'manifest unknown|no such manifest|not found' \
     "$remote_error" >/dev/null; then
     docker push "$reference"
-    require_private_package "$service" "$package_error"
     digest=$(registry_digest "$reference" 2>"$remote_error")
   else
     cat "$remote_error" >&2
@@ -105,10 +103,10 @@ for service in identity invite billing; do
   fi
   [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] \
     || { echo "registry returned an invalid digest for $reference" >&2; exit 1; }
-  temporary_output="$digest_output.tmp"
-  jq --arg service "$service" --arg digest "$digest" \
-    '. + {($service): $digest}' "$digest_output" >"$temporary_output"
-  mv "$temporary_output" "$digest_output"
+  record_digest "$service" "$digest"
+  scripts/release/check-ghcr-package-state.sh --require-private "$service"
+  docker logout ghcr.io >/dev/null
+  require_anonymous_denial "$name@$digest" "$remote_error" "$anonymous_config"
 done
 
-echo "published or verified exact GHCR image tags for $version"
+echo "published or verified private GHCR image tags with anonymous denial for $version"

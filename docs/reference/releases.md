@@ -84,15 +84,19 @@ The exact private image tags are:
 
 Images are private from their first push. Existing packages must already report
 REST visibility `private`; a new package must report `private` immediately after
-its first push. Cardo never invokes a visibility-changing API. `latest`,
-floating major/minor tags, and multi-platform manifests are outside this slice.
+its first push. The packages remain unlinked from every repository, and the
+public source repository is not granted Actions access. Cardo never invokes a
+visibility-changing or package-access API. `latest`, floating major/minor tags,
+and multi-platform manifests are outside this slice.
 
 Deployment repositories receive package `Read` access and pull the immutable
 `name@sha256:...` reference from an approved manifest with their own scoped
-credentials. Cardo's protected post-publication verification uses a dedicated
-`GHCR_PULL_TOKEN` limited to `read:packages`; its automatic `GITHUB_TOKEN` has
-only `contents: read`. Deployment repositories own credentials, configuration,
-rollout, rollback, and environment evidence; Cardo publication never deploys.
+credentials. Cardo publication uses the protected `GHCR_PUBLISH_TOKEN`, never
+the workflow `GITHUB_TOKEN`, for package API reads and pushes. Its protected
+post-publication verification uses a separate `GHCR_PULL_TOKEN` limited to
+`read:packages`; its automatic `GITHUB_TOKEN` has only `contents: read`.
+Deployment repositories own credentials, configuration, rollout, rollback, and
+environment evidence; Cardo publication never deploys.
 
 ## Versioning And Compatibility
 
@@ -130,12 +134,27 @@ public permanently.
 
 Candidate and publication jobs build each image independently from the exact
 version and revision and require identical content IDs and normalized
-inventories before a registry write. A rerun requires a recorded image digest
-to match exactly. If an abrupt runner loss left a private tag without a recorded
-digest, the remote image must pull to the freshly rebuilt candidate's exact
-Docker content ID before its registry digest is recovered. Central bytes,
-private package visibility, version, and revision remain immutable; mixed or
-different state requires a new version.
+inventories before a registry write. Before Central staging, every runtime
+package must be absent or private and unlinked from every repository.
+Publication records each service digest immediately after its push,
+REST-asserts private and unlinked state, logs out, and proves anonymous digest
+access is denied before authenticating for the next service. A failed run keeps
+already-recorded digests in its draft manifest and a focused Actions evidence
+artifact. A rerun requires a recorded image digest to match exactly. If an
+abrupt runner loss left a private tag without a recorded digest, the remote
+image must pull to the freshly rebuilt candidate's exact Docker content ID
+before its registry digest is recovered.
+Central bytes, private package visibility, version, and revision remain
+immutable; mixed or different state requires a new version. Image digest
+attestations are retained in GitHub's attestation store but are not pushed to
+GHCR.
+
+Any public runtime exposure is an incident and makes that version
+non-resumable. Deleting and recreating an exposed package is containment and
+namespace recovery only; it cannot erase anonymous availability or rehabilitate
+the version. The workflow rejects `0.1.0-rc.1` before checkout. A newly
+successful permanent `0.1.0-rc.2` with all three private digest proofs is
+required before the release objective can close.
 
 Dependabot and dependency review own dependency findings. Open high or critical
 findings block release unless `release/vulnerability-exceptions.json` has an
