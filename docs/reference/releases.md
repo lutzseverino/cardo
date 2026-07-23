@@ -177,17 +177,22 @@ non-resumable.
 `485f1d44f451ef2555ecea4cb3e3d051aad2a65c`. Its Central artifacts, private
 runtime digests, and initial successful protected verifier
 [run 30016640818](https://github.com/lutzseverino/cardo/actions/runs/30016640818)
-are retained publication evidence. The superseding protected verifier
+are retained publication evidence. Earlier protected verifier
 [run 30027859272](https://github.com/lutzseverino/cardo/actions/runs/30027859272)
-from trusted `main` revision
-`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is retained but insufficient under
-the completed GHCR authorization protocol. Its direct anonymous manifest
-`401 UNAUTHORIZED` responses were initial authentication challenges, not
-completed anonymous authorization decisions. Its standalone Java 21 consumer
-compile and authenticated pulls of the same three exact digests remain valid
-evidence. A new successful protected verifier run that completes the challenge
-flow is pending and must supersede it as privacy evidence. Publication proof
-does not by itself establish a known-good production rollback target.
+is retained only as historical authenticated-pull existence evidence; its
+direct anonymous manifest `401 UNAUTHORIZED` responses stopped at GHCR's
+initial authentication challenge, so it is not the final privacy proof. Final
+protected verifier
+[run 30032236972](https://github.com/lutzseverino/cardo/actions/runs/30032236972)
+from trusted verifier revision
+`b7f0651a0ecc4e37c9d7dfdf1e97323c682ad8ae` is the canonical privacy and
+same-digest pull evidence: it compiled a fresh standalone Java 21 consumer
+against the public Cardo surface, confirmed that GHCR's token endpoint
+explicitly denied anonymous requests for the exact three scoped repository
+pulls without issuing an anonymous bearer token, and then authenticated with
+the protected scoped credential and pulled those same three exact digests.
+Publication proof does not by itself establish a known-good production
+rollback target.
 
 Dependabot and dependency review own dependency findings. Open high or critical
 findings block release unless `release/vulnerability-exceptions.json` has an
