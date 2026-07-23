@@ -163,9 +163,20 @@ namespace recovery only; it cannot erase anonymous availability or rehabilitate
 the version. The workflow rejects both `0.1.0-rc.1` and `0.1.0-rc.2` before
 checkout. The latter is an immutable public-Maven-only partial prerelease: it
 has no private image identities or digest proofs and is non-deployable and
-non-resumable. `0.1.0-rc.3` is the next candidate for the first complete
-public-library/private-runtime prerelease required before the release objective
-can close.
+non-resumable.
+
+`0.1.0-rc.3` is an immutable published prerelease from revision
+`485f1d44f451ef2555ecea4cb3e3d051aad2a65c`. Its Central artifacts, private
+runtime digests, and initial successful protected verifier
+[run 30016640818](https://github.com/lutzseverino/cardo/actions/runs/30016640818)
+are retained publication evidence. The superseding protected verifier
+[run 30027859272](https://github.com/lutzseverino/cardo/actions/runs/30027859272)
+from trusted `main` revision
+`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is the current verifier evidence.
+It proves a standalone Java 21 public consumer compile, direct anonymous
+`401 UNAUTHORIZED` responses for all three exact image digests, and
+authenticated pulls of those same digests. Publication proof does not by
+itself establish a known-good production rollback target.
 
 Dependabot and dependency review own dependency findings. Open high or critical
 findings block release unless `release/vulnerability-exceptions.json` has an
