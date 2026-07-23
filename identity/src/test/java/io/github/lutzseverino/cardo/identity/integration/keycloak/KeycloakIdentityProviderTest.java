@@ -342,6 +342,81 @@ class KeycloakIdentityProviderTest {
   }
 
   @Test
+  void rejectsUnauthorizedInvalidPasswordGrantAsInvalidCredentials() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(
+            withStatus(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(
+                    """
+                    {"error":"invalid_grant","error_description":"Invalid user credentials"}
+                    """));
+
+    assertThatThrownBy(() -> provider.issuePasswordSession("user@example.com", "invalid-password"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(400);
+              assertThat(exception.code()).isEqualTo("invalid_credentials");
+            });
+
+    server.verify();
+  }
+
+  @Test
+  void reportsUnrelatedUnauthorizedPasswordGrantAsAProviderError() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(
+            withStatus(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(
+                    """
+                    {"error":"invalid_client"}
+                    """));
+
+    assertThatThrownBy(() -> provider.issuePasswordSession("user@example.com", "password-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(502);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+
+    server.verify();
+  }
+
+  @Test
+  void reportsMalformedUnauthorizedPasswordGrantAsAProviderError() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(
+            withStatus(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("not-json"));
+
+    assertThatThrownBy(() -> provider.issuePasswordSession("user@example.com", "password-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(502);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+
+    server.verify();
+  }
+
+  @Test
   void revokesTheRefreshCredentialAndAcceptsTheProvidersIdempotentResponse() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
@@ -377,13 +452,19 @@ class KeycloakIdentityProviderTest {
   }
 
   @Test
-  void reportsTokenEndpointAuthenticationFailureAsAProviderError() {
+  void reportsUnauthorizedInvalidRefreshGrantAsAProviderError() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
     KeycloakIdentityProvider provider = provider(rest);
     server
         .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
-        .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+        .andRespond(
+            withStatus(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(
+                    """
+                    {"error":"invalid_grant"}
+                    """));
 
     assertThatThrownBy(() -> provider.refreshSession("provider-refresh"))
         .isInstanceOfSatisfying(
