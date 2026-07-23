@@ -605,8 +605,9 @@ assert_image_metadata() {
     || fail "$service image version label is missing"
   [[ "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")" == "$source_revision" ]] \
     || fail "$service image revision label is missing"
-  [[ "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.source"}}' "$image")" == "https://github.com/lutzseverino/cardo" ]] \
-    || fail "$service image source label is missing"
+  docker image inspect --format '{{json .Config.Labels}}' "$image" \
+    | jq --exit-status 'has("org.opencontainers.image.source") | not' >/dev/null \
+    || fail "$service image carries a forbidden source-repository label"
   [[ "$(docker image inspect --format '{{.Created}}' "$image")" == "1980-01-01T00:00:02Z" ]] \
     || fail "$service image creation timestamp is not deterministic"
   embedded_environment=$(docker image inspect --format '{{json .Config.Env}}' "$image")

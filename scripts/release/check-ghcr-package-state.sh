@@ -46,7 +46,8 @@ for service in "${services[@]}"; do
         .repository == null or
         (
           (.repository | type == "object") and
-          (.repository.full_name | type == "string")
+          (.repository.full_name | type == "string") and
+          (.repository.full_name | length > 0)
         )
       )
     ' "$response" >/dev/null; then

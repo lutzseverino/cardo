@@ -36,6 +36,12 @@ jobs:
       security-events: read
     runs-on: ubuntu-24.04
     steps:
+      - name: Reject non-resumable rc.1 incident version
+        run: |
+          [[ "$RELEASE_VERSION" != 0.1.0-rc.1 ]] || {
+            echo '0.1.0-rc.1 is a non-resumable runtime exposure incident; publish 0.1.0-rc.2 instead.' >&2
+            exit 1
+          }
       - name: Check out exact revision
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:

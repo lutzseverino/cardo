@@ -35,6 +35,10 @@ case ${0##*/} in
         printf '%s\n' \
           '{"visibility":"private","repository":{"full_name":"lutzseverino/deployment"}}'
         ;;
+      linked-empty)
+        echo "state:$service:linked-empty" >>"${FIXTURE_LOG:?}"
+        printf '%s\n' '{"visibility":"private","repository":{"full_name":""}}'
+        ;;
       error)
         echo "state:$service:error" >>"${FIXTURE_LOG:?}"
         echo 'gh: forbidden (HTTP 403)' >&2
@@ -168,7 +172,7 @@ JSON
 
     state_remote="$temporary_directory/remote/state"
     mkdir -p "$state_remote"
-    for state in absent private private-omitted public linked linked-other error unknown; do
+    for state in absent private private-omitted public linked linked-other linked-empty error unknown; do
       if [[ $state == absent || $state == private || $state == private-omitted ]]; then
         expected=success
       else
@@ -335,9 +339,23 @@ JSON
 from pathlib import Path
 
 workflow = Path(".github/workflows/release.yml").read_text()
+candidate = workflow.split("  candidate:", 1)[1].split("\n  publish:", 1)[0]
 publish = workflow.split("  publish:", 1)[1].split("\n  verify-private-runtime:", 1)[0]
 job = workflow.split("  verify-private-runtime:", 1)[1].split("\n  finalize:", 1)[0]
 checker = Path("scripts/release/check-ghcr-package-state.sh").read_text()
+runtime_smoke = Path("scripts/smoke-runtime-artifacts.sh").read_text()
+runtime_docs = Path("docs/reference/runtime-artifacts.md").read_text()
+incident_guard = "- name: Reject non-resumable rc.1 incident version"
+candidate_checkout = "- name: Check out exact revision"
+if candidate.index(incident_guard) > candidate.index(candidate_checkout):
+    raise SystemExit("rc.1 incident guard does not precede candidate checkout")
+for value in [
+    '[[ "$RELEASE_VERSION" != 0.1.0-rc.1 ]]',
+    "publish 0.1.0-rc.2 instead",
+    "exit 1",
+]:
+    if value not in candidate.split(candidate_checkout, 1)[0]:
+        raise SystemExit(f"pre-checkout rc.1 incident guard lacks: {value}")
 preflight = "run: scripts/release/check-ghcr-package-state.sh"
 central_staging = "- name: Rebuild signed Central bundle"
 central_upload = "- name: Upload Central bundle for manual publication"
@@ -390,6 +408,10 @@ if "packages:" in job or "GHCR_PULL_TOKEN: ${{ github.token }}" in job:
     raise SystemExit("private verification job grants package access to its automatic token")
 if "BP_OCI_SOURCE" in Path("pom.xml").read_text():
     raise SystemExit("runtime images retain the public source-repository link label")
+if 'has("org.opencontainers.image.source") | not' not in runtime_smoke:
+    raise SystemExit("runtime smoke does not reject the source-repository label")
+if "- `org.opencontainers.image.source`" in runtime_docs:
+    raise SystemExit("runtime artifact reference still promises the forbidden source label")
 PY
 
     echo "private image publication fixtures passed"

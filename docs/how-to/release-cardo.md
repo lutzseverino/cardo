@@ -106,6 +106,6 @@ never be described as disposable.
 
 Issue #30 cannot close on repository changes alone. The exposed
 `0.1.0-rc.1` is permanent incident history and cannot satisfy the release gate.
-Publish a new permanent prerelease, anonymously resolve its BOM, libraries, and
-contracts from Central, and complete private digest-pull verification for all
-three images.
+Publish `0.1.0-rc.2` as the new permanent prerelease, anonymously resolve its
+BOM, libraries, and contracts from Central, and complete private digest-pull
+verification for all three images.

@@ -152,8 +152,9 @@ GHCR.
 Any public runtime exposure is an incident and makes that version
 non-resumable. Deleting and recreating an exposed package is containment and
 namespace recovery only; it cannot erase anonymous availability or rehabilitate
-the version. A newly successful permanent prerelease with all three private
-digest proofs is required before the release objective can close.
+the version. The workflow rejects `0.1.0-rc.1` before checkout. A newly
+successful permanent `0.1.0-rc.2` with all three private digest proofs is
+required before the release objective can close.
 
 Dependabot and dependency review own dependency findings. Open high or critical
 findings block release unless `release/vulnerability-exceptions.json` has an
