@@ -107,6 +107,15 @@ contract_javadocs = archive.read(
 with zipfile.ZipFile(io.BytesIO(contract_javadocs)) as javadocs:
     if "META-INF/MANIFEST.MF" not in javadocs.namelist():
         raise SystemExit("contract Javadoc archive lacks Maven archive metadata")
+contract_inventory = json.loads(archive.read(
+    f"io/github/lutzseverino/cardo/cardo-openapi-contracts/{version}/"
+    f"cardo-openapi-contracts-{version}-cyclonedx.json"
+))
+if contract_inventory.get("components", []):
+    raise SystemExit("contract-only CycloneDX inventory contains external components")
+root_ref = contract_inventory["metadata"]["component"]["bom-ref"]
+if contract_inventory.get("dependencies") != [{"ref": root_ref, "dependsOn": []}]:
+    raise SystemExit("contract-only CycloneDX root contains external dependencies")
 PY
 
 echo "Maven release fixture passed"
