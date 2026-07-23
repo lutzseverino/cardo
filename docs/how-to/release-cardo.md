@@ -65,6 +65,32 @@ make the first release pass.
    fail and authenticated digest pulls succeed. Only then is the GitHub release
    made non-draft.
 
+### Verify An Already-Published Release
+
+When a non-draft release still needs fresh-runner private-runtime verification,
+retain the original release run and dispatch the permanent read-only recovery
+workflow with the published manifest's exact version and full source revision:
+
+```bash
+version=0.1.0-rc.3
+revision=485f1d44f451ef2555ecea4cb3e3d051aad2a65c
+gh workflow run verify-published-private-runtime.yml \
+  --ref main \
+  --field "version=$version" \
+  --field "revision=$revision"
+```
+
+Approve the protected `release` environment, then retain the successful run URL
+as release evidence. The workflow accepts only a non-draft `v${version}`
+release, proves its manifest, tag, revision, and Central bundle identity, and
+uses only `GHCR_PULL_TOKEN` for private digest pulls. It cannot publish or edit
+a release, tag, or package. The revision input is evidence only: the job checks
+out its trusted workflow-definition commit and runs the current validator and
+verifier, never code selected by the historical revision. Keep the `release`
+environment restricted to protected branches, and allow this manual verifier
+only from protected `main`; that restriction is part of the `${{ github.sha }}`
+trust invariant.
+
 ### Recover A Partial Release
 
 - If Central has no version, upload once as `USER_MANAGED`.

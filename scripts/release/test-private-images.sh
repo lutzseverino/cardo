@@ -335,6 +335,9 @@ import textwrap
 from pathlib import Path
 
 workflow = Path(".github/workflows/release.yml").read_text()
+manual_workflow = Path(
+    ".github/workflows/verify-published-private-runtime.yml"
+).read_text()
 candidate = workflow.split("  candidate:", 1)[1].split("\n  publish:", 1)[0]
 publish = workflow.split("  publish:", 1)[1].split("\n  verify-private-runtime:", 1)[0]
 job = workflow.split("  verify-private-runtime:", 1)[1].split("\n  finalize:", 1)[0]
@@ -430,6 +433,72 @@ for value in required:
         raise SystemExit(f"private verification job lacks required external pull-token policy: {value}")
 if "packages:" in job or "GHCR_PULL_TOKEN: ${{ github.token }}" in job:
     raise SystemExit("private verification job grants package access to its automatic token")
+java_setup = (
+    "uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 "
+    "# v5.6.0"
+)
+verifier = "scripts/release/verify-private-release.sh"
+for name, verifier_job in [
+    ("release", job),
+    ("published-release", manual_workflow),
+]:
+    for value in [java_setup, "distribution: temurin", "java-version: 21"]:
+        if value not in verifier_job:
+            raise SystemExit(f"{name} private verifier lacks Java 21 setup: {value}")
+    if verifier_job.index(java_setup) > verifier_job.index(verifier):
+        raise SystemExit(f"{name} private verifier sets up Java after verification")
+
+manual_required = [
+    "name: Verify published private runtime",
+    "      version:",
+    "      revision:",
+    "        required: true",
+    "  RELEASE_REVISION: ${{ inputs.revision }}",
+    "  RELEASE_VERSION: ${{ inputs.version }}",
+    "    environment: release",
+    "          fetch-depth: 0",
+    "          persist-credentials: false",
+    "          ref: ${{ github.sha }}",
+    'gh release view "v$RELEASE_VERSION" --json isDraft --jq .isDraft',
+    '[[ $draft == false ]]',
+    "--pattern release-manifest.json --pattern central-bundle.zip",
+    "scripts/release/validate-request.sh --published-release",
+    '"$RELEASE_VERSION" "$RELEASE_REVISION"',
+    '"$RUNNER_TEMP/release/central-bundle.zip"',
+    "GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}",
+]
+for value in manual_required:
+    if value not in manual_workflow:
+        raise SystemExit(f"published-release verifier lacks immutable policy: {value}")
+manual_permissions = manual_workflow.split("\npermissions:\n", 1)[1].split(
+    "\nenv:\n", 1
+)[0]
+if manual_permissions.strip() != "contents: read" or "\n    permissions:" in manual_workflow:
+    raise SystemExit("published-release verifier grants more than contents read")
+manual_checkout = manual_workflow.split(
+    "      - name: Check out trusted verifier", 1
+)[1].split("      - name: Set up Java", 1)[0]
+if "inputs.revision" in manual_checkout or "RELEASE_REVISION" in manual_checkout:
+    raise SystemExit("published-release verifier checks out input-selected code")
+manual_verifier_step = manual_workflow.split(
+    "      - name: Prove private image access boundary", 1
+)[1]
+if "GH_TOKEN:" in manual_verifier_step or "GITHUB_TOKEN:" in manual_verifier_step:
+    raise SystemExit("published-release verifier mixes the release and GHCR tokens")
+for forbidden in [
+    "packages:",
+    "contents: write",
+    "GHCR_PUBLISH_TOKEN",
+    "gh release create",
+    "gh release edit",
+    "gh release upload",
+    "git push",
+    "docker push",
+]:
+    if forbidden in manual_workflow:
+        raise SystemExit(
+            f"published-release verifier retains mutation authority: {forbidden}"
+        )
 if "BP_OCI_SOURCE" in Path("pom.xml").read_text():
     raise SystemExit("runtime images retain the public source-repository link label")
 if 'has("org.opencontainers.image.source") | not' not in runtime_smoke:
