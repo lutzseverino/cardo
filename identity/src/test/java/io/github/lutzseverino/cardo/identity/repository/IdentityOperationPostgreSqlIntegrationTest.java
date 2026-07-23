@@ -207,8 +207,8 @@ class IdentityOperationPostgreSqlIntegrationTest {
 
     var first = service.claim(operationId).orElseThrow();
     jdbc.update(
-        "update identity_operations set next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second'"
-            + " where id = ?",
+        "update identity_operations set next_attempt_at = ? where id = ?",
+        NOW.minusSeconds(1),
         operationId);
     var recovered = service.claim(operationId).orElseThrow();
 
