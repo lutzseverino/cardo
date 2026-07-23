@@ -11,8 +11,10 @@ import io.github.lutzseverino.cardo.identity.model.IdentityOperationStatus;
 import io.github.lutzseverino.cardo.identity.model.User;
 import io.github.lutzseverino.cardo.identity.operations.IdentityWorkflowMetrics;
 import io.github.lutzseverino.cardo.identity.service.IdentityOperationService;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -40,6 +42,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,7 +63,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class IdentityOperationPostgreSqlIntegrationTest {
 
-  private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-07-18T10:00:00Z");
+  private static final Clock CLOCK =
+      Clock.fixed(OffsetDateTime.parse("2026-07-18T10:00:00Z").toInstant(), ZoneOffset.UTC);
+  private static final OffsetDateTime NOW = OffsetDateTime.now(CLOCK);
   private static final OffsetDateTime NOT_AFTER = NOW.plusDays(30);
 
   @Container
@@ -101,8 +106,15 @@ class IdentityOperationPostgreSqlIntegrationTest {
 
   @BeforeEach
   void clearDatabase() {
+    ReflectionTestUtils.setField(service, "clock", CLOCK);
     operations.deleteAll();
     users.deleteAll();
+  }
+
+  @Test
+  void credentialSetupDeadlineUsesTheServiceClockFixture() {
+    assertThat(ReflectionTestUtils.getField(service, "clock")).isSameAs(CLOCK);
+    assertThat(NOT_AFTER).isEqualTo(OffsetDateTime.now(CLOCK).plusDays(30));
   }
 
   @Test
