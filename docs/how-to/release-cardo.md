@@ -64,11 +64,11 @@ make the first release pass.
    `private` with no repository link, and logs out. A failure preserves every
    digest already recorded in the draft manifest and a focused Actions evidence
    artifact.
-6. A subsequent fresh read-only package job requests a credential-free GHCR
-   bearer token and requires an explicit `401 UNAUTHORIZED` response for every
-   exact manifest digest. Network, registry, malformed, and other HTTP failures
-   are not accepted as privacy evidence. It then proves authenticated digest
-   pulls with the scoped token. Only then is the GitHub release made non-draft.
+6. A subsequent fresh read-only package job requests every exact manifest
+   digest without credentials and requires an explicit `401 UNAUTHORIZED`
+   response. Network, registry, malformed, and other HTTP failures are not
+   accepted as privacy evidence. It then proves authenticated digest pulls with
+   the scoped token. Only then is the GitHub release made non-draft.
 
 ### Verify An Already-Published Release
 

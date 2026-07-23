@@ -30,41 +30,25 @@ for service in identity invite billing; do
   digest=${reference##*@}
 
   curl_status=0
-  token_status=$(curl --silent --show-error \
+  manifest_status=$(curl --disable --silent --show-error \
     --output "$anonymous_response" --write-out '%{http_code}' \
-    --get --data-urlencode 'service=ghcr.io' \
-    --data-urlencode "scope=repository:$repository:pull" \
-    https://ghcr.io/token 2>"$anonymous_error") || curl_status=$?
-  if [[ $curl_status -ne 0 ]]; then
-    cat "$anonymous_error" >&2
-    echo "could not obtain fresh anonymous GHCR authorization for $service ($digest)" >&2
-    exit 1
-  fi
-  [[ $token_status == 200 ]] || {
-    echo "anonymous GHCR authorization returned HTTP $token_status for $service ($digest)" >&2
-    exit 1
-  }
-  anonymous_token=$(jq --exit-status --raw-output \
-    '(.token // .access_token) | select(type == "string" and length > 0)' \
-    "$anonymous_response") || {
-    echo "anonymous GHCR authorization returned no usable token for $service ($digest)" >&2
-    exit 1
-  }
-
-  curl_status=0
-  manifest_status=$(curl --silent --show-error \
-    --output "$anonymous_response" --write-out '%{http_code}' \
-    --header "Authorization: Bearer $anonymous_token" \
     --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
     "https://ghcr.io/v2/$repository/manifests/$digest" 2>"$anonymous_error") || curl_status=$?
-  unset anonymous_token
   if [[ $curl_status -ne 0 ]]; then
     cat "$anonymous_error" >&2
     echo "anonymous GHCR manifest check failed for $service ($digest)" >&2
     exit 1
   fi
   denial_code=$(jq --raw-output \
-    '[.errors[]?.code | select(type == "string")] | first // empty' \
+    'if (.errors | type) == "array" then
+       if any(.errors[]; .code == "UNAUTHORIZED") then
+         "UNAUTHORIZED"
+       else
+         [.errors[].code | select(type == "string")] | first // empty
+       end
+     else
+       empty
+     end' \
     "$anonymous_response" 2>/dev/null || true)
   [[ $manifest_status == 401 && $denial_code == UNAUTHORIZED ]] || {
     echo "anonymous GHCR manifest check returned HTTP $manifest_status code ${denial_code:-none} for $service ($digest); expected explicit 401 UNAUTHORIZED denial" >&2
