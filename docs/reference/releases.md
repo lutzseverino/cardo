@@ -143,8 +143,8 @@ inventories before a registry write. Before Central staging, every runtime
 package must be absent or private and unlinked from every repository.
 Publication records each service digest after its tag is pushed or verified,
 REST-asserts private and unlinked state, and logs out. A subsequent fresh
-read-only verification job obtains a credential-free GHCR bearer token and
-requires an explicit `401 UNAUTHORIZED` response at each exact manifest digest;
+read-only verification job requests each exact manifest digest without
+credentials and requires an explicit `401 UNAUTHORIZED` response;
 network, registry, malformed, or other HTTP failures do not prove denial. It
 then uses the scoped pull token to pull each recorded digest. A failed run
 keeps already-recorded digests in its draft manifest and a focused Actions
