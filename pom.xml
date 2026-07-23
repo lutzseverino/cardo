@@ -73,7 +73,7 @@
     <java.version>21</java.version>
     <google-java-format.version>1.35.0</google-java-format.version>
     <jackson-databind-nullable.version>0.2.10</jackson-databind-nullable.version>
-    <lombok.version>1.18.42</lombok.version>
+    <lombok.version>1.18.46</lombok.version>
     <mapstruct.version>1.6.3</mapstruct.version>
     <maven-enforcer.version>3.6.2</maven-enforcer.version>
     <openapi-generator.version>7.22.0</openapi-generator.version>
