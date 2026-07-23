@@ -198,6 +198,27 @@ PY
 
 git -C "$repository" tag --annotate v1.2.3 "$first_revision" --message 'Cardo 1.2.3'
 git -C "$repository" push --quiet origin refs/tags/v1.2.3
+git -C "$repository" checkout --quiet --detach "$second_revision"
+(
+  cd "$repository"
+  scripts/release/validate-request.sh --published-release \
+    1.2.3 "$first_revision" \
+    "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip"
+  expect_failure scripts/release/validate-request.sh --published-release \
+    1.2.4 "$first_revision" \
+    "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip"
+  expect_failure scripts/release/validate-request.sh --published-release \
+    1.2.3 "$second_revision" \
+    "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip"
+  expect_failure scripts/release/validate-request.sh --published-release \
+    1.2.3 "$first_revision" \
+    "$temporary_directory/release-manifest.json.wrong-tag" "$temporary_directory/central-bundle.zip"
+  expect_failure scripts/release/validate-request.sh --published-release \
+    1.2.3 "$first_revision" \
+    "$temporary_directory/release-manifest.json" "$temporary_directory/wrong-bundle.zip"
+)
+
+git -C "$repository" checkout --quiet --detach "$first_revision"
 (
   cd "$repository"
   scripts/release/validate-request.sh 1.2.3 "$first_revision" \
@@ -209,6 +230,9 @@ git -C "$repository" push --quiet --force origin refs/tags/v1.2.3
 (
   cd "$repository"
   expect_failure scripts/release/validate-request.sh 1.2.3 "$first_revision" \
+    "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip"
+  expect_failure scripts/release/validate-request.sh --published-release \
+    1.2.3 "$first_revision" \
     "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip"
 )
 

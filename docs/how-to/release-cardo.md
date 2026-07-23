@@ -75,6 +75,7 @@ workflow with the published manifest's exact version and full source revision:
 version=0.1.0-rc.3
 revision=485f1d44f451ef2555ecea4cb3e3d051aad2a65c
 gh workflow run verify-published-private-runtime.yml \
+  --ref main \
   --field "version=$version" \
   --field "revision=$revision"
 ```
@@ -83,7 +84,9 @@ Approve the protected `release` environment, then retain the successful run URL
 as release evidence. The workflow accepts only a non-draft `v${version}`
 release, proves its manifest, tag, revision, and Central bundle identity, and
 uses only `GHCR_PULL_TOKEN` for private digest pulls. It cannot publish or edit
-a release, tag, or package.
+a release, tag, or package. The revision input is evidence only: the job checks
+out its trusted workflow-definition commit and runs the current validator and
+verifier, never code selected by the historical revision.
 
 ### Recover A Partial Release
 

@@ -458,11 +458,12 @@ manual_required = [
     "    environment: release",
     "          fetch-depth: 0",
     "          persist-credentials: false",
-    "          ref: ${{ inputs.revision }}",
+    "          ref: ${{ github.sha }}",
     'gh release view "v$RELEASE_VERSION" --json isDraft --jq .isDraft',
     '[[ $draft == false ]]',
     "--pattern release-manifest.json --pattern central-bundle.zip",
-    'scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION"',
+    "scripts/release/validate-request.sh --published-release",
+    '"$RELEASE_VERSION" "$RELEASE_REVISION"',
     '"$RUNNER_TEMP/release/central-bundle.zip"',
     "GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}",
 ]
@@ -474,6 +475,11 @@ manual_permissions = manual_workflow.split("\npermissions:\n", 1)[1].split(
 )[0]
 if manual_permissions.strip() != "contents: read" or "\n    permissions:" in manual_workflow:
     raise SystemExit("published-release verifier grants more than contents read")
+manual_checkout = manual_workflow.split(
+    "      - name: Check out trusted verifier", 1
+)[1].split("      - name: Set up Java", 1)[0]
+if "inputs.revision" in manual_checkout or "RELEASE_REVISION" in manual_checkout:
+    raise SystemExit("published-release verifier checks out input-selected code")
 manual_verifier_step = manual_workflow.split(
     "      - name: Prove private image access boundary", 1
 )[1]

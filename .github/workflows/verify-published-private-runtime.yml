@@ -24,12 +24,12 @@ jobs:
     environment: release
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out exact revision
+      - name: Check out trusted verifier
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.revision }}
+          ref: ${{ github.sha }}
       - name: Set up Java
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
@@ -49,7 +49,8 @@ jobs:
             --dir "$RUNNER_TEMP/release"
       - name: Validate immutable release request
         run: |
-          scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION" \
+          scripts/release/validate-request.sh --published-release \
+            "$RELEASE_VERSION" "$RELEASE_REVISION" \
             "$RUNNER_TEMP/release/release-manifest.json" \
             "$RUNNER_TEMP/release/central-bundle.zip"
       - name: Prove private image access boundary
