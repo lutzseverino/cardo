@@ -11,7 +11,10 @@ service images privately to GHCR under one version and source revision.
 1. Verify `io.github.lutzseverino.cardo` in the Maven Central Publisher Portal.
 2. Create the protected GitHub `release` environment with required reviewers.
 3. Add `CENTRAL_TOKEN_USERNAME`, `CENTRAL_TOKEN_PASSWORD`, `GPG_PRIVATE_KEY`,
-   and `GPG_PASSPHRASE` only to that environment.
+   and `GPG_PASSPHRASE` only to that environment. Add a dedicated
+   `GHCR_PULL_TOKEN` for the `lutzseverino` registry account with only
+   `read:packages`; the protected verification job must not use its automatic
+   `GITHUB_TOKEN` to pull Cardo packages.
 4. Publish the signing public key through a durable public key service.
 5. Protect `v*` tags, enable immutable GitHub releases, vulnerability alerts,
    and Dependabot security updates.
@@ -22,9 +25,9 @@ service images privately to GHCR under one version and source revision.
    workflow should use its own job-scoped `GITHUB_TOKEN` with `packages: read`.
 
 The release workflow uses its write-scoped job token only to push. A fresh
-post-publication job uses a separate job token with `packages: read` to prove
-digest pulls and anonymous rejection. No long-lived deployment token is stored
-in Cardo and no workflow changes package visibility.
+post-publication job has only `contents: read` on its automatic token and uses
+the independently scoped `GHCR_PULL_TOKEN` to prove digest pulls and anonymous
+rejection. No workflow changes package visibility.
 
 Missing credentials, namespace ownership, private package visibility, alert
 access, or repository protection must fail the release. Do not weaken a gate to
@@ -55,8 +58,10 @@ make the first release pass.
   Portal; never upload another deployment automatically.
 - If every Central component exists with identical bytes, resume. Partial or
   different bytes require a new version.
-- If a private GHCR tag is absent, push it once. If it exists, resume only when
-  it is still private and its digest equals the recorded manifest.
+- If a private GHCR tag is absent, push it once. If it exists with a recorded
+  digest, require exact digest equality. If a runner stopped before recording
+  the digest, pull the existing private tag and resume only when its Docker
+  content ID equals the freshly rebuilt and validated candidate.
 - An existing Git tag must peel to the requested revision.
 - A draft GitHub release can be updated only for the same version, revision,
   public bytes, and private digests.

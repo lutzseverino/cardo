@@ -39,7 +39,11 @@ case ${0##*/} in
         reference=$5
         service=${reference#ghcr.io/lutzseverino/cardo/}
         service=${service%%:*}
-        echo "sha256:$service-local"
+        if [[ -n ${FIXTURE_LOCAL_STATE:-} && -f $FIXTURE_LOCAL_STATE/$service ]]; then
+          cat "$FIXTURE_LOCAL_STATE/$service"
+        else
+          echo "sha256:$service-local"
+        fi
         ;;
       'manifest inspect')
         reference=$4
@@ -56,7 +60,7 @@ case ${0##*/} in
         reference=$2
         service=${reference#ghcr.io/lutzseverino/cardo/}
         service=${service%%:*}
-        touch "$FIXTURE_REMOTE/$service"
+        printf 'sha256:%s-local\n' "$service" >"$FIXTURE_REMOTE/$service"
         ;;
       'logout ghcr.io')
         rm -f "${FIXTURE_AUTH:?}"
@@ -69,6 +73,16 @@ case ${0##*/} in
         touch "${FIXTURE_AUTH:?}"
         ;;
       'pull '*)
+        reference=$2
+        service=${reference#ghcr.io/lutzseverino/cardo/}
+        service=${service%%[@:]*}
+        if [[ -n ${FIXTURE_REMOTE:-} ]]; then
+          [[ -f $FIXTURE_REMOTE/$service ]] \
+            || { echo 'manifest unknown' >&2; exit 1; }
+          mkdir -p "${FIXTURE_LOCAL_STATE:?}"
+          cp "$FIXTURE_REMOTE/$service" "$FIXTURE_LOCAL_STATE/$service"
+          exit 0
+        fi
         if [[ -f ${FIXTURE_AUTH:?} || ${FIXTURE_ANONYMOUS_SUCCEEDS:-false} == true ]]; then
           exit 0
         fi
@@ -103,21 +117,69 @@ JSON
       local visibility=$1
       local remote=$2
       local output=$3
+      local local_state=$4
+      shift 4
+      mkdir -p "$local_state"
       PATH="$fixture_bin:$PATH" GH_TOKEN=fixture \
         FIXTURE_VISIBILITY="$visibility" FIXTURE_REMOTE="$remote" \
+        FIXTURE_LOCAL_STATE="$local_state" \
         scripts/release/publish-images.sh "$version" \
-          "$temporary_directory/images.json" "$output"
+          "$temporary_directory/images.json" "$output" "$@"
     }
 
-    run_publish private "$temporary_directory/remote" "$temporary_directory/digests.json"
+    fresh_remote="$temporary_directory/remote/fresh"
+    mkdir -p "$fresh_remote"
+    run_publish private "$fresh_remote" "$temporary_directory/digests.json" \
+      "$temporary_directory/local/fresh"
     jq --exit-status '
       keys == ["billing", "identity", "invite"] and
       all(.[]; test("^sha256:[0-9]{64}$"))
     ' "$temporary_directory/digests.json" >/dev/null
 
+    run_publish private "$fresh_remote" "$temporary_directory/unrecorded.json" \
+      "$temporary_directory/local/unrecorded"
+
+    different_remote="$temporary_directory/remote/different"
+    mkdir -p "$different_remote"
+    printf 'sha256:different\n' >"$different_remote/identity"
+    if run_publish private "$different_remote" "$temporary_directory/different.json" \
+      "$temporary_directory/local/different" >/dev/null 2>&1; then
+      echo "existing tag with different unrecorded content was accepted" >&2
+      exit 1
+    fi
+
+    recorded_remote="$temporary_directory/remote/recorded"
+    mkdir -p "$recorded_remote"
+    printf 'sha256:identity-local\n' >"$recorded_remote/identity"
+    cat >"$temporary_directory/recorded-manifest.json" <<JSON
+{"images":[
+  {"service":"identity","digest":"sha256:$(printf '%064d' 9)"},
+  {"service":"invite","digest":null},
+  {"service":"billing","digest":null}
+]}
+JSON
+    if run_publish private "$recorded_remote" "$temporary_directory/recorded.json" \
+      "$temporary_directory/local/recorded" \
+      "$temporary_directory/recorded-manifest.json" >/dev/null 2>&1; then
+      echo "existing tag with a digest differing from the release manifest was accepted" >&2
+      exit 1
+    fi
+
+    partial_remote="$temporary_directory/remote/partial"
+    mkdir -p "$partial_remote"
+    printf 'sha256:identity-local\n' >"$partial_remote/identity"
+    printf 'sha256:invite-local\n' >"$partial_remote/invite"
+    run_publish private "$partial_remote" "$temporary_directory/partial.json" \
+      "$temporary_directory/local/partial"
+    [[ -f $partial_remote/billing ]] \
+      || { echo "partial image state did not resume the missing push" >&2; exit 1; }
+    jq --exit-status 'keys == ["billing", "identity", "invite"]' \
+      "$temporary_directory/partial.json" >/dev/null
+
     for visibility in public error; do
-      if run_publish "$visibility" "$temporary_directory/remote" \
-        "$temporary_directory/$visibility.json" >/dev/null 2>&1; then
+      if run_publish "$visibility" "$fresh_remote" \
+        "$temporary_directory/$visibility.json" \
+        "$temporary_directory/local/$visibility" >/dev/null 2>&1; then
         echo "$visibility package visibility was accepted" >&2
         exit 1
       fi
@@ -126,7 +188,8 @@ JSON
     after_push="$temporary_directory/after-push"
     mkdir -p "$after_push"
     if run_publish after-push-public "$after_push" \
-      "$temporary_directory/after-push.json" >/dev/null 2>&1; then
+      "$temporary_directory/after-push.json" \
+      "$temporary_directory/local/after-push" >/dev/null 2>&1; then
       echo "public visibility after a first push was accepted" >&2
       exit 1
     fi
@@ -144,10 +207,17 @@ JSON
   {"service":"billing","reference":"ghcr.io/lutzseverino/cardo/billing@sha256:$(printf '%064d' 3)"}
 ]}
 JSON
+    if env -u GHCR_PULL_TOKEN PATH="$fixture_bin:$PATH" \
+      FIXTURE_AUTH="$temporary_directory/docker-auth" \
+      "$verify_fixture/scripts/release/verify-private-release.sh" \
+        "$verify_fixture/manifest.json" lutzseverino >/dev/null 2>&1; then
+      echo "private verification accepted a missing external pull token" >&2
+      exit 1
+    fi
     PATH="$fixture_bin:$PATH" GHCR_PULL_TOKEN=fixture \
       FIXTURE_AUTH="$temporary_directory/docker-auth" \
       "$verify_fixture/scripts/release/verify-private-release.sh" \
-        "$verify_fixture/manifest.json" deployment-fixture
+        "$verify_fixture/manifest.json" lutzseverino
     if PATH="$fixture_bin:$PATH" GHCR_PULL_TOKEN=fixture \
       FIXTURE_AUTH="$temporary_directory/docker-auth" FIXTURE_ANONYMOUS_SUCCEEDS=true \
       "$verify_fixture/scripts/release/verify-private-release.sh" \
@@ -155,6 +225,24 @@ JSON
       echo "anonymous private-image access was accepted" >&2
       exit 1
     fi
+
+    python3 - <<'PY'
+from pathlib import Path
+
+workflow = Path(".github/workflows/release.yml").read_text()
+job = workflow.split("  verify-private-runtime:", 1)[1].split("\n  finalize:", 1)[0]
+required = [
+    "    environment: release",
+    "      contents: read",
+    "GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}",
+    '"$RUNNER_TEMP/release/release-manifest.json" lutzseverino',
+]
+for value in required:
+    if value not in job:
+        raise SystemExit(f"private verification job lacks required external pull-token policy: {value}")
+if "packages:" in job or "GHCR_PULL_TOKEN: ${{ github.token }}" in job:
+    raise SystemExit("private verification job grants package access to its automatic token")
+PY
 
     echo "private image publication fixtures passed"
     ;;

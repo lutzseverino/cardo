@@ -76,12 +76,22 @@ for service in identity invite billing; do
 
   : >"$remote_error"
   if remote=$(registry_digest "$reference" 2>"$remote_error"); then
-    [[ -n $previous_manifest && -f $previous_manifest ]] \
-      || { echo "$reference already exists but no prior release manifest proves its digest" >&2; exit 1; }
-    expected=$(jq --exit-status --raw-output --arg service "$service" \
-      '.images[] | select(.service == $service) | .digest' "$previous_manifest")
-    [[ $remote == "$expected" ]] \
-      || { echo "$reference digest $remote differs from recorded $expected" >&2; exit 1; }
+    expected=
+    if [[ -n $previous_manifest && -f $previous_manifest ]]; then
+      expected=$(jq --raw-output --arg service "$service" \
+        '.images[] | select(.service == $service) | .digest // empty' "$previous_manifest")
+    fi
+    if [[ -n $expected ]]; then
+      [[ $remote == "$expected" ]] \
+        || { echo "$reference digest $remote differs from recorded $expected" >&2; exit 1; }
+    else
+      docker pull "$reference" >/dev/null
+      pulled_id=$(docker image inspect --format '{{.Id}}' "$reference")
+      [[ $pulled_id == "$local_id" ]] || {
+        echo "$reference already exists with content ID $pulled_id, not validated candidate $local_id" >&2
+        exit 1
+      }
+    fi
     digest=$remote
   elif grep --ignore-case --extended-regexp 'manifest unknown|no such manifest|not found' \
     "$remote_error" >/dev/null; then
