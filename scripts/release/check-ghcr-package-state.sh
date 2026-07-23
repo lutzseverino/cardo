@@ -24,6 +24,18 @@ response=$(mktemp "${TMPDIR:-/tmp}/cardo-package-state.XXXXXX")
 error=$(mktemp "${TMPDIR:-/tmp}/cardo-package-state-error.XXXXXX")
 trap 'rm -f "$response" "$error"' EXIT
 
+: >"$response"
+: >"$error"
+if ! GH_TOKEN="$GHCR_PUBLISH_TOKEN" gh api /user >"$response" 2>"$error"; then
+  cat "$error" >&2
+  echo "could not verify the GHCR publishing token owner" >&2
+  exit 1
+fi
+if ! jq --exit-status '.login == "lutzseverino"' "$response" >/dev/null; then
+  echo "GHCR publishing token is not owned by the expected lutzseverino account" >&2
+  exit 1
+fi
+
 for service in "${services[@]}"; do
   case $service in
     identity|invite|billing) ;;

@@ -92,9 +92,11 @@ and multi-platform manifests are outside this slice.
 Deployment repositories receive package `Read` access and pull the immutable
 `name@sha256:...` reference from an approved manifest with their own scoped
 credentials. Cardo publication uses the protected `GHCR_PUBLISH_TOKEN`, never
-the workflow `GITHUB_TOKEN`, for package API reads and pushes. Its protected
-post-publication verification uses a separate `GHCR_PULL_TOKEN` limited to
-`read:packages`; its automatic `GITHUB_TOKEN` has only `contents: read`.
+the workflow `GITHUB_TOKEN`, for package API reads and pushes. Before package
+metadata is trusted, the token's current-user response must identify the
+intended `lutzseverino` owner. Its protected post-publication verification uses
+a separate `GHCR_PULL_TOKEN` limited to `read:packages`; its automatic
+`GITHUB_TOKEN` has only `contents: read`.
 Deployment repositories own credentials, configuration, rollout, rollback, and
 environment evidence; Cardo publication never deploys.
 
@@ -102,10 +104,13 @@ environment evidence; Cardo publication never deploys.
 
 Cardo uses SemVer including prereleases. The checkout remains
 `0.1.0-SNAPSHOT`; release automation injects `revision` without rewriting every
-POM. Tags are `v${version}`. GitHub release classification comes from that same
-validated version: a version with prerelease identifiers is always a
-prerelease, while a stable version is a normal release. A resumed draft is
-corrected to the exact version's classification before publication.
+POM. Tags are deterministic annotated `v${version}` tags created before any
+GitHub draft can claim the name. An existing tag must be annotated and peel to
+the exact requested revision before staging or resume mutates release state.
+GitHub release classification comes from that same validated version: a
+version with prerelease identifiers is always a prerelease, while a stable
+version is a normal release. A resumed draft is corrected to the exact
+version's classification before publication.
 
 The previous compatibility baseline is the most recent non-draft,
 non-prerelease release selected through its manifest. japicmp compares all
@@ -138,13 +143,15 @@ inventories before a registry write. Before Central staging, every runtime
 package must be absent or private and unlinked from every repository.
 Publication records each service digest after its tag is pushed or verified,
 REST-asserts private and unlinked state, and logs out. A subsequent fresh
-read-only verification job proves anonymous digest access is denied, then uses
-the scoped pull token to pull each recorded digest. A failed run keeps
-already-recorded digests in its draft manifest and a focused Actions evidence
-artifact. A rerun requires a recorded image digest to match exactly. If an
-abrupt runner loss left a private tag without a recorded digest, the remote
-image must pull to the freshly rebuilt candidate's exact Docker content ID
-before its registry digest is recovered.
+read-only verification job obtains a credential-free GHCR bearer token and
+requires an explicit `401 UNAUTHORIZED` response at each exact manifest digest;
+network, registry, malformed, or other HTTP failures do not prove denial. It
+then uses the scoped pull token to pull each recorded digest. A failed run
+keeps already-recorded digests in its draft manifest and a focused Actions
+evidence artifact. A rerun requires a recorded image digest to match exactly.
+If an abrupt runner loss left a private tag without a recorded digest, the
+remote image must pull to the freshly rebuilt candidate's exact Docker content
+ID before its registry digest is recovered.
 Central bytes, private package visibility, version, and revision remain
 immutable; mixed or different state requires a new version. Image digest
 attestations are retained in GitHub's attestation store but are not pushed to

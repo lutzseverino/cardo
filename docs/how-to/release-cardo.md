@@ -17,9 +17,10 @@ service images privately to GHCR under one version and source revision.
    and `GPG_PASSPHRASE` only to that environment. Add a dedicated
    `GHCR_PUBLISH_TOKEN` for the `lutzseverino` registry account with
    `write:packages`; only the protected publish job uses it for GHCR package
-   state reads and image pushes. Add a separate `GHCR_PULL_TOKEN` with only
-   `read:packages`; the protected verification job must not use its automatic
-   `GITHUB_TOKEN` to pull Cardo packages.
+   state reads and image pushes. The preflight resolves the token's current
+   user and fails unless it is owned by `lutzseverino`. Add a separate
+   `GHCR_PULL_TOKEN` with only `read:packages`; the protected verification job
+   must not use its automatic `GITHUB_TOKEN` to pull Cardo packages.
 4. Publish the signing public key through a durable public key service.
 5. Protect `v*` tags, enable immutable GitHub releases, vulnerability alerts,
    and Dependabot security updates.
@@ -50,9 +51,11 @@ make the first release pass.
 3. Approve the protected environment after reviewing the candidate. Before
    signing or staging anything for Central, the workflow requires all three
    GHCR packages to be absent or private and none to be linked to a repository.
-   The first dispatch then preserves a signed Central bundle
-   in a draft release, uploads it as `USER_MANAGED`, and stops for manual
-   Central publication.
+   It creates the deterministic annotated `v${version}` tag, or proves that an
+   existing annotated tag peels to the requested revision, before any GitHub
+   release is created. The first dispatch then preserves a signed Central
+   bundle in a draft release, uploads it as `USER_MANAGED`, and stops for
+   manual Central publication.
 4. Publish that deployment in the Central Publisher Portal.
 5. Rerun the exact version and revision. The workflow proves the anonymous
    Central bytes, rebuilds the candidate images, refuses any existing public or
@@ -61,9 +64,11 @@ make the first release pass.
    `private` with no repository link, and logs out. A failure preserves every
    digest already recorded in the draft manifest and a focused Actions evidence
    artifact.
-6. A subsequent fresh read-only package job proves that anonymous digest pulls
-   fail and authenticated digest pulls succeed. Only then is the GitHub release
-   made non-draft.
+6. A subsequent fresh read-only package job requests a credential-free GHCR
+   bearer token and requires an explicit `401 UNAUTHORIZED` response for every
+   exact manifest digest. Network, registry, malformed, and other HTTP failures
+   are not accepted as privacy evidence. It then proves authenticated digest
+   pulls with the scoped token. Only then is the GitHub release made non-draft.
 
 ### Verify An Already-Published Release
 
@@ -102,7 +107,9 @@ trust invariant.
   digest, require exact digest equality. If a runner stopped before recording
   the digest, pull the existing private tag and resume only when its Docker
   content ID equals the freshly rebuilt and validated candidate.
-- An existing Git tag must peel to the requested revision.
+- An existing Git tag must be annotated and peel to the requested revision.
+  The tag is established before the first staging draft, so neither staging nor
+  resume can let GitHub synthesize a lightweight tag.
 - A draft GitHub release can be updated only for the same version, revision,
   public bytes, and private digests.
 

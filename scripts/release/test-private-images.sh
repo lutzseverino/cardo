@@ -7,6 +7,24 @@ case ${0##*/} in
     [[ $1 == api && $# -eq 2 ]] \
       || { echo "fixture received an unexpected gh command" >&2; exit 1; }
     case $2 in
+      /user)
+        case ${FIXTURE_TOKEN_OWNER:-lutzseverino} in
+          lutzseverino)
+            printf '%s\n' '{"login":"lutzseverino"}'
+            ;;
+          wrong)
+            printf '%s\n' '{"login":"another-owner"}'
+            ;;
+          error)
+            echo 'gh: forbidden (HTTP 403)' >&2
+            exit 1
+            ;;
+          malformed)
+            printf '%s\n' '{"login":17}'
+            ;;
+        esac
+        exit 0
+        ;;
       /user/packages/container/cardo%2Fidentity) service=identity ;;
       /user/packages/container/cardo%2Finvite) service=invite ;;
       /user/packages/container/cardo%2Fbilling) service=billing ;;
@@ -78,6 +96,80 @@ case ${0##*/} in
         ;;
     esac
     ;;
+  curl)
+    output=
+    url=
+    while [[ $# -gt 0 ]]; do
+      case $1 in
+        --output)
+          output=$2
+          shift 2
+          ;;
+        --write-out|--data-urlencode|--header)
+          shift 2
+          ;;
+        --silent|--show-error|--get)
+          shift
+          ;;
+        https://*)
+          url=$1
+          shift
+          ;;
+        *)
+          echo "fixture received an unexpected curl argument: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    [[ -n $output && -n $url ]] \
+      || { echo "fixture received a malformed curl command" >&2; exit 1; }
+    case $url in
+      https://ghcr.io/token)
+        if [[ ${FIXTURE_ANONYMOUS_STATE:-denied} == token-network ]]; then
+          echo 'curl: (6) Could not resolve host: ghcr.io' >&2
+          exit 6
+        fi
+        printf '%s\n' '{"token":"anonymous-fixture-token"}' >"$output"
+        printf '200'
+        ;;
+      https://ghcr.io/v2/lutzseverino/cardo/*/manifests/sha256:*)
+        service=${url#https://ghcr.io/v2/lutzseverino/cardo/}
+        service=${service%%/*}
+        state=${FIXTURE_ANONYMOUS_STATE:-denied}
+        echo "anonymous:$service:$state" >>"${FIXTURE_LOG:?}"
+        case $state in
+          denied)
+            printf '%s\n' \
+              '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}' \
+              >"$output"
+            printf '401'
+            ;;
+          allowed)
+            printf '%s\n' '{"schemaVersion":2}' >"$output"
+            printf '200'
+            ;;
+          network)
+            echo 'curl: (7) Failed to connect to ghcr.io' >&2
+            exit 7
+            ;;
+          unexpected)
+            printf '%s\n' \
+              '{"errors":[{"code":"UNKNOWN","message":"temporary registry failure"}]}' \
+              >"$output"
+            printf '500'
+            ;;
+          *)
+            echo "unknown anonymous fixture state: $state" >&2
+            exit 1
+            ;;
+        esac
+        ;;
+      *)
+        echo "fixture received an unexpected curl URL: $url" >&2
+        exit 1
+        ;;
+    esac
+    ;;
   docker)
     case "$1 $2" in
       'image inspect')
@@ -126,6 +218,10 @@ case ${0##*/} in
         service=${service%%[@:]*}
         [[ -f $FIXTURE_REMOTE/$service ]] \
           || { echo 'manifest unknown' >&2; exit 1; }
+        if [[ -f ${FIXTURE_AUTH:?} && ${FIXTURE_AUTHENTICATED_PULL_FAILS:-false} == true ]]; then
+          echo 'docker: daemon unavailable' >&2
+          exit 125
+        fi
         if [[ -f ${FIXTURE_AUTH:?} || ${FIXTURE_ANONYMOUS_SUCCEEDS:-false} == true ]]; then
           echo "pull:$service:allowed" >>"${FIXTURE_LOG:?}"
           mkdir -p "${FIXTURE_LOCAL_STATE:?}"
@@ -153,6 +249,7 @@ case ${0##*/} in
     mkdir -p "$fixture_bin" "$temporary_directory/remote"
     ln -s "$root_directory/scripts/release/test-private-images.sh" "$fixture_bin/docker"
     ln -s "$root_directory/scripts/release/test-private-images.sh" "$fixture_bin/gh"
+    ln -s "$root_directory/scripts/release/test-private-images.sh" "$fixture_bin/curl"
     version=1.2.3
     cat >"$temporary_directory/images.json" <<JSON
 {"images":[
@@ -180,6 +277,26 @@ JSON
 
     state_remote="$temporary_directory/remote/state"
     mkdir -p "$state_remote"
+    for owner_state in wrong error malformed; do
+      owner_log="$temporary_directory/owner-$owner_state.log"
+      if PATH="$fixture_bin:$PATH" GHCR_PUBLISH_TOKEN=fixture \
+        FIXTURE_TOKEN_OWNER="$owner_state" FIXTURE_REMOTE="$state_remote" \
+        FIXTURE_LOG="$state_remote/events" \
+        scripts/release/check-ghcr-package-state.sh >"$owner_log" 2>&1; then
+        echo "$owner_state GHCR token owner unexpectedly passed" >&2
+        exit 1
+      fi
+      if [[ $owner_state == wrong ]]; then
+        grep --fixed-strings \
+          'GHCR publishing token is not owned by the expected lutzseverino account' \
+          "$owner_log" >/dev/null \
+          || { echo "wrong-owner diagnostic was not safe and actionable" >&2; exit 1; }
+        if grep --fixed-strings another-owner "$owner_log" >/dev/null; then
+          echo "wrong-owner diagnostic exposed the unexpected account" >&2
+          exit 1
+        fi
+      fi
+    done
     for state in absent private private-omitted public linked linked-other linked-empty error unknown; do
       if [[ $state == absent || $state == private || $state == private-omitted ]]; then
         expected=success
@@ -312,21 +429,56 @@ JSON
       echo "private verification accepted a missing external pull token" >&2
       exit 1
     fi
-    PATH="$fixture_bin:$PATH" GHCR_PULL_TOKEN=fixture \
-      FIXTURE_AUTH="$temporary_directory/docker-auth" FIXTURE_REMOTE="$fresh_remote" \
-      FIXTURE_LOCAL_STATE="$temporary_directory/local/verify" \
-      FIXTURE_LOG="$temporary_directory/verify-events" \
-      "$verify_fixture/scripts/release/verify-private-release.sh" \
-        "$verify_fixture/manifest.json" lutzseverino
-    if PATH="$fixture_bin:$PATH" GHCR_PULL_TOKEN=fixture \
-      FIXTURE_AUTH="$temporary_directory/docker-auth" FIXTURE_ANONYMOUS_SUCCEEDS=true \
-      FIXTURE_REMOTE="$fresh_remote" FIXTURE_LOCAL_STATE="$temporary_directory/local/verify" \
-      FIXTURE_LOG="$temporary_directory/verify-events" \
-      "$verify_fixture/scripts/release/verify-private-release.sh" \
-        "$verify_fixture/manifest.json" deployment-fixture >/dev/null 2>&1; then
-      echo "anonymous private-image access was accepted" >&2
+    run_verify() {
+      local anonymous_state=$1
+      local output=$2
+      local authenticated_pull_fails=${3:-false}
+      PATH="$fixture_bin:$PATH" GHCR_PULL_TOKEN=fixture \
+        FIXTURE_AUTH="$temporary_directory/docker-auth" \
+        FIXTURE_ANONYMOUS_STATE="$anonymous_state" \
+        FIXTURE_AUTHENTICATED_PULL_FAILS="$authenticated_pull_fails" \
+        FIXTURE_REMOTE="$fresh_remote" \
+        FIXTURE_LOCAL_STATE="$temporary_directory/local/verify" \
+        FIXTURE_LOG="$temporary_directory/verify-events" \
+        "$verify_fixture/scripts/release/verify-private-release.sh" \
+          "$verify_fixture/manifest.json" deployment-fixture >"$output" 2>&1
+    }
+
+    run_verify denied "$temporary_directory/verify-denied.log"
+    if run_verify denied "$temporary_directory/verify-daemon.log" true; then
+      echo "authenticated Docker daemon failure was accepted" >&2
       exit 1
     fi
+    grep --fixed-strings 'docker: daemon unavailable' \
+      "$temporary_directory/verify-daemon.log" >/dev/null \
+      || { echo "authenticated Docker daemon failure omitted its diagnostic" >&2; exit 1; }
+    for anonymous_state in allowed network token-network unexpected; do
+      verification_log="$temporary_directory/verify-$anonymous_state.log"
+      if run_verify "$anonymous_state" "$verification_log"; then
+        echo "$anonymous_state anonymous GHCR state was accepted" >&2
+        exit 1
+      fi
+      case $anonymous_state in
+        allowed)
+          expected='returned HTTP 200 code none'
+          ;;
+        network)
+          expected='anonymous GHCR manifest check failed'
+          ;;
+        token-network)
+          expected='could not obtain fresh anonymous GHCR authorization'
+          ;;
+        unexpected)
+          expected='returned HTTP 500 code UNKNOWN'
+          ;;
+      esac
+      grep --fixed-strings "$expected" "$verification_log" >/dev/null \
+        || { echo "$anonymous_state failure omitted its safe diagnostic" >&2; exit 1; }
+      if grep --fixed-strings anonymous-fixture-token "$verification_log" >/dev/null; then
+        echo "$anonymous_state diagnostic exposed the anonymous bearer token" >&2
+        exit 1
+      fi
+    done
 
     python3 - <<'PY'
 import os
@@ -399,6 +551,9 @@ if authenticated_package_read not in checker:
         "package API calls do not use the protected token with the authenticated "
         "current-user endpoint"
     )
+owner_binding = 'GH_TOKEN="$GHCR_PUBLISH_TOKEN" gh api /user'
+if owner_binding not in checker or '.login == "lutzseverino"' not in checker:
+    raise SystemExit("package preflight does not bind its token to the intended owner")
 if "/users/lutzseverino/packages/container/" in checker:
     raise SystemExit("package API calls retain the public-owner endpoint")
 for forbidden in [
