@@ -321,13 +321,27 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       }
       return token;
     } catch (RestClientResponseException exception) {
-      if (exception.getStatusCode().value() == 400) {
+      if (exception.getStatusCode().value() == 400
+          || isUnauthorizedInvalidPasswordGrant(exception, invalidCode)) {
         throw ApiException.of(
             "invalid_credentials".equals(invalidCode) ? 400 : 401, invalidCode, invalidMessage);
       }
       throw sessionProviderException(exception);
     } catch (RestClientException exception) {
       throw sessionUnavailable(exception);
+    }
+  }
+
+  private boolean isUnauthorizedInvalidPasswordGrant(
+      RestClientResponseException exception, String invalidCode) {
+    if (exception.getStatusCode().value() != 401 || !"invalid_credentials".equals(invalidCode)) {
+      return false;
+    }
+    try {
+      OAuthError error = exception.getResponseBodyAs(OAuthError.class);
+      return error != null && "invalid_grant".equals(error.error());
+    } catch (RestClientException ignored) {
+      return false;
     }
   }
 
@@ -444,6 +458,8 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       @JsonProperty("expires_in") Long expiresIn,
       @JsonProperty("refresh_token") String refreshToken,
       @JsonProperty("refresh_expires_in") Long refreshExpiresIn) {}
+
+  private record OAuthError(String error) {}
 
   private record TokenIntrospection(boolean active, String sub, String sid) {}
 }
