@@ -86,7 +86,10 @@ release, proves its manifest, tag, revision, and Central bundle identity, and
 uses only `GHCR_PULL_TOKEN` for private digest pulls. It cannot publish or edit
 a release, tag, or package. The revision input is evidence only: the job checks
 out its trusted workflow-definition commit and runs the current validator and
-verifier, never code selected by the historical revision.
+verifier, never code selected by the historical revision. Keep the `release`
+environment restricted to protected branches, and allow this manual verifier
+only from protected `main`; that restriction is part of the `${{ github.sha }}`
+trust invariant.
 
 ### Recover A Partial Release
 
