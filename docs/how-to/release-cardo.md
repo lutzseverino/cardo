@@ -15,7 +15,9 @@ service images privately to GHCR under one version and source revision.
 2. Create the protected GitHub `release` environment with required reviewers.
 3. Add `CENTRAL_TOKEN_USERNAME`, `CENTRAL_TOKEN_PASSWORD`, `GPG_PRIVATE_KEY`,
    and `GPG_PASSPHRASE` only to that environment. Add a dedicated
-   `GHCR_PULL_TOKEN` for the `lutzseverino` registry account with only
+   `GHCR_PUBLISH_TOKEN` for the `lutzseverino` registry account with
+   `write:packages`; only the protected publish job uses it for GHCR package
+   state reads and image pushes. Add a separate `GHCR_PULL_TOKEN` with only
    `read:packages`; the protected verification job must not use its automatic
    `GITHUB_TOKEN` to pull Cardo packages.
 4. Publish the signing public key through a durable public key service.
@@ -23,14 +25,17 @@ service images privately to GHCR under one version and source revision.
    and Dependabot security updates.
 6. Keep `cardo/identity`, `cardo/invite`, and `cardo/billing` private in GHCR.
    Never change them to public: public container package visibility cannot be
-   reverted.
+   reverted. Keep them unlinked from every repository and do not grant the
+   public `lutzseverino/cardo` repository Actions access to them.
 7. Grant each authorized deployment repository package `Read` access. Its
    workflow should use its own job-scoped `GITHUB_TOKEN` with `packages: read`.
 
-The release workflow uses its write-scoped job token only to push. A fresh
-post-publication job has only `contents: read` on its automatic token and uses
-the independently scoped `GHCR_PULL_TOKEN` to prove digest pulls and anonymous
-rejection. No workflow changes package visibility.
+The release workflow never uses its automatic token to create, push, or inspect
+runtime packages. The protected `GHCR_PUBLISH_TOKEN` owns those operations. A
+fresh post-publication job has only `contents: read` on its automatic token and
+uses the independently scoped `GHCR_PULL_TOKEN` to prove digest pulls and
+anonymous rejection. No workflow changes package visibility or package
+repository access.
 
 Missing credentials, namespace ownership, private package visibility, alert
 access, or repository protection must fail the release. Do not weaken a gate to
@@ -42,14 +47,20 @@ make the first release pass.
    impact, deprecation, and migration notes.
 2. Dispatch `Release` with an unused SemVer, that exact 40-character SHA, and
    the curated notes.
-3. Approve the protected environment after reviewing the candidate. The first
-   dispatch preserves a signed Central bundle in a draft release, uploads it as
-   `USER_MANAGED`, and stops for manual Central publication.
+3. Approve the protected environment after reviewing the candidate. Before
+   signing or staging anything for Central, the workflow requires all three
+   GHCR packages to be absent or private and none to be linked to a repository.
+   The first dispatch then preserves a signed Central bundle
+   in a draft release, uploads it as `USER_MANAGED`, and stops for manual
+   Central publication.
 4. Publish that deployment in the Central Publisher Portal.
 5. Rerun the exact version and revision. The workflow proves the anonymous
-   Central bytes, rebuilds the candidate images, refuses any existing public
-   package, pushes or verifies the exact private tags, and immediately requires
-   REST visibility `private`.
+   Central bytes, rebuilds the candidate images, refuses any existing public or
+   source-linked package, and pushes or verifies the exact private tags. After
+   each service push it records the digest, immediately requires REST visibility
+   `private`, logs out, and proves an anonymous digest pull is denied before
+   authenticating for the next service. A failure preserves every digest already
+   recorded in the draft manifest and a focused Actions evidence artifact.
 6. A fresh read-only package job verifies that anonymous digest pulls fail and
    authenticated digest pulls succeed. Only then is the GitHub release made
    non-draft.
@@ -71,6 +82,11 @@ make the first release pass.
 
 Never delete and recreate a published version or retarget an exact tag. Retain
 the failed run, Central deployment ID, and manifest with the incident record.
+Any public runtime exposure is an incident and makes that version
+non-resumable, even if later services were untouched. Deleting and recreating
+the package is containment and namespace recovery only; it does not erase the
+exposure or make the version releasable. Remediate the publication path and
+publish a new, permanently successful prerelease before closing issue #30.
 
 ## Verification
 
@@ -88,7 +104,8 @@ checks self-contained POMs and exact contract resources, and compiles a clean
 standalone product consumer. A Maven Central prerelease is permanent and must
 never be described as disposable.
 
-Issue #30 cannot close on repository changes alone. Publish a permanent
-prerelease such as `0.1.0-rc.1`, anonymously resolve its BOM, libraries, and
+Issue #30 cannot close on repository changes alone. The exposed
+`0.1.0-rc.1` is permanent incident history and cannot satisfy the release gate.
+Publish a new permanent prerelease, anonymously resolve its BOM, libraries, and
 contracts from Central, and complete private digest-pull verification for all
 three images.
