@@ -143,12 +143,20 @@ inventories before a registry write. Before Central staging, every runtime
 package must be absent or private and unlinked from every repository.
 Publication records each service digest after its tag is pushed or verified,
 REST-asserts private and unlinked state, and logs out. A subsequent fresh
-read-only verification job requests each exact manifest digest without
-credentials and requires an explicit `401 UNAUTHORIZED` response;
-network, registry, malformed, or other HTTP failures do not prove denial. It
-then uses the scoped pull token to pull each recorded digest. A failed run
-keeps already-recorded digests in its draft manifest and a focused Actions
-evidence artifact. A rerun requires a recorded image digest to match exactly.
+read-only verification job completes GHCR's anonymous authorization flow for
+each exact service and digest. It requests the fixed `https://ghcr.io/token`
+endpoint without authorization, netrc, curl configuration, or proxy use, with
+exact `service=ghcr.io` and
+`scope=repository:lutzseverino/cardo/<service>:pull` parameters. An explicit
+token-endpoint `401` with an `UNAUTHORIZED` errors entry proves denial. If GHCR
+instead returns `200` with a nonempty string `token` or `access_token`, the job
+retries the exact immutable manifest with that anonymous bearer and the exact
+OCI/Docker manifest Accept header; only a `401` with an `UNAUTHORIZED` errors
+entry proves denial. Network failures, malformed responses, other statuses, or
+a successful bearer manifest response do not prove privacy. The job then uses
+the scoped pull token to pull each recorded digest. A failed run keeps
+already-recorded digests in its draft manifest and a focused Actions evidence
+artifact. A rerun requires a recorded image digest to match exactly.
 If an abrupt runner loss left a private tag without a recorded digest, the
 remote image must pull to the freshly rebuilt candidate's exact Docker content
 ID before its registry digest is recovered.
@@ -172,11 +180,14 @@ runtime digests, and initial successful protected verifier
 are retained publication evidence. The superseding protected verifier
 [run 30027859272](https://github.com/lutzseverino/cardo/actions/runs/30027859272)
 from trusted `main` revision
-`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is the current verifier evidence.
-It proves a standalone Java 21 public consumer compile, direct anonymous
-`401 UNAUTHORIZED` responses for all three exact image digests, and
-authenticated pulls of those same digests. Publication proof does not by
-itself establish a known-good production rollback target.
+`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is retained but insufficient under
+the completed GHCR authorization protocol. Its direct anonymous manifest
+`401 UNAUTHORIZED` responses were initial authentication challenges, not
+completed anonymous authorization decisions. Its standalone Java 21 consumer
+compile and authenticated pulls of the same three exact digests remain valid
+evidence. A new successful protected verifier run that completes the challenge
+flow is pending and must supersede it as privacy evidence. Publication proof
+does not by itself establish a known-good production rollback target.
 
 Dependabot and dependency review own dependency findings. Open high or critical
 findings block release unless `release/vulnerability-exceptions.json` has an
