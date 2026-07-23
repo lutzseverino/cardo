@@ -129,6 +129,11 @@ case ${0##*/} in
           echo 'curl: (6) Could not resolve host: ghcr.io' >&2
           exit 6
         fi
+        if [[ ${FIXTURE_ANONYMOUS_STATE:-denied} == malformed-token ]]; then
+          printf '%s\n' 'not-json' >"$output"
+          printf '200'
+          exit 0
+        fi
         printf '%s\n' '{"token":"anonymous-fixture-token"}' >"$output"
         printf '200'
         ;;
@@ -157,6 +162,16 @@ case ${0##*/} in
               '{"errors":[{"code":"UNKNOWN","message":"temporary registry failure"}]}' \
               >"$output"
             printf '500'
+            ;;
+          malformed-manifest)
+            printf '%s\n' 'not-json' >"$output"
+            printf '401'
+            ;;
+          nonconforming-denial)
+            printf '%s\n' \
+              '{"errors":[{"code":"DENIED","message":"requested access is denied"}]}' \
+              >"$output"
+            printf '401'
             ;;
           *)
             echo "unknown anonymous fixture state: $state" >&2
@@ -452,7 +467,9 @@ JSON
     grep --fixed-strings 'docker: daemon unavailable' \
       "$temporary_directory/verify-daemon.log" >/dev/null \
       || { echo "authenticated Docker daemon failure omitted its diagnostic" >&2; exit 1; }
-    for anonymous_state in allowed network token-network unexpected; do
+    for anonymous_state in \
+      allowed network token-network unexpected \
+      malformed-token malformed-manifest nonconforming-denial; do
       verification_log="$temporary_directory/verify-$anonymous_state.log"
       if run_verify "$anonymous_state" "$verification_log"; then
         echo "$anonymous_state anonymous GHCR state was accepted" >&2
@@ -470,6 +487,15 @@ JSON
           ;;
         unexpected)
           expected='returned HTTP 500 code UNKNOWN'
+          ;;
+        malformed-token)
+          expected='anonymous GHCR authorization returned no usable token'
+          ;;
+        malformed-manifest)
+          expected='returned HTTP 401 code none'
+          ;;
+        nonconforming-denial)
+          expected='returned HTTP 401 code DENIED'
           ;;
       esac
       grep --fixed-strings "$expected" "$verification_log" >/dev/null \
