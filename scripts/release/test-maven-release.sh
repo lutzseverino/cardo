@@ -33,6 +33,12 @@ revision = sys.argv[4]
 names = archive.namelist()
 supported = open("release/supported-artifacts.txt").read().splitlines()
 private = open("release/private-artifacts.txt").read().splitlines()
+expected_project_url = "https://github.com/lutzseverino/cardo"
+expected_scm = {
+    "connection": "scm:git:https://github.com/lutzseverino/cardo.git",
+    "developerConnection": "scm:git:ssh://git@github.com/lutzseverino/cardo.git",
+    "url": expected_project_url,
+}
 if [item["artifactId"] for item in manifest["maven"]["artifacts"]] != supported:
     raise SystemExit("release manifest does not contain the exact public Maven allowlist")
 if "openapiBundles" in manifest:
@@ -52,9 +58,20 @@ for artifact in ["cardo-bom", *supported]:
     namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
     if pom.find("m:parent", namespace) is not None:
         raise SystemExit(f"bundle POM for {artifact} still requires a parent")
+    project_url = pom.find("m:url", namespace)
+    if project_url is None or project_url.text != expected_project_url:
+        raise SystemExit(f"bundle POM for {artifact} has an incorrect repository URL")
+    for element, value in expected_scm.items():
+        node = pom.find(f"m:scm/m:{element}", namespace)
+        if node is None or node.text != value:
+            raise SystemExit(f"bundle POM for {artifact} has incorrect SCM {element}")
     scm_tag = pom.find("m:scm/m:tag", namespace)
     if scm_tag is None or scm_tag.text != revision:
         raise SystemExit(f"bundle POM for {artifact} lacks exact source revision")
+    if artifact == "cardo-openapi-contracts" and pom.findall(
+        "m:dependencies/m:dependency", namespace
+    ):
+        raise SystemExit("contract-only bundle POM contains an unnecessary dependency")
 for artifact in private:
     if any(f"/{artifact}/{version}/" in name for name in names):
         raise SystemExit(f"bundle contains private artifact {artifact}")

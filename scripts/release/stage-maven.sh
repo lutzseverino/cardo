@@ -76,6 +76,12 @@ expected = (root / "release/supported-artifacts.txt").read_text().splitlines()
 private = (root / "release/private-artifacts.txt").read_text().splitlines()
 
 namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+expected_project_url = "https://github.com/lutzseverino/cardo"
+expected_scm = {
+    "connection": "scm:git:https://github.com/lutzseverino/cardo.git",
+    "developerConnection": "scm:git:ssh://git@github.com/lutzseverino/cardo.git",
+    "url": expected_project_url,
+}
 bom = ET.parse(root / "cardo-bom/pom.xml")
 managed = [
     node.text
@@ -111,6 +117,13 @@ for artifact, packaging in components:
     pom = ET.parse(destination_dir / f"{base}.pom")
     if pom.find("m:parent", namespace) is not None:
         raise SystemExit(f"{artifact} staged POM still requires the private reactor parent")
+    project_url = pom.find("m:url", namespace)
+    if project_url is None or project_url.text != expected_project_url:
+        raise SystemExit(f"{artifact} staged POM does not identify the exact repository URL")
+    for element, value in expected_scm.items():
+        node = pom.find(f"m:scm/m:{element}", namespace)
+        if node is None or node.text != value:
+            raise SystemExit(f"{artifact} staged POM has incorrect SCM {element}")
     scm_tag = pom.find("m:scm/m:tag", namespace)
     if scm_tag is None or scm_tag.text != revision:
         raise SystemExit(f"{artifact} staged POM lacks exact full source revision")
@@ -126,6 +139,10 @@ for artifact, packaging in components:
             artifact == "cardo-bom" and dependency_version.text == "${project.version}"
         ):
             raise SystemExit(f"{artifact} staged POM leaves {coordinate} version unresolved")
+    if artifact == "cardo-openapi-contracts" and pom.findall(
+        "m:dependencies/m:dependency", namespace
+    ):
+        raise SystemExit("contract-only staged POM contains an unnecessary dependency")
 
 contract_jar = clean / group_path / "cardo-openapi-contracts" / version / f"cardo-openapi-contracts-{version}.jar"
 contract_entries = {
