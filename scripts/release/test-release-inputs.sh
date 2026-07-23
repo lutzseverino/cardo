@@ -110,6 +110,7 @@ for path, content in ((anchor, b"same-core"), (candidate, b"same-core")):
 manifest = {
     "schemaVersion": 1,
     "version": "1.2.3",
+    "tag": "v1.2.3",
     "sourceRevision": revision,
     "maven": {
         "centralBundle": {
@@ -156,6 +157,21 @@ PY
   cd "$repository"
   expect_failure scripts/release/validate-request.sh 1.2.3 "$first_revision" \
     "$temporary_directory/release-manifest.json.wrong-revision" "$temporary_directory/central-bundle.zip"
+)
+
+python3 - "$temporary_directory/release-manifest.json" <<'PY'
+import json
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+manifest = json.loads(path.read_text())
+manifest["tag"] = "v1.2.4"
+pathlib.Path(str(path) + ".wrong-tag").write_text(json.dumps(manifest))
+PY
+(
+  cd "$repository"
+  expect_failure scripts/release/validate-request.sh 1.2.3 "$first_revision" \
+    "$temporary_directory/release-manifest.json.wrong-tag" "$temporary_directory/central-bundle.zip"
 )
 
 cp "$temporary_directory/central-bundle.zip" "$temporary_directory/wrong-bundle.zip"

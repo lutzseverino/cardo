@@ -45,6 +45,8 @@ if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1:
     raise SystemExit("preserved release manifest must use schemaVersion 1")
 if manifest.get("version") != version:
     raise SystemExit("preserved release manifest version differs from release request")
+if manifest.get("tag") != f"v{version}":
+    raise SystemExit("preserved release manifest tag differs from release request")
 if manifest.get("sourceRevision") != revision:
     raise SystemExit("preserved release manifest revision differs from release request")
 central_bundle = manifest.get("maven", {}).get("centralBundle", {})

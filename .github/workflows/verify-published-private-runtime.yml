@@ -1,0 +1,60 @@
+name: Verify published private runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact published SemVer release version
+        required: true
+        type: string
+      revision:
+        description: Exact full source commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_REVISION: ${{ inputs.revision }}
+  RELEASE_VERSION: ${{ inputs.version }}
+
+jobs:
+  verify-private-runtime:
+    environment: release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.revision }}
+      - name: Set up Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Download published release anchor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          draft=$(gh release view "v$RELEASE_VERSION" --json isDraft --jq .isDraft)
+          [[ $draft == false ]] \
+            || { echo "v$RELEASE_VERSION is not a published release" >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download "v$RELEASE_VERSION" \
+            --pattern release-manifest.json --pattern central-bundle.zip \
+            --dir "$RUNNER_TEMP/release"
+      - name: Validate immutable release request
+        run: |
+          scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION" \
+            "$RUNNER_TEMP/release/release-manifest.json" \
+            "$RUNNER_TEMP/release/central-bundle.zip"
+      - name: Prove private image access boundary
+        env:
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          scripts/release/verify-private-release.sh \
+            "$RUNNER_TEMP/release/release-manifest.json" lutzseverino
