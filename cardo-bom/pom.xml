@@ -31,7 +31,7 @@
       </dependency>
       <dependency>
         <groupId>io.github.lutzseverino.cardo</groupId>
-        <artifactId>openapi-support</artifactId>
+        <artifactId>cardo-openapi-contracts</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -86,4 +86,20 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>flatten-maven-plugin</artifactId>
+        <configuration>
+          <flattenMode>oss</flattenMode>
+          <pomElements>
+            <dependencyManagement>keep</dependencyManagement>
+            <dependencies>remove</dependencies>
+          </pomElements>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>

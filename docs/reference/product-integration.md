@@ -15,6 +15,7 @@ the same wiring and the packaged shape can stay product-neutral.
 | Common API | API errors, outbound client error translation, and partial-update value/validation contracts | `common-api` | none | none |
 | Common | data markers, remaining value/validation mechanics, server error handling, compatibility aggregation | `common` | none | none |
 | OpenAPI Support | generated transport mapping helpers and PATCH presence conversion | embedded Java APIs | none | none |
+| OpenAPI Contracts | versioned Identity, Invite, Billing, and shared-error documents | `cardo-openapi-contracts` | none | extract from the public Central artifact |
 
 ## Consumer Dependency Surfaces
 

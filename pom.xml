@@ -46,6 +46,7 @@
   <modules>
     <module>common/api</module>
     <module>common</module>
+    <module>cardo-openapi-contracts</module>
     <module>cardo-bom</module>
     <module>openapi-support</module>
     <module>authorization/keycloak-client</module>
@@ -365,6 +366,13 @@
       <id>release-staging</id>
       <build>
         <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>flatten-maven-plugin</artifactId>
+            <configuration>
+              <flattenMode>oss</flattenMode>
+            </configuration>
+          </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-source-plugin</artifactId>

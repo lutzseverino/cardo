@@ -36,6 +36,7 @@ documentation index. Repository-wide architecture and conventions remain here.
 | --- | --- | --- |
 | [Common](../common/README.md) | Shared Java contracts | [Docs](../common/docs/README.md) |
 | [Common API](../common/api/README.md) | API error contracts and client translation | [Docs](../common/api/docs/README.md) |
+| [OpenAPI Contracts](../cardo-openapi-contracts/README.md) | Public versioned service contracts | [Docs](../cardo-openapi-contracts/docs/README.md) |
 | [OpenAPI Support](../openapi-support/README.md) | Generated-transport mechanics | [Docs](../openapi-support/docs/README.md) |
 | [Authorization](../authorization/README.md) | Embedded authorization mechanics | [Docs](../authorization/docs/README.md) |
 | [Authorization Keycloak Client](../authorization/keycloak-client/README.md) | Token acquisition and exchange | [Docs](../authorization/keycloak-client/docs/README.md) |

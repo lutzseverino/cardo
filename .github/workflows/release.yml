@@ -169,6 +169,8 @@ jobs:
 
   publish:
     needs: candidate
+    outputs:
+      central_state: ${{ steps.central.outputs.state }}
     environment: release
     permissions:
       attestations: write
@@ -374,16 +376,10 @@ jobs:
           fi
           scripts/release/create-manifest.py "$RELEASE_VERSION" "$RELEASE_REVISION" \
             "$RUNNER_TEMP/candidate" --image-digests "$RUNNER_TEMP/image-digests.json" "${previous[@]}"
-          cp "$RUNNER_TEMP/candidate/openapi/identity.yaml" "$RUNNER_TEMP/candidate/identity-openapi.yaml"
-          cp "$RUNNER_TEMP/candidate/openapi/invite.yaml" "$RUNNER_TEMP/candidate/invite-openapi.yaml"
-          cp "$RUNNER_TEMP/candidate/openapi/billing.yaml" "$RUNNER_TEMP/candidate/billing-openapi.yaml"
           scripts/release/create-checksums.sh "$RUNNER_TEMP/candidate/checksums.sha256" \
             "$RUNNER_TEMP/signed/central-bundle.zip" \
             "$RUNNER_TEMP/candidate/release-manifest.json" \
             "$RUNNER_TEMP/candidate/vulnerability-report.json" \
-            "$RUNNER_TEMP/candidate/identity-openapi.yaml" \
-            "$RUNNER_TEMP/candidate/invite-openapi.yaml" \
-            "$RUNNER_TEMP/candidate/billing-openapi.yaml" \
             "$RUNNER_TEMP/candidate/images/identity-image.cyclonedx.json" \
             "$RUNNER_TEMP/candidate/images/invite-image.cyclonedx.json" \
             "$RUNNER_TEMP/candidate/images/billing-image.cyclonedx.json"
@@ -437,9 +433,6 @@ jobs:
             "$RUNNER_TEMP/candidate/release-manifest.json"
             "$RUNNER_TEMP/candidate/checksums.sha256"
             "$RUNNER_TEMP/candidate/vulnerability-report.json"
-            "$RUNNER_TEMP/candidate/identity-openapi.yaml"
-            "$RUNNER_TEMP/candidate/invite-openapi.yaml"
-            "$RUNNER_TEMP/candidate/billing-openapi.yaml"
             "$RUNNER_TEMP/candidate/images/identity-image.cyclonedx.json"
             "$RUNNER_TEMP/candidate/images/invite-image.cyclonedx.json"
             "$RUNNER_TEMP/candidate/images/billing-image.cyclonedx.json"
@@ -451,12 +444,41 @@ jobs:
             gh release create "v$RELEASE_VERSION" --draft --verify-tag \
               --title "Cardo $RELEASE_VERSION" --notes-file "$notes" "${assets[@]}"
           fi
-      - name: Verify anonymous resolution
-        if: steps.central.outputs.state == 'published'
-        run: scripts/release/verify-anonymous-release.sh "$RUNNER_TEMP/candidate/release-manifest.json"
-      - name: Publish verified GitHub release
-        if: steps.central.outputs.state == 'published'
+  verify-private-runtime:
+    needs: publish
+    if: needs.publish.outputs.central_state == 'published'
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.revision }}
+      - name: Download final release manifest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit "v$RELEASE_VERSION" --draft=false
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download "v$RELEASE_VERSION" \
+            --pattern release-manifest.json --dir "$RUNNER_TEMP/release"
+      - name: Prove private image access boundary
+        env:
+          GHCR_PULL_TOKEN: ${{ github.token }}
+        run: |
+          scripts/release/verify-private-release.sh \
+            "$RUNNER_TEMP/release/release-manifest.json" "${{ github.actor }}"
+
+  finalize:
+    needs: [publish, verify-private-runtime]
+    if: needs.publish.outputs.central_state == 'published'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish verified GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "v$RELEASE_VERSION" --repo "${{ github.repository }}" --draft=false

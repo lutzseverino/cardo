@@ -39,4 +39,7 @@ The current base-commit comparison is the available compatibility baseline becau
 
 ## Internal Test Support
 
-`openapi-support` attaches a `tests` classifier containing the shared runtime-parity assertion. It is internal reactor test support, not a supported consumer artifact. Artifact publication in issue #30 must distinguish or exclude this classifier from the public release surface while preserving the repository's canonical Maven verification.
+`openapi-support` attaches a `tests` classifier containing the shared runtime-parity assertion. It
+is internal reactor test support and is denied from the public release surface. The contract-only
+`cardo-openapi-contracts` artifact publishes the authoritative source documents byte-for-byte and
+provides the durable compatibility baseline without generated or runtime helpers.

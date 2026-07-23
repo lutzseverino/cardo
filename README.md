@@ -24,7 +24,8 @@ behavior or provide a generic plugin framework.
 | Billing | Customers, Stripe checkout and portal integration, entitlements, and stable billing clients |
 | Common API | API error contracts and outbound client error translation |
 | Common | Audit and personal-data markers, value objects, validation, server error handling, and compatibility aggregation |
-| OpenAPI Support | Reusable generated-transport and PATCH conversion helpers |
+| OpenAPI Contracts | Public versioned Identity, Invite, Billing, and shared-error documents |
+| OpenAPI Support | Internal generated-transport and PATCH conversion helpers |
 
 ## Integration Contract
 
@@ -37,8 +38,10 @@ See the [integration reference](docs/reference/product-integration.md)
 for artifact selection, configuration, and ownership rules.
 Deployments consume the executable JAR and OCI image process contract described
 in the [runtime artifact reference](docs/reference/runtime-artifacts.md).
-Released consumers align supported libraries through the
+Released products anonymously resolve public libraries and contracts through the
 [`cardo-bom` and immutable release contract](docs/reference/releases.md).
+Authorized deployment repositories pull private runtime images by digest under
+that same release identity.
 Maintainers can exercise those boundaries together through the unpublished
 [portable reference stack](integration/reference-stack/README.md).
 

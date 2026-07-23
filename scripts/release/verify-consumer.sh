@@ -68,17 +68,60 @@ pathlib.Path(output).write_text(f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 """)
 PY
 
-printf '%s\n' 'package example;' 'final class Consumer { }' \
-  >"$temporary_directory/src/main/java/example/Consumer.java"
+printf '%s\n' \
+  'package example;' \
+  '' \
+  'import io.github.lutzseverino.cardo.authorization.AuthorizationAdminClient;' \
+  'import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakRequestingPartyTokenClient;' \
+  'import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader;' \
+  'import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;' \
+  'import io.github.lutzseverino.cardo.billing.client.http.BillingClientAutoConfiguration;' \
+  'import io.github.lutzseverino.cardo.common.api.ApiError;' \
+  'import io.github.lutzseverino.cardo.common.model.EmailAddress;' \
+  'import io.github.lutzseverino.cardo.identity.client.IdentityUsersClient;' \
+  'import io.github.lutzseverino.cardo.identity.client.http.IdentityClientAutoConfiguration;' \
+  'import io.github.lutzseverino.cardo.identity.productauth.IdentityProductAuthAutoConfiguration;' \
+  'import io.github.lutzseverino.cardo.invite.client.InvitationsClient;' \
+  'import io.github.lutzseverino.cardo.invite.client.http.InviteClientAutoConfiguration;' \
+  '' \
+  'final class Consumer {' \
+  '  static final Class<?>[] PUBLIC_INTEGRATION = {' \
+  '    ApiError.class, EmailAddress.class, AuthorizationAdminClient.class,' \
+  '    KeycloakRequestingPartyTokenClient.class, AuthenticatedUserReader.class,' \
+  '    IdentityUsersClient.class, IdentityClientAutoConfiguration.class,' \
+  '    IdentityProductAuthAutoConfiguration.class, InvitationsClient.class,' \
+  '    InviteClientAutoConfiguration.class, BillingEntitlementsClient.class,' \
+  '    BillingClientAutoConfiguration.class' \
+  '  };' \
+  '}' >"$temporary_directory/src/main/java/example/Consumer.java"
 
 ./mvnw --batch-mode --no-transfer-progress \
   -f "$temporary_directory/pom.xml" \
   -Dmaven.repo.local="$local_repository" \
-  compile
+  -DoutputFile="$temporary_directory/dependency-tree.txt" \
+  compile org.apache.maven.plugins:maven-dependency-plugin:3.9.0:tree
 
 while IFS= read -r artifact; do
   [[ -f "$local_repository/io/github/lutzseverino/cardo/$artifact/$version/$artifact-$version.jar" ]] \
     || { echo "fresh consumer did not resolve $artifact:$version" >&2; exit 1; }
 done <release/supported-artifacts.txt
 
-echo "fresh standalone consumer resolved and compiled against Cardo $version"
+while IFS= read -r artifact; do
+  if grep --fixed-strings "io.github.lutzseverino.cardo:$artifact:" \
+    "$temporary_directory/dependency-tree.txt" >/dev/null; then
+    echo "fresh consumer resolved private artifact $artifact" >&2
+    exit 1
+  fi
+done <release/private-artifacts.txt
+
+contract_jar="$local_repository/io/github/lutzseverino/cardo/cardo-openapi-contracts/$version/cardo-openapi-contracts-$version.jar"
+for entry in \
+  META-INF/cardo/openapi/common/openapi/errors.yaml \
+  META-INF/cardo/openapi/identity/openapi/identity.yaml \
+  META-INF/cardo/openapi/invite/openapi/invite.yaml \
+  META-INF/cardo/openapi/billing/openapi/billing.yaml; do
+  unzip -p "$contract_jar" "$entry" >/dev/null \
+    || { echo "public contracts artifact lacks $entry" >&2; exit 1; }
+done
+
+echo "fresh standalone consumer compiled against the public Cardo $version surface"

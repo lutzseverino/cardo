@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import zipfile
 
 
 GROUP_PATH = pathlib.Path("io/github/lutzseverino/cardo")
@@ -47,20 +48,29 @@ def main() -> int:
             }
         )
 
-    openapi = []
-    for service in ("identity", "invite", "billing"):
-        path = candidate / "openapi" / f"{service}.yaml"
-        openapi.append(
-            {
-                "service": service,
-                "asset": f"{service}-openapi.yaml",
-                "sha256": sha256(path),
-                "url": (
-                    f"https://github.com/lutzseverino/cardo/releases/download/"
-                    f"v{args.version}/{service}-openapi.yaml"
-                ),
-            }
-        )
+    contract_artifact = "cardo-openapi-contracts"
+    contract_relative = (
+        GROUP_PATH
+        / contract_artifact
+        / args.version
+        / f"{contract_artifact}-{args.version}.jar"
+    )
+    contract_path = repository / contract_relative
+    contract_entries = []
+    with zipfile.ZipFile(contract_path) as archive:
+        for service, entry in (
+            ("common-errors", "META-INF/cardo/openapi/common/openapi/errors.yaml"),
+            ("identity", "META-INF/cardo/openapi/identity/openapi/identity.yaml"),
+            ("invite", "META-INF/cardo/openapi/invite/openapi/invite.yaml"),
+            ("billing", "META-INF/cardo/openapi/billing/openapi/billing.yaml"),
+        ):
+            contract_entries.append(
+                {
+                    "document": service,
+                    "path": entry,
+                    "sha256": hashlib.sha256(archive.read(entry)).hexdigest(),
+                }
+            )
 
     bundle = candidate / "central-bundle.zip"
     manifest = {
@@ -80,7 +90,14 @@ def main() -> int:
             "centralBundle": {"asset": bundle.name, "sha256": sha256(bundle)},
             "artifacts": artifacts,
         },
-        "openapiBundles": openapi,
+        "openapiContracts": {
+            "coordinate": (
+                f"io.github.lutzseverino.cardo:{contract_artifact}:{args.version}"
+            ),
+            "url": f"https://repo1.maven.org/maven2/{contract_relative.as_posix()}",
+            "sha256": sha256(contract_path),
+            "documents": contract_entries,
+        },
         "images": images,
         "vulnerabilityReport": "vulnerability-report.json",
     }

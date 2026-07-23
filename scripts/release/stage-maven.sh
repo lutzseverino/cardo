@@ -36,7 +36,7 @@ if [[ $signing == "--signed" ]]; then
   profiles+=,central-signing
 fi
 
-projects=:cardo,:cardo-bom
+projects=:cardo-bom
 while IFS= read -r artifact; do
   projects+=,:$artifact
 done <release/supported-artifacts.txt
@@ -49,6 +49,13 @@ done <release/supported-artifacts.txt
   -DskipTests \
   -DaltDeploymentRepository="cardo-release::file://$raw_repository" \
   clean deploy
+
+while IFS= read -r artifact; do
+  if [[ -d "$raw_repository/io/github/lutzseverino/cardo/$artifact/$version" ]]; then
+    echo "private artifact entered raw release staging: $artifact" >&2
+    exit 1
+  fi
+done <release/private-artifacts.txt
 
 python3 - "$raw_repository" "$clean_repository" "$version" "$source_revision" "$signing" <<'PY'
 import hashlib
@@ -66,6 +73,7 @@ signed = sys.argv[5] == "--signed"
 root = pathlib.Path.cwd()
 group_path = pathlib.Path("io/github/lutzseverino/cardo")
 expected = (root / "release/supported-artifacts.txt").read_text().splitlines()
+private = (root / "release/private-artifacts.txt").read_text().splitlines()
 
 namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
 bom = ET.parse(root / "cardo-bom/pom.xml")
@@ -73,8 +81,8 @@ managed = [
     node.text
     for node in bom.findall("m:dependencyManagement/m:dependencies/m:dependency/m:artifactId", namespace)
 ]
-if managed != expected or len(set(managed)) != 13:
-    raise SystemExit("cardo-bom must manage the ordered 13-artifact release allowlist")
+if managed != expected or len(set(managed)) != len(expected):
+    raise SystemExit("cardo-bom must manage the ordered public release allowlist")
 
 def copy_required(source, destination):
     if not source.is_file():
@@ -82,7 +90,7 @@ def copy_required(source, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
 
-components = [("cardo", "pom"), ("cardo-bom", "pom")] + [(name, "jar") for name in expected]
+components = [("cardo-bom", "pom")] + [(name, "jar") for name in expected]
 for artifact, packaging in components:
     source_dir = raw / group_path / artifact / version
     destination_dir = clean / group_path / artifact / version
@@ -101,9 +109,44 @@ for artifact, packaging in components:
             copy_required(source_dir / f"{filename}.asc", destination_dir / f"{filename}.asc")
 
     pom = ET.parse(destination_dir / f"{base}.pom")
+    if pom.find("m:parent", namespace) is not None:
+        raise SystemExit(f"{artifact} staged POM still requires the private reactor parent")
     scm_tag = pom.find("m:scm/m:tag", namespace)
     if scm_tag is None or scm_tag.text != revision:
         raise SystemExit(f"{artifact} staged POM lacks exact full source revision")
+    for dependency in pom.findall(".//m:dependency", namespace):
+        dependency_version = dependency.find("m:version", namespace)
+        coordinate = ":".join(
+            dependency.find(f"m:{field}", namespace).text or ""
+            for field in ("groupId", "artifactId")
+        )
+        if dependency_version is None or not dependency_version.text:
+            raise SystemExit(f"{artifact} staged POM leaves {coordinate} without a version")
+        if "${" in dependency_version.text and not (
+            artifact == "cardo-bom" and dependency_version.text == "${project.version}"
+        ):
+            raise SystemExit(f"{artifact} staged POM leaves {coordinate} version unresolved")
+
+contract_jar = clean / group_path / "cardo-openapi-contracts" / version / f"cardo-openapi-contracts-{version}.jar"
+contract_entries = {
+    "META-INF/cardo/openapi/common/openapi/errors.yaml": root / "common/openapi/errors.yaml",
+    "META-INF/cardo/openapi/identity/openapi/identity.yaml": root / "identity/openapi/identity.yaml",
+    "META-INF/cardo/openapi/invite/openapi/invite.yaml": root / "invite/openapi/invite.yaml",
+    "META-INF/cardo/openapi/billing/openapi/billing.yaml": root / "billing/openapi/billing.yaml",
+}
+with zipfile.ZipFile(contract_jar) as archive:
+    for entry, source in contract_entries.items():
+        if archive.read(entry) != source.read_bytes():
+            raise SystemExit(f"contract artifact entry differs from authoritative source: {entry}")
+contract_sources = contract_jar.with_name(f"cardo-openapi-contracts-{version}-sources.jar")
+with zipfile.ZipFile(contract_sources) as archive:
+    for entry, source in contract_entries.items():
+        if archive.read(entry) != source.read_bytes():
+            raise SystemExit(f"contract sources entry differs from authoritative source: {entry}")
+contract_javadocs = contract_jar.with_name(f"cardo-openapi-contracts-{version}-javadoc.jar")
+with zipfile.ZipFile(contract_javadocs) as archive:
+    if "META-INF/MANIFEST.MF" not in archive.namelist():
+        raise SystemExit("contract Javadoc archive lacks deterministic Maven archive metadata")
 
 for jar in clean.glob(f"{group_path}/*/{version}/*-{version}.jar"):
     if jar.name.endswith(("-sources.jar", "-javadoc.jar")):
@@ -126,15 +169,15 @@ for path in release_files:
         )
 
 unexpected = []
-allowed = {"cardo", "cardo-bom", *expected}
+allowed = {"cardo-bom", *expected}
 for version_dir in clean.glob(f"{group_path}/*/{version}"):
     if version_dir.parent.name not in allowed:
         unexpected.append(version_dir.parent.name)
 if unexpected:
     raise SystemExit(f"unexpected artifacts in clean staging repository: {unexpected}")
-if list(clean.rglob(f"openapi-support-{version}-tests.jar")):
-    raise SystemExit("internal openapi-support tests classifier entered release staging")
-
+for artifact in private:
+    if (clean / group_path / artifact / version).exists():
+        raise SystemExit(f"private artifact entered release staging: {artifact}")
 bundle = pathlib.Path(sys.argv[2]).parent / "central-bundle.zip"
 with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
     for path in sorted(clean.rglob("*")):
