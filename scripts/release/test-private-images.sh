@@ -698,10 +698,14 @@ for value in [
     'case "$RELEASE_VERSION" in',
     "0.1.0-rc.1)",
     "0.1.0-rc.2)",
-    "publish 0.1.0-rc.3 instead",
 ]:
     if value not in guard:
         raise SystemExit(f"pre-checkout partial-prerelease guard lacks: {value}")
+recovery_guidance = "choose a new, unused version."
+if guard.count(recovery_guidance) != 2:
+    raise SystemExit("pre-checkout partial-prerelease guard must use durable recovery guidance twice")
+if "publish 0.1.0-rc.3 instead" in guard:
+    raise SystemExit("pre-checkout partial-prerelease guard recommends immutable rc.3")
 for version, accepted in [
     ("0.1.0-rc.1", False),
     ("0.1.0-rc.2", False),
