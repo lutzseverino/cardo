@@ -102,42 +102,132 @@ case ${0##*/} in
       exit 1
     }
     shift
-    output=
-    url=
-    headers=()
-    while [[ $# -gt 0 ]]; do
-      case $1 in
-        --output)
-          output=$2
-          shift 2
-          ;;
-        --header)
-          headers+=("$2")
-          shift 2
-          ;;
-        --write-out)
-          shift 2
-          ;;
-        --silent|--show-error)
-          shift
-          ;;
-        https://*)
-          url=$1
-          shift
-          ;;
-        *)
-          echo "fixture received an unexpected curl argument: $1" >&2
-          exit 1
-          ;;
-      esac
-    done
-    [[ -n $output && -n $url ]] \
-      || { echo "fixture received a malformed curl command" >&2; exit 1; }
-    [[ ${#headers[@]} -eq 1 \
-      && ${headers[0]} == 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' ]] \
-      || { echo "anonymous fixture did not receive the exact manifest Accept header" >&2; exit 1; }
-    case $url in
+    state=${FIXTURE_ANONYMOUS_STATE:-token-401}
+    case ${!#} in
+      https://ghcr.io/token)
+        [[ $# -eq 14 \
+          && $1 == --silent \
+          && $2 == --show-error \
+          && $3 == --noproxy \
+          && $4 == '*' \
+          && $5 == --output \
+          && -n $6 \
+          && $7 == --write-out \
+          && $8 == '%{http_code}' \
+          && $9 == --get \
+          && ${10} == --data-urlencode \
+          && ${11} == service=ghcr.io \
+          && ${12} == --data-urlencode \
+          && ${13} == scope=repository:lutzseverino/cardo/*:pull ]] \
+          || { echo "anonymous fixture received a malformed GHCR token request" >&2; exit 1; }
+        output=$6
+        service=${13#scope=repository:lutzseverino/cardo/}
+        service=${service%:pull}
+        case $service in
+          identity|invite|billing) ;;
+          *) echo "unknown anonymous fixture service: $service" >&2; exit 1 ;;
+        esac
+        echo "token:$service:$state" >>"${FIXTURE_LOG:?}"
+        case $state in
+          token-401)
+            printf '%s\n' \
+              '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}' \
+              >"$output"
+            printf '401'
+            ;;
+          token-network)
+            echo 'curl: (7) Failed to connect to ghcr.io' >&2
+            exit 7
+            ;;
+          token-404)
+            printf '%s\n' \
+              '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}' \
+              >"$output"
+            printf '404'
+            ;;
+          token-500)
+            printf '%s\n' \
+              '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}' \
+              >"$output"
+            printf '500'
+            ;;
+          token-malformed|token-401-malformed)
+            printf '%s\n' 'not-json' >"$output"
+            [[ $state == token-malformed ]] && printf '200' || printf '401'
+            ;;
+          token-missing)
+            printf '%s\n' '{"expires_in":60}' >"$output"
+            printf '200'
+            ;;
+          token-empty)
+            printf '%s\n' '{"token":""}' >"$output"
+            printf '200'
+            ;;
+          token-wrong-type)
+            printf '%s\n' '{"token":17}' >"$output"
+            printf '200'
+            ;;
+          token-401-wrong-code)
+            printf '%s\n' \
+              '{"errors":[{"code":"DENIED","message":"requested access is denied"}]}' \
+              >"$output"
+            printf '401'
+            ;;
+          token-401-missing-code)
+            printf '%s\n' \
+              '{"errors":[{"message":"authentication required"}]}' \
+              >"$output"
+            printf '401'
+            ;;
+          token-401-object-errors)
+            printf '%s\n' \
+              '{"errors":{"primary":{"code":"UNAUTHORIZED","message":"authentication required"}}}' \
+              >"$output"
+            printf '401'
+            ;;
+          token-access-token-retry-401)
+            printf '%s\n' '{"access_token":"anonymous-access-token-fixture"}' >"$output"
+            printf '200'
+            ;;
+          *)
+            printf '%s\n' '{"token":"anonymous-bearer-token-fixture"}' >"$output"
+            printf '200'
+            ;;
+        esac
+        ;;
       https://ghcr.io/v2/lutzseverino/cardo/*/manifests/sha256:*)
+        [[ $# -eq 13 \
+          && $1 == --silent \
+          && $2 == --show-error \
+          && $3 == --noproxy \
+          && $4 == '*' \
+          && $5 == --output \
+          && -n $6 \
+          && $7 == --write-out \
+          && $8 == '%{http_code}' \
+          && $9 == --header \
+          && ${10} == @* \
+          && ${11} == --header \
+          && ${12} == 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' ]] \
+          || { echo "anonymous fixture received a malformed GHCR manifest retry" >&2; exit 1; }
+        output=$6
+        authorization_file=${10#@}
+        [[ -f $authorization_file ]] \
+          || { echo "anonymous fixture did not receive a bearer header file" >&2; exit 1; }
+        authorization_mode=$(
+          stat -c '%a' "$authorization_file" 2>/dev/null \
+            || stat -f '%Lp' "$authorization_file"
+        )
+        [[ $authorization_mode == 600 ]] \
+          || { echo "anonymous fixture received an exposed bearer header file" >&2; exit 1; }
+        authorization=$(<"$authorization_file")
+        expected_authorization='Authorization: Bearer anonymous-bearer-token-fixture'
+        if [[ $state == token-access-token-retry-401 ]]; then
+          expected_authorization='Authorization: Bearer anonymous-access-token-fixture'
+        fi
+        [[ $authorization == "$expected_authorization" ]] \
+          || { echo "anonymous fixture did not receive the issued bearer token" >&2; exit 1; }
+        url=${13}
         service=${url#https://ghcr.io/v2/lutzseverino/cardo/}
         service=${service%%/*}
         digest=${url##*/manifests/}
@@ -150,52 +240,51 @@ case ${0##*/} in
         expected_digest=$(printf 'sha256:%064d' "$digit")
         [[ $digest == "$expected_digest" ]] \
           || { echo "anonymous fixture received a non-manifest digest" >&2; exit 1; }
-        state=${FIXTURE_ANONYMOUS_STATE:-denied}
-        echo "anonymous:$service:$state" >>"${FIXTURE_LOG:?}"
+        echo "manifest:$service:$state" >>"${FIXTURE_LOG:?}"
         case $state in
-          denied)
+          token-token-retry-401|token-access-token-retry-401)
             printf '%s\n' \
               '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}' \
               >"$output"
             printf '401'
             ;;
-          http-200)
+          public)
             printf '%s\n' '{"schemaVersion":2}' >"$output"
             printf '200'
             ;;
-          http-404)
+          retry-404)
             printf '%s\n' \
               '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}' \
               >"$output"
             printf '404'
             ;;
-          http-500)
+          retry-500)
             printf '%s\n' \
               '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}' \
               >"$output"
             printf '500'
             ;;
-          network)
+          retry-network)
             echo 'curl: (7) Failed to connect to ghcr.io' >&2
             exit 7
             ;;
-          malformed-body)
+          retry-malformed)
             printf '%s\n' 'not-json' >"$output"
             printf '401'
             ;;
-          wrong-code)
+          retry-wrong-code)
             printf '%s\n' \
               '{"errors":[{"code":"DENIED","message":"requested access is denied"}]}' \
               >"$output"
             printf '401'
             ;;
-          missing-code)
+          retry-missing-code)
             printf '%s\n' \
               '{"errors":[{"message":"authentication required"}]}' \
               >"$output"
             printf '401'
             ;;
-          object-errors)
+          retry-object-errors)
             printf '%s\n' \
               '{"errors":{"primary":{"code":"UNAUTHORIZED","message":"authentication required"}}}' \
               >"$output"
@@ -476,7 +565,10 @@ JSON
       local anonymous_state=$1
       local output=$2
       local authenticated_pull_fails=${3:-false}
-      PATH="$fixture_bin:$PATH" GHCR_PULL_TOKEN=distinct-pull-token-fixture \
+      rm -f "$temporary_directory/docker-auth"
+      : >"$temporary_directory/verify-events"
+      TMPDIR="$temporary_directory" \
+        PATH="$fixture_bin:$PATH" GHCR_PULL_TOKEN=distinct-pull-token-fixture \
         FIXTURE_AUTH="$temporary_directory/docker-auth" \
         FIXTURE_ANONYMOUS_STATE="$anonymous_state" \
         FIXTURE_AUTHENTICATED_PULL_FAILS="$authenticated_pull_fails" \
@@ -487,17 +579,25 @@ JSON
           "$verify_fixture/manifest.json" deployment-fixture >"$output" 2>&1
     }
 
-    run_verify denied "$temporary_directory/verify-denied.log"
-    python3 - "$temporary_directory/verify-events" <<'PY'
+    for anonymous_state in \
+      token-401 token-token-retry-401 token-access-token-retry-401; do
+      verification_log="$temporary_directory/verify-$anonymous_state.log"
+      run_verify "$anonymous_state" "$verification_log" || {
+        cat "$verification_log" >&2
+        echo "$anonymous_state valid anonymous GHCR denial was rejected" >&2
+        exit 1
+      }
+      python3 - "$temporary_directory/verify-events" "$anonymous_state" <<'PY'
 import pathlib
 import sys
 
 events = pathlib.Path(sys.argv[1]).read_text().splitlines()
+state = sys.argv[2]
 expected = ["logout"]
-expected.extend(
-    f"anonymous:{service}:denied"
-    for service in ("identity", "invite", "billing")
-)
+for service in ("identity", "invite", "billing"):
+    expected.append(f"token:{service}:{state}")
+    if state != "token-401":
+        expected.append(f"manifest:{service}:{state}")
 expected.append("login")
 expected.extend(
     f"pull:{service}:allowed"
@@ -507,7 +607,8 @@ expected.append("logout")
 if events != expected:
     raise SystemExit(f"private verification sequence differs: {events!r}")
 PY
-    if run_verify denied "$temporary_directory/verify-daemon.log" true; then
+    done
+    if run_verify token-401 "$temporary_directory/verify-daemon.log" true; then
       echo "authenticated Docker daemon failure was accepted" >&2
       exit 1
     fi
@@ -515,47 +616,61 @@ PY
       "$temporary_directory/verify-daemon.log" >/dev/null \
       || { echo "authenticated Docker daemon failure omitted its diagnostic" >&2; exit 1; }
     for anonymous_state in \
-      http-200 http-404 http-500 network malformed-body wrong-code missing-code \
-      object-errors; do
+      public \
+      token-network token-404 token-500 token-malformed token-missing token-empty \
+      token-wrong-type token-401-malformed token-401-wrong-code \
+      token-401-missing-code token-401-object-errors \
+      retry-network retry-404 retry-500 retry-malformed retry-wrong-code \
+      retry-missing-code retry-object-errors; do
       verification_log="$temporary_directory/verify-$anonymous_state.log"
       if run_verify "$anonymous_state" "$verification_log"; then
         echo "$anonymous_state anonymous GHCR state was accepted" >&2
         exit 1
       fi
       case $anonymous_state in
-        http-200)
-          expected='returned HTTP 200 code none'
+        public)
+          expected='manifest retry returned HTTP 200'
           ;;
-        http-404)
-          expected='returned HTTP 404 code UNAUTHORIZED'
+        token-network)
+          expected='token request failed'
           ;;
-        http-500)
-          expected='returned HTTP 500 code UNAUTHORIZED'
+        token-404)
+          expected='token request returned HTTP 404'
           ;;
-        network)
-          expected='anonymous GHCR manifest check failed'
+        token-500)
+          expected='token request returned HTTP 500'
           ;;
-        malformed-body)
-          expected='returned HTTP 401 code none'
+        token-malformed|token-missing|token-empty|token-wrong-type)
+          expected='token request returned HTTP 200 without a nonempty string token'
           ;;
-        missing-code)
-          expected='returned HTTP 401 code none'
+        token-401-malformed|token-401-wrong-code|token-401-missing-code|token-401-object-errors)
+          expected='token request returned HTTP 401 without an UNAUTHORIZED errors entry'
           ;;
-        object-errors)
-          expected='returned HTTP 401 code none'
+        retry-network)
+          expected='manifest retry failed'
           ;;
-        wrong-code)
-          expected='returned HTTP 401 code DENIED'
+        retry-404)
+          expected='manifest retry returned HTTP 404'
+          ;;
+        retry-500)
+          expected='manifest retry returned HTTP 500'
+          ;;
+        retry-malformed|retry-wrong-code|retry-missing-code|retry-object-errors)
+          expected='manifest retry returned HTTP 401 without the required UNAUTHORIZED denial'
           ;;
       esac
       grep --fixed-strings "$expected" "$verification_log" >/dev/null \
         || { echo "$anonymous_state failure omitted its safe diagnostic" >&2; exit 1; }
     done
-    if grep --recursive --fixed-strings distinct-pull-token-fixture \
-      "$temporary_directory" >/dev/null; then
-      echo "private verification exposed the authenticated pull token" >&2
-      exit 1
-    fi
+    for token in \
+      distinct-pull-token-fixture anonymous-bearer-token-fixture \
+      anonymous-access-token-fixture; do
+      if grep --recursive --fixed-strings "$token" \
+        "$temporary_directory" >/dev/null; then
+        echo "private verification exposed a registry token" >&2
+        exit 1
+      fi
+    done
 
     python3 - <<'PY'
 import os

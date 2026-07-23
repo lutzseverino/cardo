@@ -64,11 +64,19 @@ make the first release pass.
    `private` with no repository link, and logs out. A failure preserves every
    digest already recorded in the draft manifest and a focused Actions evidence
    artifact.
-6. A subsequent fresh read-only package job requests every exact manifest
-   digest without credentials and requires an explicit `401 UNAUTHORIZED`
-   response. Network, registry, malformed, and other HTTP failures are not
-   accepted as privacy evidence. It then proves authenticated digest pulls with
-   the scoped token. Only then is the GitHub release made non-draft.
+6. A subsequent fresh read-only package job completes GHCR's anonymous
+   authorization flow for every exact service and digest. It requests the fixed
+   `https://ghcr.io/token` endpoint without authorization, netrc, curl
+   configuration, or proxy use, with exact `service=ghcr.io` and
+   `scope=repository:lutzseverino/cardo/<service>:pull` parameters. A token
+   endpoint `401` with an `UNAUTHORIZED` errors entry proves denial. If GHCR
+   returns `200` with a nonempty string `token` or `access_token`, the job
+   retries the exact immutable manifest with that anonymous bearer and the
+   exact OCI/Docker manifest Accept header; only a `401` with an
+   `UNAUTHORIZED` errors entry proves denial. Network failures, malformed
+   responses, other statuses, and a successful bearer manifest response are
+   not accepted as privacy evidence. It then proves authenticated same-digest
+   pulls with the scoped token. Only then is the GitHub release made non-draft.
 
 ### Verify An Already-Published Release
 
@@ -151,8 +159,11 @@ runtime digests, and initial successful protected verifier
 are retained publication evidence. The superseding protected verifier
 [run 30027859272](https://github.com/lutzseverino/cardo/actions/runs/30027859272)
 from trusted `main` revision
-`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is the current verifier evidence.
-It proves a standalone Java 21 public consumer compile, direct anonymous
-`401 UNAUTHORIZED` responses for all three exact image digests, and
-authenticated pulls of those same digests. This publication proof alone does
-not make `0.1.0-rc.3` a known-good production rollback target.
+`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is retained but insufficient under
+the completed GHCR authorization protocol. Its direct anonymous manifest
+`401 UNAUTHORIZED` responses were initial authentication challenges, not
+completed anonymous authorization decisions. Its standalone Java 21 consumer
+compile and authenticated pulls of the same three exact digests remain valid
+evidence. A new successful protected verifier run that completes the challenge
+flow is pending and must supersede it as privacy evidence. This publication
+proof alone does not make `0.1.0-rc.3` a known-good production rollback target.

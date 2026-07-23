@@ -19,7 +19,9 @@ scripts/release/verify-consumer.sh "$version" https://repo1.maven.org/maven2
 docker logout ghcr.io >/dev/null 2>&1 || true
 anonymous_response=$(mktemp "${TMPDIR:-/tmp}/cardo-anonymous-response.XXXXXX")
 anonymous_error=$(mktemp "${TMPDIR:-/tmp}/cardo-anonymous-error.XXXXXX")
-trap 'rm -f "$anonymous_response" "$anonymous_error"; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+anonymous_authorization=$(mktemp "${TMPDIR:-/tmp}/cardo-anonymous-authorization.XXXXXX")
+chmod 600 "$anonymous_authorization"
+trap 'rm -f "$anonymous_response" "$anonymous_error" "$anonymous_authorization"; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 for service in identity invite billing; do
   reference=$(jq --exit-status --raw-output --arg service "$service" \
     '.images[] | select(.service == $service) | .reference' "$manifest")
@@ -30,31 +32,68 @@ for service in identity invite billing; do
   digest=${reference##*@}
 
   curl_status=0
-  manifest_status=$(curl --disable --silent --show-error \
+  token_status=$(curl --disable --silent --show-error --noproxy '*' \
     --output "$anonymous_response" --write-out '%{http_code}' \
-    --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
-    "https://ghcr.io/v2/$repository/manifests/$digest" 2>"$anonymous_error") || curl_status=$?
+    --get --data-urlencode 'service=ghcr.io' \
+    --data-urlencode "scope=repository:lutzseverino/cardo/$service:pull" \
+    https://ghcr.io/token 2>"$anonymous_error") || curl_status=$?
   if [[ $curl_status -ne 0 ]]; then
     cat "$anonymous_error" >&2
-    echo "anonymous GHCR manifest check failed for $service ($digest)" >&2
+    echo "anonymous GHCR token request failed for $service ($digest)" >&2
     exit 1
   fi
-  denial_code=$(jq --raw-output \
-    'if (.errors | type) == "array" then
-       if any(.errors[]; .code == "UNAUTHORIZED") then
-         "UNAUTHORIZED"
-       else
-         [.errors[].code | select(type == "string")] | first // empty
-       end
-     else
-       empty
-     end' \
-    "$anonymous_response" 2>/dev/null || true)
-  [[ $manifest_status == 401 && $denial_code == UNAUTHORIZED ]] || {
-    echo "anonymous GHCR manifest check returned HTTP $manifest_status code ${denial_code:-none} for $service ($digest); expected explicit 401 UNAUTHORIZED denial" >&2
+
+  if [[ $token_status == 401 ]]; then
+    jq --exit-status \
+      '(.errors | type) == "array"
+       and any(.errors[]; type == "object" and .code == "UNAUTHORIZED")' \
+      "$anonymous_response" >/dev/null 2>&1 || {
+      echo "anonymous GHCR token request returned HTTP 401 without an UNAUTHORIZED errors entry for $service ($digest)" >&2
+      exit 1
+    }
+    echo "anonymous GHCR token request explicitly denied for $service ($digest)"
+    continue
+  fi
+
+  [[ $token_status == 200 ]] || {
+    echo "anonymous GHCR token request returned HTTP $token_status for $service ($digest); expected 200 or explicit 401 UNAUTHORIZED denial" >&2
     exit 1
   }
-  echo "anonymous GHCR access explicitly denied for $service ($digest)"
+  anonymous_token=$(jq --exit-status --raw-output \
+    'if (.token | type) == "string" and (.token | length) > 0 then
+       .token
+     elif (.access_token | type) == "string"
+          and (.access_token | length) > 0 then
+       .access_token
+     else
+       error("missing anonymous bearer token")
+     end' "$anonymous_response" 2>/dev/null) || {
+    echo "anonymous GHCR token request returned HTTP 200 without a nonempty string token for $service ($digest)" >&2
+    exit 1
+  }
+  printf 'Authorization: Bearer %s\n' "$anonymous_token" >"$anonymous_authorization"
+  unset anonymous_token
+
+  curl_status=0
+  manifest_status=$(curl --disable --silent --show-error --noproxy '*' \
+    --output "$anonymous_response" --write-out '%{http_code}' \
+    --header "@$anonymous_authorization" \
+    --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+    "https://ghcr.io/v2/$repository/manifests/$digest" 2>"$anonymous_error") || curl_status=$?
+  : >"$anonymous_authorization"
+  if [[ $curl_status -ne 0 ]]; then
+    cat "$anonymous_error" >&2
+    echo "anonymous GHCR manifest retry failed for $service ($digest)" >&2
+    exit 1
+  fi
+  if [[ $manifest_status != 401 ]] || ! jq --exit-status \
+      '(.errors | type) == "array"
+       and any(.errors[]; type == "object" and .code == "UNAUTHORIZED")' \
+      "$anonymous_response" >/dev/null 2>&1; then
+    echo "anonymous GHCR manifest retry returned HTTP $manifest_status without the required UNAUTHORIZED denial for $service ($digest)" >&2
+    exit 1
+  fi
+  echo "anonymous GHCR bearer access explicitly denied for $service ($digest)"
 done
 
 printf '%s' "$GHCR_PULL_TOKEN" \
@@ -65,4 +104,4 @@ for service in identity invite billing; do
   docker pull "$reference"
 done
 
-echo "explicit anonymous GHCR digest denial and authenticated digest pulls passed for $version"
+echo "completed anonymous GHCR digest denial and authenticated digest pulls passed for $version"
