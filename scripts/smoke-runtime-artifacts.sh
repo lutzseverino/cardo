@@ -511,43 +511,34 @@ wait_for_process_exit_by() {
   done
 }
 
-assert_jar_readiness_withdrawn() {
-  local service=$1
-  local process=$2
-  local readiness_url=$3
-  local deadline=$((SECONDS + 5))
-  local status
-  while kill -0 "$process" 2>/dev/null; do
-    status=$(curl --silent --max-time 1 --output /dev/null --write-out '%{http_code}' "$readiness_url" || true)
-    if [[ "$status" != "200" ]] && kill -0 "$process" 2>/dev/null; then
-      return
-    fi
-    if (( SECONDS >= deadline )); then
-      break
-    fi
-    sleep 1
-  done
-  fail "$service did not withdraw readiness while its graceful shutdown was in progress"
+process_is_running() {
+  kill -0 "$1" 2>/dev/null
 }
 
-assert_container_readiness_withdrawn() {
+container_is_running() {
+  [[ "$(docker inspect --format '{{.State.Running}}' "$1" 2>/dev/null)" == "true" ]]
+}
+
+assert_readiness_withdrawn() {
   local service=$1
-  local container=$2
-  local readiness_url=$3
+  local runtime=$2
+  local is_running=$3
+  local readiness_url=$4
   local deadline=$((SECONDS + 5))
   local status
-  while [[ "$(docker inspect --format '{{.State.Running}}' "$container")" == "true" ]]; do
+  while "$is_running" "$runtime"; do
     status=$(curl --silent --max-time 1 --output /dev/null --write-out '%{http_code}' "$readiness_url" || true)
-    if [[ "$status" != "200" ]] \
-      && [[ "$(docker inspect --format '{{.State.Running}}' "$container")" == "true" ]]; then
+    if [[ "$status" != "200" ]]; then
       return
     fi
     if (( SECONDS >= deadline )); then
-      break
+      if "$is_running" "$runtime"; then
+        fail "$service continued reporting readiness after SIGTERM"
+      fi
+      return
     fi
     sleep 1
   done
-  fail "$service did not withdraw readiness while its graceful shutdown was in progress"
 }
 
 smoke_jar() {
@@ -583,8 +574,9 @@ smoke_jar() {
   hold_incomplete_request "$port" "$marker"
   shutdown_deadline=$((SECONDS + 25))
   kill -TERM "$process"
-  assert_jar_readiness_withdrawn \
-    "$service JAR" "$process" "http://127.0.0.1:$port/actuator/health/readiness"
+  assert_readiness_withdrawn \
+    "$service JAR" "$process" process_is_running \
+    "http://127.0.0.1:$port/actuator/health/readiness"
   wait_for_process_exit_by "$process" "$shutdown_deadline" \
     || fail "$service JAR exceeded the 20s shutdown bound"
   set +e
@@ -709,8 +701,9 @@ smoke_image() {
   hold_incomplete_request "$port" "$marker"
   shutdown_deadline=$((SECONDS + 25))
   docker kill --signal TERM "$container" >/dev/null
-  assert_container_readiness_withdrawn \
-    "$service image" "$container" "http://127.0.0.1:$port/actuator/health/readiness"
+  assert_readiness_withdrawn \
+    "$service image" "$container" container_is_running \
+    "http://127.0.0.1:$port/actuator/health/readiness"
   wait_for_container_exit_by "$container" "$shutdown_deadline" \
     || fail "$service image exceeded the 20s shutdown bound"
   kill -TERM "$held_request_pid" 2>/dev/null || true
