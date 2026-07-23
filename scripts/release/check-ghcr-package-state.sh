@@ -36,7 +36,7 @@ for service in "${services[@]}"; do
   : >"$response"
   : >"$error"
   if GH_TOKEN="$GHCR_PUBLISH_TOKEN" gh api \
-    "/users/lutzseverino/packages/container/cardo%2F$service" \
+    "/user/packages/container/cardo%2F$service" \
     >"$response" 2>"$error"; then
     if ! jq --exit-status '
       type == "object" and
