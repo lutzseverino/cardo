@@ -63,8 +63,7 @@ final class ReferenceStackHarness implements AutoCloseable {
     record("mailpit-ready");
     keycloak.start();
     record("keycloak-ready");
-    origin = ReferenceHttpsOrigin.start(productPort, identityPort);
-    record("https-origin-ready");
+    origin = ReferenceHttpsOrigin.configure(productPort, identityPort);
     keycloakContract = new ReferenceKeycloakMaterializer(keycloakBaseUrl());
     ReferenceKeycloakMaterializer.Snapshot first =
         keycloakContract.materialize(origin().resolve("/invitations/completed").toString());
@@ -75,6 +74,8 @@ final class ReferenceStackHarness implements AutoCloseable {
     }
     record("keycloak-contract-materialized-twice");
     startServices();
+    origin.start();
+    record("https-origin-ready");
   }
 
   URI origin() {

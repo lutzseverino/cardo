@@ -1,8 +1,12 @@
 package io.github.lutzseverino.cardo.integration.reference;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +15,7 @@ import java.security.SecureRandom;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.util.List;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import org.testcontainers.Testcontainers;
@@ -22,13 +27,24 @@ import org.testcontainers.utility.DockerImageName;
 final class ReferenceHttpsOrigin implements AutoCloseable {
 
   private final GenericContainer<?> caddy;
+  private final int productPort;
+  private final int identityPort;
+  private final ServerSocket httpsPortReservation;
+  private final int httpsPort;
 
-  private ReferenceHttpsOrigin(GenericContainer<?> caddy) {
+  private ReferenceHttpsOrigin(
+      GenericContainer<?> caddy,
+      int productPort,
+      int identityPort,
+      ServerSocket httpsPortReservation) {
     this.caddy = caddy;
+    this.productPort = productPort;
+    this.identityPort = identityPort;
+    this.httpsPortReservation = httpsPortReservation;
+    this.httpsPort = httpsPortReservation.getLocalPort();
   }
 
-  static ReferenceHttpsOrigin start(int productPort, int identityPort) {
-    Testcontainers.exposeHostPorts(productPort, identityPort);
+  static ReferenceHttpsOrigin configure(int productPort, int identityPort) {
     String configuration =
         "{\n  admin off\n}\n"
             + "https://localhost {\n"
@@ -51,12 +67,21 @@ final class ReferenceHttpsOrigin implements AutoCloseable {
                 "/etc/caddy/Caddyfile")
             .withExposedPorts(443)
             .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofSeconds(30)));
+    ServerSocket httpsPortReservation = reserveHttpsPort();
+    caddy.setPortBindings(List.of(httpsPortReservation.getLocalPort() + ":443"));
+    return new ReferenceHttpsOrigin(caddy, productPort, identityPort, httpsPortReservation);
+  }
+
+  void start() {
+    requireListening("product", productPort);
+    requireListening("Identity", identityPort);
+    Testcontainers.exposeHostPorts(productPort, identityPort);
+    releaseHttpsPort();
     caddy.start();
-    return new ReferenceHttpsOrigin(caddy);
   }
 
   URI origin() {
-    return URI.create("https://localhost:" + caddy.getMappedPort(443));
+    return URI.create("https://localhost:" + httpsPort);
   }
 
   HttpClient browser() {
@@ -95,7 +120,39 @@ final class ReferenceHttpsOrigin implements AutoCloseable {
 
   @Override
   public void close() {
+    releaseHttpsPort();
     caddy.stop();
+  }
+
+  private static ServerSocket reserveHttpsPort() {
+    try {
+      ServerSocket reservation = new ServerSocket();
+      reservation.setReuseAddress(false);
+      reservation.bind(new InetSocketAddress(0));
+      return reservation;
+    } catch (IOException failure) {
+      throw new IllegalStateException("Could not reserve the reference HTTPS port.", failure);
+    }
+  }
+
+  private void releaseHttpsPort() {
+    if (httpsPortReservation.isClosed()) {
+      return;
+    }
+    try {
+      httpsPortReservation.close();
+    } catch (IOException failure) {
+      throw new IllegalStateException("Could not release the reference HTTPS port.", failure);
+    }
+  }
+
+  private void requireListening(String service, int port) {
+    try (Socket socket = new Socket()) {
+      socket.connect(new InetSocketAddress("127.0.0.1", port), 500);
+    } catch (IOException failure) {
+      throw new IllegalStateException(
+          "Reference " + service + " must listen before the HTTPS origin starts.", failure);
+    }
   }
 
   record Browser(HttpClient client, CookieManager cookies) {}
