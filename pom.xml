@@ -75,7 +75,7 @@
     <jackson-databind-nullable.version>0.2.10</jackson-databind-nullable.version>
     <lombok.version>1.18.42</lombok.version>
     <mapstruct.version>1.6.3</mapstruct.version>
-    <maven-enforcer.version>3.6.2</maven-enforcer.version>
+    <maven-enforcer.version>3.6.3</maven-enforcer.version>
     <openapi-generator.version>7.22.0</openapi-generator.version>
     <cardo.buildpack.builder>paketobuildpacks/builder-noble-java-tiny@sha256:3c0ad71c3dc975e4c7d5e3a704c04307beb93a1c75a663f70ac6437414f6ed12</cardo.buildpack.builder>
     <cardo.buildpack.run-image>paketobuildpacks/ubuntu-noble-run-tiny@sha256:ce96dbed676cede92b8c043bf6892edfcf6c96e825437fdd92a179ffa66fad5e</cardo.buildpack.run-image>
