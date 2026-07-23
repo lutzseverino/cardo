@@ -22,6 +22,9 @@ that scope-specific token until shortly before Keycloak's reported expiry. The s
 audience and authority required by the invoked operation. Product-specific
 Identity policy remains in the consuming product.
 
+If a product supplies its own `IdentityUsersClient` bean, the auto-configuration
+backs off and none of the `cardo.identity.client.*` properties are required.
+
 Outbound Identity calls default to two-second connection and response timeouts.
 Override them with `cardo.identity.client.connect-timeout` and
 `cardo.identity.client.read-timeout` when the deployment requires different

@@ -16,11 +16,11 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
+@ConditionalOnMissingBean(InvitationsClient.class)
 @EnableConfigurationProperties(InviteClientProperties.class)
 public class InviteClientAutoConfiguration {
 
   @Bean
-  @ConditionalOnMissingBean
   InvitationsClient invitationsClient(
       InviteClientProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,

@@ -25,6 +25,9 @@ Auto-configuration provides `InvitationsClient`. Authorization convergence is
 owned and exposed by the product that stages the corresponding grant plan;
 Invite has no convergence client.
 
+If a product supplies its own `InvitationsClient` bean, the auto-configuration
+backs off and none of the `cardo.invite.client.*` properties are required.
+
 Outbound Invite calls default to two-second connection and response timeouts.
 Override them with `cardo.invite.client.connect-timeout` and
 `cardo.invite.client.read-timeout` only with positive bounded values.

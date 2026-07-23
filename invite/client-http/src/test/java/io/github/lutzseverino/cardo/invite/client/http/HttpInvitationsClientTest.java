@@ -60,6 +60,26 @@ class HttpInvitationsClientTest {
   }
 
   @Test
+  void backsOffForACustomClientWithoutHttpProperties() {
+    InvitationsClient customClient = mock(InvitationsClient.class);
+
+    new ApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(InviteClientAutoConfiguration.class))
+        .withBean(InvitationsClient.class, () -> customClient)
+        .run(
+            application -> {
+              assertThat(application).hasNotFailed().hasSingleBean(InvitationsClient.class);
+              assertThat(application.getBean(InvitationsClient.class)).isSameAs(customClient);
+              assertThat(application).doesNotHaveBean(InviteClientProperties.class);
+            });
+  }
+
+  @Test
+  void rejectsMissingStandardClientPropertiesAtStartup() {
+    baseContext.run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
   void bindsClientTimeoutOverrides() {
     context
         .withPropertyValues(
