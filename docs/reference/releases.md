@@ -98,7 +98,10 @@ rollout, rollback, and environment evidence; Cardo publication never deploys.
 
 Cardo uses SemVer including prereleases. The checkout remains
 `0.1.0-SNAPSHOT`; release automation injects `revision` without rewriting every
-POM. Tags are `v${version}`.
+POM. Tags are `v${version}`. GitHub release classification comes from that same
+validated version: a version with prerelease identifiers is always a
+prerelease, while a stable version is a normal release. A resumed draft is
+corrected to the exact version's classification before publication.
 
 The previous compatibility baseline is the most recent non-draft,
 non-prerelease release selected through its manifest. japicmp compares all

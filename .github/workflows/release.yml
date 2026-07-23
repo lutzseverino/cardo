@@ -29,6 +29,8 @@ env:
 
 jobs:
   candidate:
+    outputs:
+      github_prerelease: ${{ steps.release-request.outputs.github_prerelease }}
     permissions:
       contents: read
       security-events: read
@@ -55,6 +57,7 @@ jobs:
             echo 'restored=false' >>"$GITHUB_OUTPUT"
           fi
       - name: Validate immutable release request
+        id: release-request
         run: |
           [[ -n "${RELEASE_NOTES//[[:space:]]/}" ]] || { echo 'release notes are required' >&2; exit 1; }
           anchor=()
@@ -63,6 +66,8 @@ jobs:
             anchor+=("$RUNNER_TEMP/release-anchor/central-bundle.zip")
           fi
           scripts/release/validate-request.sh "$RELEASE_VERSION" "$RELEASE_REVISION" "${anchor[@]}"
+          echo "github_prerelease=$(scripts/release/validate-version.py \
+            "$RELEASE_VERSION" --github-prerelease)" >>"$GITHUB_OUTPUT"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -171,6 +176,7 @@ jobs:
     needs: candidate
     outputs:
       central_state: ${{ steps.central.outputs.state }}
+      github_prerelease: ${{ needs.candidate.outputs.github_prerelease }}
     environment: release
     permissions:
       attestations: write
@@ -261,6 +267,7 @@ jobs:
         if: steps.central.outputs.state == 'absent' && steps.prior-central.outputs.restored == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_PRERELEASE: ${{ needs.candidate.outputs.github_prerelease }}
         run: |
           cp "$RUNNER_TEMP/signed/central-bundle.zip" "$RUNNER_TEMP/candidate/central-bundle.zip"
           previous=()
@@ -277,6 +284,7 @@ jobs:
           printf 'Cardo %s staging evidence\n\nSource revision: %s\n\nCentral publication is pending. Inspect the Publisher Portal before any retry; never upload a second deployment for this version.\n' \
             "$RELEASE_VERSION" "$RELEASE_REVISION" >"$notes"
           gh release create "v$RELEASE_VERSION" --draft --target "$RELEASE_REVISION" \
+            --prerelease="$RELEASE_PRERELEASE" \
             --title "Cardo $RELEASE_VERSION" --notes-file "$notes" \
             "$RUNNER_TEMP/signed/central-bundle.zip" \
             "$RUNNER_TEMP/candidate/release-manifest.json"
@@ -418,6 +426,7 @@ jobs:
         if: steps.central.outputs.state == 'published'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_PRERELEASE: ${{ needs.candidate.outputs.github_prerelease }}
         run: |
           if ! git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
             git tag --annotate "v$RELEASE_VERSION" "$RELEASE_REVISION" \
@@ -438,10 +447,13 @@ jobs:
             "$RUNNER_TEMP/candidate/images/billing-image.cyclonedx.json"
           )
           if gh release view "v$RELEASE_VERSION" >/dev/null 2>&1; then
-            gh release edit "v$RELEASE_VERSION" --title "Cardo $RELEASE_VERSION" --notes-file "$notes"
+            gh release edit "v$RELEASE_VERSION" \
+              --prerelease="$RELEASE_PRERELEASE" \
+              --title "Cardo $RELEASE_VERSION" --notes-file "$notes"
             gh release upload "v$RELEASE_VERSION" --clobber "${assets[@]}"
           else
             gh release create "v$RELEASE_VERSION" --draft --verify-tag \
+              --prerelease="$RELEASE_PRERELEASE" \
               --title "Cardo $RELEASE_VERSION" --notes-file "$notes" "${assets[@]}"
           fi
   verify-private-runtime:
@@ -480,5 +492,7 @@ jobs:
       - name: Publish verified GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_PRERELEASE: ${{ needs.publish.outputs.github_prerelease }}
         run: |
-          gh release edit "v$RELEASE_VERSION" --repo "${{ github.repository }}" --draft=false
+          gh release edit "v$RELEASE_VERSION" --repo "${{ github.repository }}" \
+            --prerelease="$RELEASE_PRERELEASE" --draft=false
