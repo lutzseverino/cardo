@@ -33,10 +33,11 @@ desired service image:
 ```
 
 Override `cardo.image.name` when a deployment or release build needs a different
-local name. Public releases use only
-`ghcr.io/lutzseverino/cardo/{identity,invite,billing}:${version}` and deployments
-pin the digest recorded by the [release manifest](releases.md). Registry
-publication belongs to the release workflow, not to these builds.
+local name. Releases use only the private
+`ghcr.io/lutzseverino/cardo/{identity,invite,billing}:${version}` packages.
+Authorized deployment repositories pin and pull the digest recorded by the
+[release manifest](releases.md). Registry publication belongs to the release
+workflow, not to these builds.
 
 ## Runtime Contract
 

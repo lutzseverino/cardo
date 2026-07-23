@@ -1,6 +1,6 @@
 common-api
 common
-openapi-support
+cardo-openapi-contracts
 authorization-keycloak-client
 authorization-security
 authorization

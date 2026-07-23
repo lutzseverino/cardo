@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.lutzseverino.cardo</groupId>
+    <artifactId>cardo</artifactId>
+    <version>${revision}</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>cardo-openapi-contracts</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Cardo OpenAPI Contracts</name>
+  <description>Versioned public Identity, Invite, Billing, and shared-error OpenAPI contracts.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>${lombok.version}</version>
+      <scope>test</scope>
+      <optional>true</optional>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>${maven.multiModuleProjectDirectory}</directory>
+        <filtering>false</filtering>
+        <includes>
+          <include>common/openapi/errors.yaml</include>
+          <include>identity/openapi/identity.yaml</include>
+          <include>invite/openapi/invite.yaml</include>
+          <include>billing/openapi/billing.yaml</include>
+        </includes>
+        <targetPath>META-INF/cardo/openapi</targetPath>
+      </resource>
+    </resources>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>release-staging</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>flatten-maven-plugin</artifactId>
+            <configuration>
+              <pomElements>
+                <dependencies>remove</dependencies>
+              </pomElements>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <phase>none</phase>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-jar-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-contract-javadocs</id>
+                <phase>package</phase>
+                <goals><goal>jar</goal></goals>
+                <configuration>
+                  <classifier>javadoc</classifier>
+                  <classesDirectory>${project.build.directory}/contract-javadocs</classesDirectory>
+                  <skipIfEmpty>false</skipIfEmpty>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

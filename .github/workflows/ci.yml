@@ -84,6 +84,7 @@ jobs:
           ./scripts/release/test-compatibility-fixtures.sh
           ./scripts/release/test-central-state.sh
           ./scripts/release/test-image-rebuild.sh
+          ./scripts/release/test-private-images.sh
           ./scripts/release/test-release-inputs.sh
           ./scripts/release/test-vulnerability-policy.sh
           ./scripts/release/test-maven-release.sh 0.1.0-rc.0.ci

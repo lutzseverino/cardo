@@ -1,18 +1,18 @@
 # Releases
 
-This reference defines Cardo's supported publication surface and immutable
-release identity. A release is one SemVer value and one full Git revision across
-Java artifacts, OpenAPI bundles, service images, the Git tag, and the release
-manifest.
+This reference defines Cardo's public product-integration surface, private
+runtime surface, and immutable release identity. One release is one SemVer and
+one full Git revision across Central artifacts, private images, the Git tag,
+and the release manifest.
 
-## Supported Artifacts
+## Public Maven Surface
 
-Consumers import `io.github.lutzseverino.cardo:cardo-bom:${cardo.version}` and
-choose only the libraries they need. The BOM manages exactly these artifacts:
+Products import `io.github.lutzseverino.cardo:cardo-bom:${cardo.version}` and
+choose only the libraries they need. The BOM manages exactly:
 
 - `common-api`
 - `common`
-- `openapi-support`
+- `cardo-openapi-contracts`
 - `authorization-keycloak-client`
 - `authorization-security`
 - `authorization`
@@ -24,19 +24,35 @@ choose only the libraries they need. The BOM manages exactly these artifacts:
 - `billing-client`
 - `billing-client-http`
 
-The root `cardo` POM is published only because the module POMs inherit required
-Maven metadata. It is not a consumer BOM. Identity, Invite, and Billing
-executable JARs are not published to Maven Central. Neither the internal
-`openapi-support:tests` classifier nor generated client transport packages are
-part of the supported Java compatibility baseline.
+Authorization remains public deliberately because products embed its mechanics
+in product-owned transactions. Products still own resource catalogs, actions,
+tenant meaning, permissions, and domain policy. Public artifacts contain no
+credentials, deployment topology, environment state, or product rules.
 
-The direct root module `integration/reference-stack` is an unpublished,
-test-only executable fixture. It has `maven.deploy.skip=true` and is excluded
-from the BOM, supported-artifact list, compatibility baseline, Central bundle,
-service-image set, and release manifest. Its presence in the reactor must not
-change any public artifact coordinate or image.
+`cardo-openapi-contracts` contains these byte-for-byte resources:
 
-A product imports the BOM and omits versions from individual Cardo dependencies:
+- `META-INF/cardo/openapi/common/openapi/errors.yaml`
+- `META-INF/cardo/openapi/identity/openapi/identity.yaml`
+- `META-INF/cardo/openapi/invite/openapi/invite.yaml`
+- `META-INF/cardo/openapi/billing/openapi/billing.yaml`
+
+Their relative layout preserves shared-error references after extraction. The
+same JAR bytes and document checksums are the durable OpenAPI compatibility
+baseline. Consumers resolve or extract this artifact from Central; release
+assets and a Cardo checkout are not required.
+
+The root `cardo` reactor/build parent, `openapi-support` and its tests
+classifier, the executable Identity/Invite/Billing JARs, and
+`integration-reference-stack` are explicitly denied from Central. Published
+POMs are flattened, self-contained, and do not resolve the private root parent.
+
+Every public JAR has its POM, binary JAR, source JAR, Javadoc JAR, CycloneDX
+inventory, signatures, and Central checksums. Binary manifests carry
+`Implementation-Version` and the full `Build-Revision`; every staged POM carries
+the same revision in its SCM tag.
+
+Example product consumption requires neither a Cardo checkout nor private
+credentials:
 
 ```xml
 <dependencyManagement>
@@ -58,105 +74,68 @@ A product imports the BOM and omits versions from individual Cardo dependencies:
 </dependencies>
 ```
 
-Every library release includes its POM, binary JAR, source JAR, Javadoc JAR,
-CycloneDX dependency inventory, signatures, and Central checksums. Binary JAR
-manifests identify `Implementation-Version` and the full `Build-Revision`.
-Every staged POM, including `cardo` and `cardo-bom`, records that same full
-revision in its SCM tag.
+## Private Runtime Surface
 
-Service images use only these public names:
+The exact private image tags are:
 
 - `ghcr.io/lutzseverino/cardo/identity:${version}`
 - `ghcr.io/lutzseverino/cardo/invite:${version}`
 - `ghcr.io/lutzseverino/cardo/billing:${version}`
 
-Exact-version tags are aliases. Deployments record and pull the immutable
-`name@sha256:...` reference from `release-manifest.json`. Cardo does not publish
-`latest`, major/minor floating tags, or multi-architecture manifests in this
-release slice.
+Images are private from their first push. Existing packages must already report
+REST visibility `private`; a new package must report `private` immediately after
+its first push. Cardo never invokes a visibility-changing API. `latest`,
+floating major/minor tags, and multi-platform manifests are outside this slice.
+
+Deployment repositories receive package `Read` access and pull the immutable
+`name@sha256:...` reference from an approved manifest with their own scoped
+credentials. Cardo's protected post-publication verification uses a dedicated
+`GHCR_PULL_TOKEN` limited to `read:packages`; its automatic `GITHUB_TOKEN` has
+only `contents: read`. Deployment repositories own credentials, configuration,
+rollout, rollback, and environment evidence; Cardo publication never deploys.
 
 ## Versioning And Compatibility
 
-Cardo uses SemVer, including standard prerelease identifiers. The checkout
-default remains `0.1.0-SNAPSHOT`; release automation injects `revision` without
-rewriting every POM. Tags have the form `v${version}`.
+Cardo uses SemVer including prereleases. The checkout remains
+`0.1.0-SNAPSHOT`; release automation injects `revision` without rewriting every
+POM. Tags are `v${version}`.
 
 The previous compatibility baseline is the most recent non-draft,
-non-prerelease release and is selected through its manifest. japicmp compares
-all 13 supported JARs. Released OpenAPI files are checked with the same bundled
-contract comparison used by pull-request CI. The first stable release records
-that it has no prior stable baseline, while CI still exercises additive and
-breaking fixtures for both gates.
+non-prerelease release selected through its manifest. japicmp compares all
+public Java library JARs. OpenAPI comparison downloads the previous immutable
+`cardo-openapi-contracts` JAR from Central, verifies its artifact and document
+hashes, extracts it, and compares it with the current contracts.
 
-An intentional Java break requires one squash commit containing all of:
+An intentional Java break needs `!`, a `BREAKING CHANGE:` footer with impact
+and migration, and `Java-Migration: #N` in one squash commit. OpenAPI breaks use
+the same title/footer requirements plus `OpenAPI-Migration: #N`. Ordinary
+removal requires deprecation in at least one released minor first.
 
-- `!` in its Conventional Commit subject;
-- a `BREAKING CHANGE:` footer with impact and migration;
-- `Java-Migration: #N` naming the tracked migration.
+## Release Evidence And Resumability
 
-OpenAPI breaks use the same title and footer requirements plus
-`OpenAPI-Migration: #N`. Authorization makes the incompatibility reviewable; it
-does not suppress the report.
+`release-manifest.json` records the version, revision, prior stable baseline,
+public Maven coordinates and hashes, the contract artifact and document hashes,
+and private image identities. Central uses `USER_MANAGED`; automatic publication
+is disabled. The signed bundle is preserved before its first upload.
 
-Ordinary removal of a supported API requires deprecation in at least one
-released minor first. Release notes must curate the replacement and migration;
-generated diffs and commit lists are supporting evidence, not release notes.
+The current public MIT repository means any runtime manifest, digest, SBOM, or
+vulnerability evidence attached to its GitHub release is publicly disclosed.
+It must contain no credentials, configuration, topology, or environment state.
+Before future proprietary runtime work or repository-boundary changes, move
+runtime evidence behind access control; public Central bytes and contracts stay
+public permanently.
 
-## Release Evidence
+Candidate and publication jobs build each image independently from the exact
+version and revision and require identical content IDs and normalized
+inventories before a registry write. A rerun requires a recorded image digest
+to match exactly. If an abrupt runner loss left a private tag without a recorded
+digest, the remote image must pull to the freshly rebuilt candidate's exact
+Docker content ID before its registry digest is recovered. Central bytes,
+private package visibility, version, and revision remain immutable; mixed or
+different state requires a new version.
 
-`release-manifest.json` records the version, source revision, previous stable
-baseline, 13 Maven coordinates and SHA-256 values, OpenAPI asset checksums, and
-the exact image names, digests, and SBOM checksums. GitHub release assets also
-contain the Central bundle, OpenAPI bundles, CycloneDX image inventories,
-vulnerability report, and a SHA-256 checksum list. GitHub artifact attestations
-cover the release files and the three registry digests.
-
-The candidate and publication jobs independently build every service image.
-Each image build starts from a clean runner by installing the exact release
-version and revision once for the `identity,invite,billing` reactor with its
-upstream modules. It then invokes the direct image goal separately for each
-executable service, so a resumed second dispatch does not depend on ambient or
-published Cardo artifacts and never applies the image goal to library modules.
-Before any registry write, publication requires all three local image content
-IDs and normalized CycloneDX inventories to match the validated candidate byte
-for byte.
-
-The workflow stages Central with `USER_MANAGED`; automatic publication is
-disabled. It never overwrites a Maven version or an image tag. A rerun can
-resume only when Central bytes and any existing registry digests equal the
-recorded release. The draft manifest must identify the requested version and
-revision, its digest must identify the preserved signed bundle, and that
-bundle's unsigned payload must equal a fresh candidate even if `main` has since
-advanced. Mixed or different state fails and requires a new version.
-Central state classification checks every staged non-checksum payload file,
-including sources, Javadocs, dependency inventories, and signatures; only an
-all-404 result is safe to upload and only an all-identical result can resume.
-The signed Central bundle is preserved in a draft release before the first
-Publisher API call. If the call succeeds but recording its deployment ID does
-not, a rerun stops for portal inspection instead of creating another
-`USER_MANAGED` deployment.
-
-## Dependency And Vulnerability Ownership
-
-Dependabot checks Maven and Actions dependencies weekly. Pull requests run
-dependency review and reject newly introduced high-severity dependencies.
-Release preparation queries repository Dependabot alerts and records a
-vulnerability report. Open high or critical findings block release unless
-`release/vulnerability-exceptions.json` contains an owned, time-bounded
-exception.
-
-New critical findings are triaged within one business day and high findings
-within three business days. An exception must name the alert, owner, reason,
-tracking issue, and expiry; expiry is never longer than 30 days without a new
-review. The exception file rejects unrecognized root or entry fields so a typo
-cannot silently weaken the release gate. Medium and low findings are triaged in
-the next planned maintenance cycle. Disabling an alert without this record is
-not an exception process.
-
-## Ownership Boundary
-
-Cardo owns artifact bytes, public coordinates, compatibility checks, image
-construction, manifests, and publication validation. Deployment repositories
-own environment configuration, database migration sequencing, rollout,
-rollback of environment state, and selection of an already published digest.
-Publishing a Cardo release never deploys it.
+Dependabot and dependency review own dependency findings. Open high or critical
+findings block release unless `release/vulnerability-exceptions.json` has an
+owned, time-bounded exception. Critical findings are triaged within one business
+day and high findings within three; an exception must name its alert, owner,
+reason, tracking issue, and expiry.

@@ -24,6 +24,11 @@ Authorization. Publish authorization-keycloak-client for client-credential and r
 token mechanics, and authorization-security for Spring Security and JWT mechanics. Keep the
 existing Java packages and public types so consumers change only their Maven dependency.
 
+Publish the embedded authorization artifacts and their required `common` dependency as part of the
+public product-integration surface. Product repositories own their resource catalogs, actions,
+tenant semantics, and domain policy; those rules do not enter Cardo's public mechanics. Do not
+introduce an Authorization HTTP service merely to hide the embedded implementation.
+
 The HTTP client adapters use common-api for the existing API error contracts without acquiring the
 full common aggregate. The full common artifact depends on common-api for source and binary
 compatibility.
@@ -42,6 +47,8 @@ If authorization becomes a standalone service, introduce the HTTP contract delib
 - Excessive dependency weight is addressed with finer-grained embedded artifacts, not an
   Authorization HTTP facade for a service that does not exist.
 - A future service extraction must design the HTTP API rather than inheriting one accidentally.
+- Public compatibility management reflects the actual embedded product boundary without exposing
+  product policy, credentials, or runtime state.
 
 ## Alternatives Considered
 

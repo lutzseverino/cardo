@@ -21,6 +21,7 @@ group_path=io/github/lutzseverino/cardo
 breaking=0
 
 while IFS= read -r artifact; do
+  [[ $artifact == cardo-openapi-contracts ]] && continue
   old_jar="$old_repository/$group_path/$artifact/$old_version/$artifact-$old_version.jar"
   new_jar="$new_repository/$group_path/$artifact/$new_version/$artifact-$new_version.jar"
   set +e
