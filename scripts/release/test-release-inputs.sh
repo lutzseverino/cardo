@@ -8,12 +8,43 @@ cd "$root_directory"
 for version in 0.1.0 1.2.3-rc.1 2.0.0-alpha.1-x; do
   scripts/release/validate-version.py "$version"
 done
+[[ $(scripts/release/validate-version.py 1.2.3-rc.1 --github-prerelease) == true ]] \
+  || { echo "SemVer prerelease was not classified as a GitHub prerelease" >&2; exit 1; }
+[[ $(scripts/release/validate-version.py 1.2.3 --github-prerelease) == false ]] \
+  || { echo "stable SemVer was classified as a GitHub prerelease" >&2; exit 1; }
 for version in 01.0.0 1.0.0-01 1.0.0-rc. 1.0.0+build 1.0.0-SNAPSHOT 1.0.0-rc.SNAPSHOT; do
   if scripts/release/validate-version.py "$version" >/dev/null 2>&1; then
     echo "invalid release version was accepted: $version" >&2
     exit 1
   fi
 done
+
+python3 - .github/workflows/release.yml <<'PY'
+import pathlib
+import sys
+
+workflow = pathlib.Path(sys.argv[1]).read_text()
+commands = []
+lines = workflow.splitlines()
+for index, line in enumerate(lines):
+    if 'gh release create "v$RELEASE_VERSION"' not in line and (
+        'gh release edit "v$RELEASE_VERSION"' not in line
+    ):
+        continue
+    command = line.strip()
+    while command.endswith("\\"):
+        index += 1
+        command = f"{command[:-1].rstrip()} {lines[index].strip()}"
+    commands.append(command)
+
+if len(commands) != 4:
+    raise SystemExit(
+        f"expected four GitHub release create/edit paths, found {len(commands)}"
+    )
+for command in commands:
+    if '--prerelease="$RELEASE_PRERELEASE"' not in command:
+        raise SystemExit(f"GitHub release classification is missing from: {command}")
+PY
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/cardo-release-request.XXXXXX")
 trap 'rm -rf "$temporary_directory"' EXIT
