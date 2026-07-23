@@ -8,7 +8,10 @@ service images privately to GHCR under one version and source revision.
 
 ### Configure One-Time Prerequisites
 
-1. Verify `io.github.lutzseverino.cardo` in the Maven Central Publisher Portal.
+1. Sign in to the Maven Central Publisher Portal with the `lutzseverino` GitHub
+   account. Confirm the verified parent `io.github.lutzseverino` authorizes the
+   child group ID `io.github.lutzseverino.cardo`; contact Central Support if the
+   parent is absent.
 2. Create the protected GitHub `release` environment with required reviewers.
 3. Add `CENTRAL_TOKEN_USERNAME`, `CENTRAL_TOKEN_PASSWORD`, `GPG_PRIVATE_KEY`,
    and `GPG_PASSPHRASE` only to that environment. Add a dedicated
