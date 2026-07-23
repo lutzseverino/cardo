@@ -37,28 +37,8 @@ record_digest() {
   echo "recorded $service GHCR digest $digest"
 }
 
-require_anonymous_denial() {
-  local reference=$1
-  local error_file=$2
-  local anonymous_config=$3
-  : >"$error_file"
-  if DOCKER_CONFIG="$anonymous_config" docker pull "$reference" \
-    >"$error_file" 2>&1; then
-    echo "anonymous pull unexpectedly succeeded for $reference" >&2
-    exit 1
-  fi
-  grep --ignore-case --extended-regexp \
-    'denied|unauthorized|authentication required|insufficient_scope' \
-    "$error_file" >/dev/null || {
-      cat "$error_file" >&2
-      echo "could not prove anonymous access denial for $reference" >&2
-      exit 1
-    }
-}
-
 remote_error=$(mktemp "${TMPDIR:-/tmp}/cardo-registry-check.XXXXXX")
-anonymous_config=$(mktemp -d "${TMPDIR:-/tmp}/cardo-anonymous-docker.XXXXXX")
-trap 'docker logout ghcr.io >/dev/null 2>&1 || true; rm -f "$remote_error"; rm -rf "$anonymous_config"' EXIT
+trap 'docker logout ghcr.io >/dev/null 2>&1 || true; rm -f "$remote_error"' EXIT
 
 printf '{}\n' >"$digest_output"
 for service in identity invite billing; do
@@ -106,7 +86,6 @@ for service in identity invite billing; do
   record_digest "$service" "$digest"
   scripts/release/check-ghcr-package-state.sh --require-private "$service"
   docker logout ghcr.io >/dev/null
-  require_anonymous_denial "$name@$digest" "$remote_error" "$anonymous_config"
 done
 
-echo "published or verified private GHCR image tags with anonymous denial for $version"
+echo "published or verified private GHCR image tags for $version"

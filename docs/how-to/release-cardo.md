@@ -56,14 +56,14 @@ make the first release pass.
 4. Publish that deployment in the Central Publisher Portal.
 5. Rerun the exact version and revision. The workflow proves the anonymous
    Central bytes, rebuilds the candidate images, refuses any existing public or
-   source-linked package, and pushes or verifies the exact private tags. After
-   each service push it records the digest, immediately requires REST visibility
-   `private`, logs out, and proves an anonymous digest pull is denied before
-   authenticating for the next service. A failure preserves every digest already
-   recorded in the draft manifest and a focused Actions evidence artifact.
-6. A fresh read-only package job verifies that anonymous digest pulls fail and
-   authenticated digest pulls succeed. Only then is the GitHub release made
-   non-draft.
+   source-linked package, and pushes or verifies the exact private tags. The
+   publish job records each service digest, immediately requires REST visibility
+   `private` with no repository link, and logs out. A failure preserves every
+   digest already recorded in the draft manifest and a focused Actions evidence
+   artifact.
+6. A subsequent fresh read-only package job proves that anonymous digest pulls
+   fail and authenticated digest pulls succeed. Only then is the GitHub release
+   made non-draft.
 
 ### Recover A Partial Release
 
