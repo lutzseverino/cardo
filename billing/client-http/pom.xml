@@ -92,6 +92,7 @@
               <generateSupportingFiles>true</generateSupportingFiles>
               <configOptions>
                 <dateLibrary>java8</dateLibrary>
+                <hideGenerationTimestamp>true</hideGenerationTimestamp>
                 <openApiNullable>false</openApiNullable>
                 <sourceFolder>src/gen/java</sourceFolder>
                 <useBeanValidation>true</useBeanValidation>

@@ -10,17 +10,31 @@ revision=$(git rev-parse HEAD)
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/cardo-release-test.XXXXXX")
 trap 'rm -rf "$temporary_directory"' EXIT
 
-scripts/release/stage-maven.sh "$version" "$revision" "$temporary_directory"
-scripts/release/verify-consumer.sh "$version" "$temporary_directory/maven-repository"
-mkdir -p "$temporary_directory/images"
+candidate_directory="$temporary_directory/candidate-utc"
+comparison_directory="$temporary_directory/candidate-kiritimati"
+TZ=UTC scripts/release/stage-maven.sh "$version" "$revision" "$candidate_directory"
+TZ=Pacific/Kiritimati scripts/release/stage-maven.sh \
+  "$version" "$revision" "$comparison_directory"
+if ! cmp -s \
+  "$candidate_directory/central-bundle.zip" \
+  "$comparison_directory/central-bundle.zip"; then
+  echo "unsigned Central candidates differ across build timezones" >&2
+  shasum -a 256 \
+    "$candidate_directory/central-bundle.zip" \
+    "$comparison_directory/central-bundle.zip" >&2
+  exit 1
+fi
+
+scripts/release/verify-consumer.sh "$version" "$candidate_directory/maven-repository"
+mkdir -p "$candidate_directory/images"
 printf '%s\n' '{"images":[' \
   '{"service":"identity","name":"ghcr.io/lutzseverino/cardo/identity"},' \
   '{"service":"invite","name":"ghcr.io/lutzseverino/cardo/invite"},' \
   '{"service":"billing","name":"ghcr.io/lutzseverino/cardo/billing"}' \
-  ']}' >"$temporary_directory/images/images.json"
-scripts/release/create-manifest.py "$version" "$revision" "$temporary_directory"
+  ']}' >"$candidate_directory/images/images.json"
+scripts/release/create-manifest.py "$version" "$revision" "$candidate_directory"
 
-python3 - "$temporary_directory/central-bundle.zip" "$temporary_directory/release-manifest.json" "$version" "$revision" <<'PY'
+python3 - "$candidate_directory/central-bundle.zip" "$candidate_directory/release-manifest.json" "$version" "$revision" <<'PY'
 import json
 import sys
 import zipfile
