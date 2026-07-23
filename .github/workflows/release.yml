@@ -446,7 +446,9 @@ jobs:
           RELEASE_PRERELEASE: ${{ needs.candidate.outputs.github_prerelease }}
         run: |
           if ! git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
-            git tag --annotate "v$RELEASE_VERSION" "$RELEASE_REVISION" \
+            git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              tag --annotate "v$RELEASE_VERSION" "$RELEASE_REVISION" \
               --message "Cardo $RELEASE_VERSION"
             git push origin "refs/tags/v$RELEASE_VERSION"
           fi

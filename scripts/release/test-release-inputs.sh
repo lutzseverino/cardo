@@ -44,6 +44,29 @@ if len(commands) != 4:
 for command in commands:
     if '--prerelease="$RELEASE_PRERELEASE"' not in command:
         raise SystemExit(f"GitHub release classification is missing from: {command}")
+
+tag_commands = []
+for index, line in enumerate(lines):
+    if "git -c user.name='github-actions[bot]'" not in line:
+        continue
+    if lines[index - 1].strip() != (
+        'if ! git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then'
+    ):
+        raise SystemExit("release tag creation is missing its absent-tag guard")
+    command = line.strip()
+    while command.endswith("\\"):
+        index += 1
+        command = f"{command[:-1].rstrip()} {lines[index].strip()}"
+    tag_commands.append(command)
+
+expected_tag_command = (
+    "git -c user.name='github-actions[bot]' "
+    "-c user.email='41898282+github-actions[bot]@users.noreply.github.com' "
+    'tag --annotate "v$RELEASE_VERSION" "$RELEASE_REVISION" '
+    '--message "Cardo $RELEASE_VERSION"'
+)
+if tag_commands != [expected_tag_command]:
+    raise SystemExit(f"release tag command differs from policy: {tag_commands}")
 PY
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/cardo-release-request.XXXXXX")
@@ -155,6 +178,22 @@ PY
   expect_failure scripts/release/validate-request.sh 1.2.3 "$first_revision" \
     "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip" \
     "$temporary_directory/wrong-candidate.zip"
+)
+
+git -C "$repository" tag --annotate v1.2.3 "$first_revision" --message 'Cardo 1.2.3'
+git -C "$repository" push --quiet origin refs/tags/v1.2.3
+(
+  cd "$repository"
+  scripts/release/validate-request.sh 1.2.3 "$first_revision" \
+    "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip"
+)
+
+git -C "$repository" tag --force --annotate v1.2.3 "$second_revision" --message 'Cardo 1.2.3'
+git -C "$repository" push --quiet --force origin refs/tags/v1.2.3
+(
+  cd "$repository"
+  expect_failure scripts/release/validate-request.sh 1.2.3 "$first_revision" \
+    "$temporary_directory/release-manifest.json" "$temporary_directory/central-bundle.zip"
 )
 
 echo "release input fixtures passed"
