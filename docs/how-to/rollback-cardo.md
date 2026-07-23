@@ -12,17 +12,23 @@ rollback or resumed.
 `485f1d44f451ef2555ecea4cb3e3d051aad2a65c`. Its Central artifacts, private
 runtime digests, and initial successful protected verifier
 [run 30016640818](https://github.com/lutzseverino/cardo/actions/runs/30016640818)
-are retained publication evidence. The superseding protected verifier
+are retained publication evidence. Earlier protected verifier
 [run 30027859272](https://github.com/lutzseverino/cardo/actions/runs/30027859272)
-from trusted `main` revision
-`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is retained but insufficient
-privacy evidence: its direct manifest `401 UNAUTHORIZED` responses stopped at
-GHCR's initial authentication challenge. Its authenticated same-digest pulls
-remain existence evidence. A new successful protected run that completes the
-anonymous GHCR authorization flow is pending and must supersede it. These
-publication proofs do not alone establish that `0.1.0-rc.3` is a known-good
-production rollback target; select it only if the deployment repository has
-approved environment-specific rollout and rollback evidence.
+is retained only as historical authenticated-pull existence evidence; its
+direct anonymous manifest `401 UNAUTHORIZED` responses stopped at GHCR's
+initial authentication challenge, so it is not the final privacy proof. Final
+protected verifier
+[run 30032236972](https://github.com/lutzseverino/cardo/actions/runs/30032236972)
+from trusted verifier revision
+`b7f0651a0ecc4e37c9d7dfdf1e97323c682ad8ae` is the canonical privacy and
+same-digest pull evidence: it compiled a fresh standalone Java 21 consumer
+against the public Cardo surface, confirmed that GHCR's token endpoint
+explicitly denied anonymous requests for the exact three scoped repository
+pulls without issuing an anonymous bearer token, and then authenticated with
+the protected scoped credential and pulled those same three exact digests.
+These publication proofs do not alone establish that `0.1.0-rc.3` is a
+known-good production rollback target; select it only if the deployment
+repository has approved environment-specific rollout and rollback evidence.
 
 ## Steps
 
