@@ -6,8 +6,19 @@ reuses the faulty version.
 
 `0.1.0-rc.2` is public-Maven-only partial history, not a known-good deployable
 release. It has no private image digest references, so it cannot be selected for
-rollback or resumed. `0.1.0-rc.3` is the next candidate for a complete
-public-library/private-runtime prerelease.
+rollback or resumed.
+
+`0.1.0-rc.3` is an immutable published prerelease from revision
+`485f1d44f451ef2555ecea4cb3e3d051aad2a65c`. Its Central artifacts, private
+runtime digests, and initial successful protected verifier
+[run 30016640818](https://github.com/lutzseverino/cardo/actions/runs/30016640818)
+are retained publication evidence. The superseding protected verifier
+[run 30027859272](https://github.com/lutzseverino/cardo/actions/runs/30027859272)
+from trusted `main` revision
+`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is the current verifier evidence.
+These publication proofs do not alone establish that `0.1.0-rc.3` is a
+known-good production rollback target; select it only if the deployment
+repository has approved environment-specific rollout and rollback evidence.
 
 ## Steps
 

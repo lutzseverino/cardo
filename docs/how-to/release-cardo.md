@@ -142,6 +142,17 @@ Issue #30 cannot close on repository changes alone. The exposed
 `0.1.0-rc.2` is also permanent, but only its BOM, libraries, and contracts were
 published to Central. It has no private runtime images or digest-pull
 verification, so it is non-deployable and non-resumable. Do not dispatch either
-retired version. Publish `0.1.0-rc.3` from corrected `main` as the next complete
-public-library/private-runtime prerelease, anonymously resolve its Central
-artifacts, and complete private digest-pull verification for all three images.
+retired version.
+
+`0.1.0-rc.3` is an immutable published prerelease from revision
+`485f1d44f451ef2555ecea4cb3e3d051aad2a65c`. Its Central artifacts, private
+runtime digests, and initial successful protected verifier
+[run 30016640818](https://github.com/lutzseverino/cardo/actions/runs/30016640818)
+are retained publication evidence. The superseding protected verifier
+[run 30027859272](https://github.com/lutzseverino/cardo/actions/runs/30027859272)
+from trusted `main` revision
+`3812c7f5145418d16922ba7d9696bcbe7bbd4ee2` is the current verifier evidence.
+It proves a standalone Java 21 public consumer compile, direct anonymous
+`401 UNAUTHORIZED` responses for all three exact image digests, and
+authenticated pulls of those same digests. This publication proof alone does
+not make `0.1.0-rc.3` a known-good production rollback target.
