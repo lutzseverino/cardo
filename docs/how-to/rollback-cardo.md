@@ -4,6 +4,11 @@ Published Maven versions, Git tags, GitHub releases, and exact GHCR tags are
 immutable. Rollback selects an older known-good release; it never mutates or
 reuses the faulty version.
 
+`0.1.0-rc.2` is public-Maven-only partial history, not a known-good deployable
+release. It has no private image digest references, so it cannot be selected for
+rollback or resumed. `0.1.0-rc.3` is the next candidate for a complete
+public-library/private-runtime prerelease.
+
 ## Steps
 
 1. Restore the product's previous `cardo-bom` version and rebuild it.

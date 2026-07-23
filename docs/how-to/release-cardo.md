@@ -106,6 +106,9 @@ never be described as disposable.
 
 Issue #30 cannot close on repository changes alone. The exposed
 `0.1.0-rc.1` is permanent incident history and cannot satisfy the release gate.
-Publish `0.1.0-rc.2` as the new permanent prerelease, anonymously resolve its
-BOM, libraries, and contracts from Central, and complete private digest-pull
-verification for all three images.
+`0.1.0-rc.2` is also permanent, but only its BOM, libraries, and contracts were
+published to Central. It has no private runtime images or digest-pull
+verification, so it is non-deployable and non-resumable. Do not dispatch either
+retired version. Publish `0.1.0-rc.3` from corrected `main` as the next complete
+public-library/private-runtime prerelease, anonymously resolve its Central
+artifacts, and complete private digest-pull verification for all three images.

@@ -344,6 +344,9 @@ JSON
     fi
 
     python3 - <<'PY'
+import os
+import subprocess
+import textwrap
 from pathlib import Path
 
 workflow = Path(".github/workflows/release.yml").read_text()
@@ -353,17 +356,36 @@ job = workflow.split("  verify-private-runtime:", 1)[1].split("\n  finalize:", 1
 checker = Path("scripts/release/check-ghcr-package-state.sh").read_text()
 runtime_smoke = Path("scripts/smoke-runtime-artifacts.sh").read_text()
 runtime_docs = Path("docs/reference/runtime-artifacts.md").read_text()
-incident_guard = "- name: Reject non-resumable rc.1 incident version"
+incident_guard = "- name: Reject non-resumable partial prereleases"
 candidate_checkout = "- name: Check out exact revision"
 if candidate.index(incident_guard) > candidate.index(candidate_checkout):
-    raise SystemExit("rc.1 incident guard does not precede candidate checkout")
+    raise SystemExit("partial-prerelease guard does not precede candidate checkout")
+guard_step = candidate.split(incident_guard, 1)[1].split(candidate_checkout, 1)[0]
+guard = textwrap.dedent(guard_step.split("        run: |\n", 1)[1])
 for value in [
-    '[[ "$RELEASE_VERSION" != 0.1.0-rc.1 ]]',
-    "publish 0.1.0-rc.2 instead",
-    "exit 1",
+    'case "$RELEASE_VERSION" in',
+    "0.1.0-rc.1)",
+    "0.1.0-rc.2)",
+    "publish 0.1.0-rc.3 instead",
 ]:
-    if value not in candidate.split(candidate_checkout, 1)[0]:
-        raise SystemExit(f"pre-checkout rc.1 incident guard lacks: {value}")
+    if value not in guard:
+        raise SystemExit(f"pre-checkout partial-prerelease guard lacks: {value}")
+for version, accepted in [
+    ("0.1.0-rc.1", False),
+    ("0.1.0-rc.2", False),
+    ("0.1.0-rc.3", True),
+]:
+    result = subprocess.run(
+        ["bash", "-Eeuo", "pipefail", "-c", guard],
+        env={**os.environ, "RELEASE_VERSION": version},
+        capture_output=True,
+        text=True,
+    )
+    if (result.returncode == 0) != accepted:
+        raise SystemExit(
+            f"pre-checkout partial-prerelease guard returned "
+            f"{result.returncode} for {version}"
+        )
 preflight = "run: scripts/release/check-ghcr-package-state.sh"
 central_staging = "- name: Rebuild signed Central bundle"
 central_upload = "- name: Upload Central bundle for manual publication"

@@ -36,12 +36,18 @@ jobs:
       security-events: read
     runs-on: ubuntu-24.04
     steps:
-      - name: Reject non-resumable rc.1 incident version
+      - name: Reject non-resumable partial prereleases
         run: |
-          [[ "$RELEASE_VERSION" != 0.1.0-rc.1 ]] || {
-            echo '0.1.0-rc.1 is a non-resumable runtime exposure incident; publish 0.1.0-rc.2 instead.' >&2
-            exit 1
-          }
+          case "$RELEASE_VERSION" in
+            0.1.0-rc.1)
+              echo '0.1.0-rc.1 is a non-resumable runtime exposure incident; publish 0.1.0-rc.3 instead.' >&2
+              exit 1
+              ;;
+            0.1.0-rc.2)
+              echo '0.1.0-rc.2 is a non-resumable public-Maven-only partial prerelease; publish 0.1.0-rc.3 instead.' >&2
+              exit 1
+              ;;
+          esac
       - name: Check out exact revision
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
