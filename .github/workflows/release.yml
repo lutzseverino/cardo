@@ -252,6 +252,21 @@ jobs:
         env:
           GHCR_PUBLISH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN }}
         run: scripts/release/check-ghcr-package-state.sh
+      - name: Create or validate immutable release tag
+        run: |
+          tag="v$RELEASE_VERSION"
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              tag --annotate "$tag" "$RELEASE_REVISION" \
+              --message "Cardo $RELEASE_VERSION"
+            git push origin "refs/tags/$tag"
+          fi
+          tag_revision=$(git ls-remote --tags origin "refs/tags/$tag^{}" | awk '{print $1}')
+          [[ -n $tag_revision && $tag_revision == "$RELEASE_REVISION" ]] || {
+            echo "$tag does not identify the requested revision through an annotated remote tag" >&2
+            exit 1
+          }
       - name: Import release signing key
         if: steps.prior-central.outputs.restored == 'false'
         env:
@@ -298,7 +313,7 @@ jobs:
           notes="$RUNNER_TEMP/staged-release-notes.md"
           printf 'Cardo %s staging evidence\n\nSource revision: %s\n\nCentral publication is pending. Inspect the Publisher Portal before any retry; never upload a second deployment for this version.\n' \
             "$RELEASE_VERSION" "$RELEASE_REVISION" >"$notes"
-          gh release create "v$RELEASE_VERSION" --draft --target "$RELEASE_REVISION" \
+          gh release create "v$RELEASE_VERSION" --draft --verify-tag \
             --prerelease="$RELEASE_PRERELEASE" \
             --title "Cardo $RELEASE_VERSION" --notes-file "$notes" \
             "$RUNNER_TEMP/signed/central-bundle.zip" \
@@ -439,19 +454,12 @@ jobs:
           subject-name: ghcr.io/lutzseverino/cardo/billing
           subject-digest: ${{ fromJSON(steps.image-digests.outputs.json).billing }}
           push-to-registry: false
-      - name: Create immutable tag and draft GitHub release
+      - name: Create or update draft GitHub release
         if: steps.central.outputs.state == 'published'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_PRERELEASE: ${{ needs.candidate.outputs.github_prerelease }}
         run: |
-          if ! git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
-            git -c user.name='github-actions[bot]' \
-              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-              tag --annotate "v$RELEASE_VERSION" "$RELEASE_REVISION" \
-              --message "Cardo $RELEASE_VERSION"
-            git push origin "refs/tags/v$RELEASE_VERSION"
-          fi
           cp "$RUNNER_TEMP/signed/central-bundle.zip" "$RUNNER_TEMP/candidate/central-bundle.zip"
           notes="$RUNNER_TEMP/release-notes.md"
           printf '# Cardo %s\n\n%s\n\nSource revision: %s\n' \
