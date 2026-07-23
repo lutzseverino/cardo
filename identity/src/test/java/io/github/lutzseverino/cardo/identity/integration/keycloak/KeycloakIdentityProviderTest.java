@@ -394,6 +394,29 @@ class KeycloakIdentityProviderTest {
   }
 
   @Test
+  void reportsMalformedUnauthorizedPasswordGrantAsAProviderError() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(
+            withStatus(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("not-json"));
+
+    assertThatThrownBy(() -> provider.issuePasswordSession("user@example.com", "password-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(502);
+              assertThat(exception.code()).isEqualTo("identity_provider_error");
+            });
+
+    server.verify();
+  }
+
+  @Test
   void revokesTheRefreshCredentialAndAcceptsTheProvidersIdempotentResponse() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
