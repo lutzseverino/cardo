@@ -20,6 +20,11 @@ provider, persistence, and convergence boundaries from one checkout.
    not depend on published Cardo snapshots or arbitrary pre-existing service
    artifacts.
 
+The harness fixes the disposable HTTPS origin URI before service configuration,
+then starts the host-side Identity and product listeners before exposing their
+ports to Testcontainers and starting Caddy. This keeps the configured Keycloak
+redirects stable without racing the reverse proxy against its upstreams.
+
 Do not replace digest-pinned images, skip Docker-backed tests, or weaken the
 production cookie, exact-audience, active-introspection, and least-privilege
 checks to accommodate a local daemon problem.
