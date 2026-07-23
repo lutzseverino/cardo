@@ -15,11 +15,11 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
+@ConditionalOnMissingBean(BillingEntitlementsClient.class)
 @EnableConfigurationProperties(BillingClientProperties.class)
 public class BillingClientAutoConfiguration {
 
   @Bean
-  @ConditionalOnMissingBean
   BillingEntitlementsClient billingEntitlementsClient(
       BillingClientProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,

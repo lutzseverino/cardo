@@ -15,11 +15,11 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
+@ConditionalOnMissingBean(IdentityUsersClient.class)
 @EnableConfigurationProperties(IdentityClientProperties.class)
 public class IdentityClientAutoConfiguration {
 
   @Bean
-  @ConditionalOnMissingBean
   IdentityUsersClient identityUsersClient(
       IdentityClientProperties properties,
       KeycloakClientCredentialsTokenProvider clientCredentialsTokens,

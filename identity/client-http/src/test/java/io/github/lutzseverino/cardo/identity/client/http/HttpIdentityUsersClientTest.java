@@ -60,6 +60,26 @@ class HttpIdentityUsersClientTest {
   }
 
   @Test
+  void backsOffForACustomClientWithoutHttpProperties() {
+    IdentityUsersClient customClient = mock(IdentityUsersClient.class);
+
+    new ApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(IdentityClientAutoConfiguration.class))
+        .withBean(IdentityUsersClient.class, () -> customClient)
+        .run(
+            application -> {
+              assertThat(application).hasNotFailed().hasSingleBean(IdentityUsersClient.class);
+              assertThat(application.getBean(IdentityUsersClient.class)).isSameAs(customClient);
+              assertThat(application).doesNotHaveBean(IdentityClientProperties.class);
+            });
+  }
+
+  @Test
+  void rejectsMissingStandardClientPropertiesAtStartup() {
+    baseContext.run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
   void bindsClientTimeoutOverrides() {
     context
         .withPropertyValues(

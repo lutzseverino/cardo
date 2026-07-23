@@ -49,6 +49,27 @@ class HttpBillingEntitlementsClientTest {
   }
 
   @Test
+  void backsOffForACustomClientWithoutHttpProperties() {
+    BillingEntitlementsClient customClient = mock(BillingEntitlementsClient.class);
+
+    new ApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(BillingClientAutoConfiguration.class))
+        .withBean(BillingEntitlementsClient.class, () -> customClient)
+        .run(
+            application -> {
+              assertThat(application).hasNotFailed().hasSingleBean(BillingEntitlementsClient.class);
+              assertThat(application.getBean(BillingEntitlementsClient.class))
+                  .isSameAs(customClient);
+              assertThat(application).doesNotHaveBean(BillingClientProperties.class);
+            });
+  }
+
+  @Test
+  void rejectsMissingStandardClientPropertiesAtStartup() {
+    baseContext.run(application -> assertThat(application).hasFailed());
+  }
+
+  @Test
   void bindsClientTimeoutOverrides() {
     context
         .withPropertyValues(

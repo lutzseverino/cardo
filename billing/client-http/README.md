@@ -17,6 +17,10 @@ missing or blank values fail auto-configuration. The auto-configuration requires
 `KeycloakClientCredentialsTokenProvider` bean. The shared provider reuses its
 scope-specific service token until shortly before Keycloak's reported expiry.
 
+If a product supplies its own `BillingEntitlementsClient` bean, the
+auto-configuration backs off and none of the `cardo.billing.client.*`
+properties are required.
+
 Outbound Billing calls default to two-second connection and response timeouts.
 Override them with `cardo.billing.client.connect-timeout` and
 `cardo.billing.client.read-timeout` when the deployment requires different
