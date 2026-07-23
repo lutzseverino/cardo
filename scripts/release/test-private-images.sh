@@ -227,7 +227,6 @@ for service in ("identity", "invite", "billing"):
             f"push:{service}",
             f"state:{service}:private",
             "logout",
-            f"pull:{service}:denied",
         ]
     )
 if events != expected:
@@ -292,20 +291,6 @@ JSON
       || { echo "Identity failure log omitted its recorded digest" >&2; exit 1; }
     [[ -f $after_push/identity && ! -f $after_push/invite && ! -f $after_push/billing ]] \
       || { echo "Identity visibility failure touched a later service" >&2; exit 1; }
-
-    anonymous_public="$temporary_directory/anonymous-public"
-    mkdir -p "$anonymous_public"
-    if FIXTURE_ANONYMOUS_SUCCEEDS=true \
-      run_publish after-push-private "$anonymous_public" \
-        "$temporary_directory/anonymous-public.json" \
-        "$temporary_directory/local/anonymous-public" >/dev/null 2>&1; then
-      echo "anonymous digest access after a first push was accepted" >&2
-      exit 1
-    fi
-    jq --exit-status 'keys == ["identity"]' \
-      "$temporary_directory/anonymous-public.json" >/dev/null
-    [[ -f $anonymous_public/identity && ! -f $anonymous_public/invite && ! -f $anonymous_public/billing ]] \
-      || { echo "Identity anonymous-access failure touched a later service" >&2; exit 1; }
 
     verify_fixture="$temporary_directory/verify-fixture"
     mkdir -p "$verify_fixture/scripts/release"

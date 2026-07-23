@@ -136,9 +136,10 @@ Candidate and publication jobs build each image independently from the exact
 version and revision and require identical content IDs and normalized
 inventories before a registry write. Before Central staging, every runtime
 package must be absent or private and unlinked from every repository.
-Publication records each service digest immediately after its push,
-REST-asserts private and unlinked state, logs out, and proves anonymous digest
-access is denied before authenticating for the next service. A failed run keeps
+Publication records each service digest after its tag is pushed or verified,
+REST-asserts private and unlinked state, and logs out. A subsequent fresh
+read-only verification job proves anonymous digest access is denied, then uses
+the scoped pull token to pull each recorded digest. A failed run keeps
 already-recorded digests in its draft manifest and a focused Actions evidence
 artifact. A rerun requires a recorded image digest to match exactly. If an
 abrupt runner loss left a private tag without a recorded digest, the remote
