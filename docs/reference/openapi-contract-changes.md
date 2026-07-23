@@ -35,7 +35,7 @@ An intentional breaking change must keep the compatibility report visible and in
 
 These markers authorize review of the break; they do not hide or suppress the diff.
 
-The current base-commit comparison is the available compatibility baseline because Cardo does not yet publish versioned contract bundles. Issue #30 must publish the bundled service documents and compare a proposed release with the last released bundle. The pull-request comparison should remain as early feedback.
+Release automation publishes the versioned `cardo-openapi-contracts` artifact and, when a prior stable baseline exists, compares a proposed release with the most recent non-draft, non-prerelease release. The pull-request base comparison remains early feedback. Issue #95 owns compatibility for a prior stable release whose manifest or artifact shape predates the public-surface split.
 
 ## Internal Test Support
 
