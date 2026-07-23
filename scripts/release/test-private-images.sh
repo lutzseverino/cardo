@@ -6,7 +6,15 @@ case ${0##*/} in
   gh)
     [[ $1 == api && $# -eq 2 ]] \
       || { echo "fixture received an unexpected gh command" >&2; exit 1; }
-    service=${2##*%2F}
+    case $2 in
+      /user/packages/container/cardo%2Fidentity) service=identity ;;
+      /user/packages/container/cardo%2Finvite) service=invite ;;
+      /user/packages/container/cardo%2Fbilling) service=billing ;;
+      *)
+        echo "fixture received an unexpected package endpoint: $2" >&2
+        exit 1
+        ;;
+    esac
     case ${FIXTURE_PACKAGE_STATE:-after-push-private} in
       absent)
         echo "state:$service:absent" >>"${FIXTURE_LOG:?}"
@@ -372,8 +380,17 @@ required_publish = [
 for value in required_publish:
     if value not in publish:
         raise SystemExit(f"publish job lacks protected GHCR credential policy: {value}")
-if 'GH_TOKEN="$GHCR_PUBLISH_TOKEN" gh api' not in checker:
-    raise SystemExit("package API calls do not explicitly isolate the protected publish token")
+authenticated_package_read = (
+    'GH_TOKEN="$GHCR_PUBLISH_TOKEN" gh api \\\n'
+    '    "/user/packages/container/cardo%2F$service"'
+)
+if authenticated_package_read not in checker:
+    raise SystemExit(
+        "package API calls do not use the protected token with the authenticated "
+        "current-user endpoint"
+    )
+if "/users/lutzseverino/packages/container/" in checker:
+    raise SystemExit("package API calls retain the public-owner endpoint")
 for forbidden in [
     "packages: write",
     "password: ${{ github.token }}",
