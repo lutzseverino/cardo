@@ -121,9 +121,7 @@ final class ReferenceHttpsOrigin implements AutoCloseable {
   @Override
   public void close() {
     releaseHttpsPort();
-    if (caddy.isRunning()) {
-      caddy.stop();
-    }
+    caddy.stop();
   }
 
   private static ServerSocket reserveHttpsPort() {
