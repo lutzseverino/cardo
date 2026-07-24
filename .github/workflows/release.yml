@@ -33,7 +33,7 @@ jobs:
       github_prerelease: ${{ steps.release-request.outputs.github_prerelease }}
     permissions:
       contents: read
-      security-events: read
+      vulnerability-alerts: read
     runs-on: ubuntu-24.04
     steps:
       - name: Reject non-resumable partial prereleases
@@ -162,7 +162,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api --paginate repos/${{ github.repository }}/dependabot/alerts \
-            --jq '.[]' | jq --slurp . >"$RUNNER_TEMP/dependabot-alerts.json"
+            --jq '.[]' >"$RUNNER_TEMP/dependabot-alerts.jsonl"
+          jq --slurp . "$RUNNER_TEMP/dependabot-alerts.jsonl" \
+            >"$RUNNER_TEMP/dependabot-alerts.json"
           scripts/release/check-vulnerabilities.py \
             "$RUNNER_TEMP/dependabot-alerts.json" release/vulnerability-exceptions.json \
             "$RUNNER_TEMP/candidate/vulnerability-report.json"
