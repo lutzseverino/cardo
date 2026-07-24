@@ -753,6 +753,10 @@ required_publish = [
     "- name: Preserve partial image digest evidence",
     "if: failure() && steps.central.outputs.state == 'published'",
     "path: ${{ runner.temp }}/image-digests.json",
+    "- name: Preserve final release manifest for private verification",
+    "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
+    "name: cardo-${{ inputs.version }}-${{ inputs.revision }}-final-release",
+    "path: ${{ runner.temp }}/candidate/release-manifest.json",
 ]
 for value in required_publish:
     if value not in publish:
@@ -795,6 +799,10 @@ for service in ["identity", "invite", "billing"]:
 required = [
     "    environment: release",
     "      contents: read",
+    "- name: Download final release manifest",
+    "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1",
+    "name: cardo-${{ inputs.version }}-${{ inputs.revision }}-final-release",
+    "path: ${{ runner.temp }}/release",
     "GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}",
     '"$RUNNER_TEMP/release/release-manifest.json" lutzseverino',
 ]
@@ -803,6 +811,8 @@ for value in required:
         raise SystemExit(f"private verification job lacks required external pull-token policy: {value}")
 if "packages:" in job or "GHCR_PULL_TOKEN: ${{ github.token }}" in job:
     raise SystemExit("private verification job grants package access to its automatic token")
+if "gh release download" in job or "GH_TOKEN:" in job:
+    raise SystemExit("private verification job reads the inaccessible draft release")
 java_setup = (
     "uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 "
     "# v5.6.0"
