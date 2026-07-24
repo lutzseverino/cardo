@@ -168,10 +168,10 @@ GHCR.
 Any public runtime exposure is an incident and makes that version
 non-resumable. Deleting and recreating an exposed package is containment and
 namespace recovery only; it cannot erase anonymous availability or rehabilitate
-the version. The workflow rejects both `0.1.0-rc.1` and `0.1.0-rc.2` before
-checkout. The latter is an immutable public-Maven-only partial prerelease: it
-has no private image identities or digest proofs and is non-deployable and
-non-resumable.
+the version. The workflow rejects `0.1.0-rc.1`, `0.1.0-rc.2`, and
+`0.1.0-rc.4` before checkout. The latter two are immutable
+public-Maven-only partial prereleases: they have no private image identities or
+digest proofs and are non-deployable and non-resumable.
 
 `0.1.0-rc.3` is an immutable published prerelease from revision
 `485f1d44f451ef2555ecea4cb3e3d051aad2a65c`. Its Central artifacts, private
@@ -193,6 +193,18 @@ pulls without issuing an anonymous bearer token, and then authenticated with
 the protected scoped credential and pulled those same three exact digests.
 Publication proof does not by itself establish a known-good production
 rollback target.
+
+`0.1.0-rc.4` is an immutable public-Maven-only partial prerelease from revision
+`ee2117daaa94a208f71f2448a1f6ea7ef08b3c48`. Its Central deployment
+`04cbcc65-3659-4c23-b2dc-2b6958b55b8b` and failed publication
+[run 30055546907](https://github.com/lutzseverino/cardo/actions/runs/30055546907)
+are retained incident evidence. The candidate requested `security-events: read`
+instead of `vulnerability-alerts: read`; GitHub denied the Dependabot alerts
+request, and a pipeline without `pipefail` converted that denial into an
+invalid empty vulnerability report. After the workflow fix advanced `main`,
+[run 30058201117](https://github.com/lutzseverino/cardo/actions/runs/30058201117)
+correctly rejected the old revision. No private runtime image was published.
+The version is non-deployable and non-resumable.
 
 Dependabot and dependency review own dependency findings. Open high or critical
 findings block release unless `release/vulnerability-exceptions.json` has an
