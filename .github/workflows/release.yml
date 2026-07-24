@@ -489,6 +489,14 @@ jobs:
               --prerelease="$RELEASE_PRERELEASE" \
               --title "Cardo $RELEASE_VERSION" --notes-file "$notes" "${assets[@]}"
           fi
+      - name: Preserve final release manifest for private verification
+        if: steps.central.outputs.state == 'published'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cardo-${{ inputs.version }}-${{ inputs.revision }}-final-release
+          path: ${{ runner.temp }}/candidate/release-manifest.json
+          if-no-files-found: error
+          retention-days: 7
   verify-private-runtime:
     needs: publish
     if: needs.publish.outputs.central_state == 'published'
@@ -508,12 +516,10 @@ jobs:
           java-version: 21
           cache: maven
       - name: Download final release manifest
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/release"
-          gh release download "v$RELEASE_VERSION" \
-            --pattern release-manifest.json --dir "$RUNNER_TEMP/release"
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cardo-${{ inputs.version }}-${{ inputs.revision }}-final-release
+          path: ${{ runner.temp }}/release
       - name: Prove private image access boundary
         env:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
