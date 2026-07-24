@@ -47,6 +47,10 @@ jobs:
               echo '0.1.0-rc.2 is a non-resumable public-Maven-only partial prerelease; choose a new, unused version.' >&2
               exit 1
               ;;
+            0.1.0-rc.4)
+              echo '0.1.0-rc.4 is a non-resumable public-Maven-only partial prerelease with invalid vulnerability evidence; choose a new, unused version.' >&2
+              exit 1
+              ;;
           esac
       - name: Check out exact revision
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

@@ -172,3 +172,16 @@ pulls without issuing an anonymous bearer token, and then authenticated with
 the protected scoped credential and pulled those same three exact digests. This
 publication proof alone does not make `0.1.0-rc.3` a known-good production
 rollback target.
+
+`0.1.0-rc.4` is also permanent and non-resumable. Central contains its public
+Maven surface from revision
+`ee2117daaa94a208f71f2448a1f6ea7ef08b3c48`, but
+[run 30055546907](https://github.com/lutzseverino/cardo/actions/runs/30055546907)
+received `403` when reading Dependabot alerts and then masked that failure in a
+pipeline, producing invalid vulnerability evidence. Once the fix advanced
+`main`,
+[run 30058201117](https://github.com/lutzseverino/cardo/actions/runs/30058201117)
+correctly rejected the old source revision. It has no private runtime images or
+digest-pull verification. Retain its tag, draft, deployment
+`04cbcc65-3659-4c23-b2dc-2b6958b55b8b`, and failed runs as incident evidence;
+do not dispatch or deploy it.
