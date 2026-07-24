@@ -722,6 +722,22 @@ for version, accepted in [
             f"pre-checkout partial-prerelease guard returned "
             f"{result.returncode} for {version}"
         )
+candidate_permissions = candidate.split("\n    permissions:\n", 1)[1].split(
+    "\n    runs-on:", 1
+)[0]
+if candidate_permissions.strip() != "contents: read\n      vulnerability-alerts: read":
+    raise SystemExit("candidate job lacks least-privilege Dependabot alert access")
+vulnerability_step = candidate.split(
+    "- name: Evaluate known vulnerabilities", 1
+)[1].split("- name: Create candidate release manifest", 1)[0]
+if "| jq --slurp" in vulnerability_step:
+    raise SystemExit("Dependabot alert access can still be masked by a successful pipeline tail")
+for value in [
+    '--jq \'.[]\' >"$RUNNER_TEMP/dependabot-alerts.jsonl"',
+    'jq --slurp . "$RUNNER_TEMP/dependabot-alerts.jsonl"',
+]:
+    if value not in vulnerability_step:
+        raise SystemExit(f"vulnerability evidence capture lacks: {value}")
 preflight = "run: scripts/release/check-ghcr-package-state.sh"
 central_staging = "- name: Rebuild signed Central bundle"
 central_upload = "- name: Upload Central bundle for manual publication"
