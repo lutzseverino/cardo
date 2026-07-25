@@ -8,4 +8,5 @@ public record CurrentAuthentication(
     String authorizationSubject,
     String sessionId,
     OffsetDateTime authorizationExpiresAt,
-    List<EffectiveGrant> grants) {}
+    List<EffectiveGrant> grants,
+    AuthenticationSource source) {}

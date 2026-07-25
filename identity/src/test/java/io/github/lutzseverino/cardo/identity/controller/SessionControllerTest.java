@@ -12,13 +12,16 @@ import static org.mockito.Mockito.when;
 import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.identity.api.model.AuthenticateRequest;
 import io.github.lutzseverino.cardo.identity.api.model.AuthenticatedPrincipalResponse;
+import io.github.lutzseverino.cardo.identity.config.AuthenticationSourceContext;
 import io.github.lutzseverino.cardo.identity.config.SessionProperties;
 import io.github.lutzseverino.cardo.identity.config.SessionProperties.Mode;
 import io.github.lutzseverino.cardo.identity.mapper.AuthenticationTransportMapper;
 import io.github.lutzseverino.cardo.identity.model.AuthenticateInput;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
+import io.github.lutzseverino.cardo.identity.model.AuthenticationSource;
 import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
+import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
 import io.github.lutzseverino.cardo.identity.model.SessionCredential;
 import io.github.lutzseverino.cardo.identity.model.SessionResult;
 import io.github.lutzseverino.cardo.identity.reader.CurrentJwtReader;
@@ -82,6 +85,35 @@ class SessionControllerTest {
     assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
     assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).hasSize(2);
     verify(authentication).refresh("old-refresh");
+  }
+
+  @Test
+  void currentPrincipalPreservesExplicitBearerSourceAndDisablesCaching() {
+    AuthenticationSourceContext.set(request, AuthenticationSource.BEARER);
+    CurrentAuthentication current = mock(CurrentAuthentication.class);
+    AuthenticationResult result = mock(AuthenticationResult.class);
+    AuthenticatedPrincipalResponse body = mock(AuthenticatedPrincipalResponse.class);
+    when(currentJwt.current(AuthenticationSource.BEARER)).thenReturn(current);
+    when(authentication.getCurrent(current)).thenReturn(result);
+    when(mapper.toResponse(result)).thenReturn(body);
+
+    var response = controller.getCurrentPrincipal();
+
+    assertThat(response.getBody()).isSameAs(body);
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
+  }
+
+  @Test
+  void currentPrincipalPreservesBrowserSessionSource() {
+    AuthenticationSourceContext.set(request, AuthenticationSource.BROWSER_SESSION);
+    CurrentAuthentication current = mock(CurrentAuthentication.class);
+    AuthenticationResult result = mock(AuthenticationResult.class);
+    when(currentJwt.current(AuthenticationSource.BROWSER_SESSION)).thenReturn(current);
+    when(authentication.getCurrent(current)).thenReturn(result);
+
+    controller.getCurrentPrincipal();
+
+    verify(currentJwt).current(AuthenticationSource.BROWSER_SESSION);
   }
 
   @Test

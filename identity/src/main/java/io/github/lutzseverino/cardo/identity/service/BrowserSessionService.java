@@ -74,7 +74,7 @@ public class BrowserSessionService {
             });
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = ApiException.class)
   public BrowserSessionRefresh claimRefresh(String refreshCredential) {
     String hash = fingerprint(refreshCredential);
     BrowserSession session =
@@ -86,7 +86,14 @@ public class BrowserSessionService {
                         401, "refresh_credential_invalid", "The refresh credential is not valid."));
     OffsetDateTime now = now();
     assertUsable(session, now);
-    if (!session.refreshLeaseAvailable(now)) {
+    if (session.refreshInProgress()) {
+      if (session.refreshLeaseExpired(now)) {
+        session.revoke(now);
+        throw ApiException.of(
+            401,
+            "session_revoked",
+            "The browser session was revoked after an uncertain refresh outcome.");
+      }
       throw ApiException.conflict(
           "session_refresh_in_progress", "The browser session is already being refreshed.");
     }
@@ -106,6 +113,12 @@ public class BrowserSessionService {
     if (!session.ownsRefreshLease(refresh.leaseToken())) {
       throw ApiException.conflict(
           "session_refresh_superseded", "The browser session refresh was superseded.");
+    }
+    if (session.refreshLeaseExpired(now())) {
+      throw ApiException.of(
+          401,
+          "session_revoked",
+          "The browser session was revoked after its refresh deadline elapsed.");
     }
     if (!session.getProviderSessionId().equals(providerSessionId)
         || !session.getProviderSubject().equals(providerSubject)) {
@@ -131,17 +144,11 @@ public class BrowserSessionService {
   }
 
   @Transactional
-  public void releaseRefresh(BrowserSessionRefresh refresh) {
-    sessions
+  public boolean revokeRefresh(BrowserSessionRefresh refresh) {
+    return sessions
         .findEntityByProviderSessionIdForUpdate(refresh.providerSessionId())
-        .ifPresent(session -> session.releaseRefresh(refresh.leaseToken()));
-  }
-
-  @Transactional
-  public void revokeRefresh(BrowserSessionRefresh refresh) {
-    sessions
-        .findEntityByProviderSessionIdForUpdate(refresh.providerSessionId())
-        .ifPresent(session -> session.revoke(now()));
+        .map(session -> session.revokeRefresh(refresh.leaseToken(), now()))
+        .orElse(false);
   }
 
   @Transactional

@@ -381,6 +381,12 @@ paths:
                 $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: The provider session is already represented by a browser session.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
@@ -705,7 +711,7 @@ components:
       enum: [password, oidc, saml]
     AuthenticatedPrincipalResponse:
       type: object
-      required: [sessionId, user, grants, authenticationMethod, authProviderId, expiresAt, browserSession]
+      required: [sessionId, user, grants, authenticationMethod, authProviderId, expiresAt]
       properties:
         sessionId:
           type: string
@@ -728,7 +734,10 @@ components:
           nullable: true
           format: date-time
         browserSession:
-          $ref: "#/components/schemas/BrowserSessionMetadataResponse"
+          description: Authoritative browser-session metadata. Absent for a valid explicit bearer that was not issued through Cardo's browser-session flow.
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/BrowserSessionMetadataResponse"
     BrowserSessionMetadataResponse:
       type: object
       required: [serverTime, sessionStartedAt, idleExpiresAt, absoluteExpiresAt, refreshable]

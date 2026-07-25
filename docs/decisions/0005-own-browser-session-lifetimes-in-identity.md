@@ -27,17 +27,23 @@ short refresh lease. Raw access and refresh credentials are never persisted.
 Password authentication creates the aggregate only after provider authentication, Identity
 authorization, and local-principal validation succeed. The explicit refresh operation claims the
 session under a row lock, performs provider I/O outside the database transaction, then atomically
-rotates the refresh hash and idle deadline. Only explicit refresh renews idle lifetime; login fixes
+rotates the refresh hash and idle deadline. The fencing lease is never reclaimed: an elapsed or
+ambiguous provider refresh fails closed and requires reauthentication because a rotated credential
+may have been lost. Only explicit refresh renews idle lifetime; login fixes
 the absolute deadline, and current-session and product requests do not change either deadline.
 Concurrent refresh attempts fail with a stable conflict rather than racing refresh-token rotation.
 
-Authentication, current-session, and refresh responses expose `serverTime`, `sessionStartedAt`,
-`idleExpiresAt`, `absoluteExpiresAt`, and `refreshable`. The existing top-level `expiresAt` remains
-the authorization credential expiry. Access and refresh cookie lifetimes are capped by both their
-credential expiry and the earliest browser-session deadline.
+Browser authentication, current-session, and refresh responses expose `serverTime`,
+`sessionStartedAt`, `idleExpiresAt`, `absoluteExpiresAt`, and `refreshable`. A valid explicit bearer
+that did not originate in Cardo's browser flow has no browser-session metadata. The existing
+top-level `expiresAt` remains the authorization credential expiry. Access and refresh cookie
+lifetimes are capped by both their credential expiry and the earliest browser-session deadline.
 
 Identity session endpoints consult the aggregate. Product traffic remains token-based and
 stateless with respect to Identity's database, preserving the product-boundary design in ADR 0003.
+Deploying this decision does not infer records for browser credentials issued by older versions:
+those credentials must authenticate again. Cardo has no production sessions during this rollout,
+so a speculative and unreliable backfill is intentionally omitted.
 Terminal rows are retained for a bounded period and removed by a scheduled workflow.
 
 ## Consequences

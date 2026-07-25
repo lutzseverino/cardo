@@ -362,6 +362,12 @@ public class KeycloakIdentityProvider implements IdentityProvider {
       if (!introspection.active() || introspection.sub() == null || introspection.sub().isBlank()) {
         throw ApiException.of(401, "invalid_session", "The session is no longer valid.");
       }
+      if (introspection.sid() == null || introspection.sid().isBlank()) {
+        throw ApiException.of(
+            502,
+            "identity_provider_session_missing",
+            "Identity provider did not return a session identifier.");
+      }
       return introspection;
     } catch (RestClientResponseException exception) {
       throw sessionProviderException(exception);

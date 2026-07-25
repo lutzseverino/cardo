@@ -9,6 +9,7 @@ import io.github.lutzseverino.cardo.identity.model.AuthenticateInput;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
+import io.github.lutzseverino.cardo.identity.model.AuthenticationSource;
 import io.github.lutzseverino.cardo.identity.model.AuthorizationTokenResult;
 import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
 import io.github.lutzseverino.cardo.identity.model.BrowserSessionRefresh;
@@ -61,13 +62,14 @@ public class AuthenticationService {
       providerSession = identityProvider.refreshSession(refreshToken);
     } catch (ApiException failure) {
       if ("invalid_session".equals(failure.code())) {
-        browserSessions.revokeRefresh(refresh);
-        throw sessionRevoked(failure);
+        ApiException revoked = sessionRevoked(failure);
+        revokeRefreshIfOwned(refresh, revoked);
+        throw revoked;
       }
-      browserSessions.releaseRefresh(refresh);
+      revokeRefreshIfOwned(refresh, failure);
       throw failure;
     } catch (RuntimeException failure) {
-      browserSessions.releaseRefresh(refresh);
+      revokeRefreshIfOwned(refresh, failure);
       throw failure;
     }
 
@@ -82,8 +84,9 @@ public class AuthenticationService {
               providerSession.refreshExpiresAt());
       return result(providerSession, authorization, browserSession);
     } catch (RuntimeException failure) {
-      browserSessions.revokeRefresh(refresh);
-      revokeAfterFailedEstablishment(providerSession.refreshToken(), failure);
+      if (revokeRefreshIfOwned(refresh, failure)) {
+        revokeAfterFailedEstablishment(providerSession.refreshToken(), failure);
+      }
       throw failure;
     }
   }
@@ -92,13 +95,13 @@ public class AuthenticationService {
     AuthenticatedPrincipal principal =
         principal(current.authorizationSubject(), current.sessionId(), AuthenticationMethod.OIDC);
     assertOperational(principal);
-    BrowserSessionMetadata browserSession =
-        browserSessions
-            .current(current.sessionId(), current.authorizationSubject())
-            .orElseThrow(
-                () -> ApiException.of(401, "session_revoked", "The browser session was revoked."));
+    var browserSession =
+        browserSessions.current(current.sessionId(), current.authorizationSubject());
+    if (AuthenticationSource.BROWSER_SESSION.equals(current.source()) && browserSession.isEmpty()) {
+      throw ApiException.of(401, "session_revoked", "The browser session was revoked.");
+    }
     return new AuthenticationResult(
-        principal, current.grants(), current.authorizationExpiresAt(), browserSession);
+        principal, current.grants(), current.authorizationExpiresAt(), browserSession.orElse(null));
   }
 
   public void revoke(@NotBlank String refreshToken) {
@@ -206,6 +209,16 @@ public class AuthenticationService {
         ApiException.of(401, "session_revoked", "The browser session was revoked.");
     failure.addSuppressed(providerFailure);
     return failure;
+  }
+
+  private boolean revokeRefreshIfOwned(
+      BrowserSessionRefresh refresh, RuntimeException originalFailure) {
+    try {
+      return browserSessions.revokeRefresh(refresh);
+    } catch (RuntimeException compensationFailure) {
+      originalFailure.addSuppressed(compensationFailure);
+      return true;
+    }
   }
 
   private record Authorization(

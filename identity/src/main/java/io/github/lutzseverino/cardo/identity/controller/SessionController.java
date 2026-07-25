@@ -4,6 +4,7 @@ import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.identity.api.SessionsApi;
 import io.github.lutzseverino.cardo.identity.api.model.AuthenticateRequest;
 import io.github.lutzseverino.cardo.identity.api.model.AuthenticatedPrincipalResponse;
+import io.github.lutzseverino.cardo.identity.config.AuthenticationSourceContext;
 import io.github.lutzseverino.cardo.identity.mapper.AuthenticationTransportMapper;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
 import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
@@ -41,7 +42,8 @@ public class SessionController implements SessionsApi {
 
   @Override
   public ResponseEntity<AuthenticatedPrincipalResponse> getCurrentPrincipal() {
-    CurrentAuthentication current = currentJwt.current();
+    CurrentAuthentication current =
+        currentJwt.current(AuthenticationSourceContext.require(request));
     AuthenticationResult authentication = authenticationService.getCurrent(current);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())

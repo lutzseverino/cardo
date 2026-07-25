@@ -80,8 +80,12 @@ public class BrowserSession extends AuditedEntity {
     return leaseToken != null && leaseToken.equals(refreshLeaseToken);
   }
 
-  public boolean refreshLeaseAvailable(OffsetDateTime now) {
-    return refreshLeaseUntil == null || !refreshLeaseUntil.isAfter(now);
+  public boolean refreshInProgress() {
+    return refreshLeaseToken != null;
+  }
+
+  public boolean refreshLeaseExpired(OffsetDateTime now) {
+    return refreshLeaseUntil != null && !refreshLeaseUntil.isAfter(now);
   }
 
   public UUID claimRefresh(OffsetDateTime leaseUntil) {
@@ -99,10 +103,12 @@ public class BrowserSession extends AuditedEntity {
     clearRefreshLease();
   }
 
-  public void releaseRefresh(UUID leaseToken) {
-    if (ownsRefreshLease(leaseToken)) {
-      clearRefreshLease();
+  public boolean revokeRefresh(UUID leaseToken, OffsetDateTime now) {
+    if (!ownsRefreshLease(leaseToken)) {
+      return false;
     }
+    revoke(now);
+    return true;
   }
 
   public void revoke(OffsetDateTime now) {

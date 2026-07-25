@@ -95,6 +95,30 @@ class BrowserSessionServiceTest {
   }
 
   @Test
+  void expiredRefreshLeaseFailsClosedInsteadOfBeingReclaimed() {
+    start();
+    service.claimRefresh("refresh-1");
+    clock.advance(Duration.ofSeconds(31));
+
+    assertThatThrownBy(() -> service.claimRefresh("refresh-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class, failure -> assertThat(failure.code()).isEqualTo("session_revoked"));
+    assertThat(stored.get().active()).isFalse();
+  }
+
+  @Test
+  void staleFencingTokenCannotRevokeTheOwnedSession() {
+    start();
+    var owner = service.claimRefresh("refresh-1");
+    var stale =
+        new io.github.lutzseverino.cardo.identity.model.BrowserSessionRefresh(
+            owner.providerSessionId(), owner.providerSubject(), java.util.UUID.randomUUID());
+
+    assertThat(service.revokeRefresh(stale)).isFalse();
+    assertThat(stored.get().active()).isTrue();
+  }
+
+  @Test
   void reportsStableIdleAndAbsoluteExpiryReasons() {
     start();
     clock.advance(Duration.ofMinutes(30));

@@ -16,6 +16,7 @@ import io.github.lutzseverino.cardo.common.api.ApiException;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
+import io.github.lutzseverino.cardo.identity.model.AuthenticationSource;
 import io.github.lutzseverino.cardo.identity.model.AuthorizationTokenResult;
 import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
 import io.github.lutzseverino.cardo.identity.model.BrowserSessionRefresh;
@@ -60,6 +61,7 @@ class AuthenticationServiceTest {
     when(browserSessions.completeRefresh(
             refresh, "session-1", "subject-1", "refresh-token", REFRESH_EXPIRES_AT))
         .thenReturn(browserSession());
+    when(browserSessions.revokeRefresh(refresh)).thenReturn(true);
     when(browserSessions.current("session-1", "subject-1"))
         .thenReturn(Optional.of(browserSession()));
   }
@@ -110,7 +112,7 @@ class AuthenticationServiceTest {
   }
 
   @Test
-  void releasesRefreshLeaseWhenTheProviderIsUnavailable() {
+  void revokesTheLocalSessionWhenTheProviderRefreshOutcomeIsUnavailable() {
     when(identityProvider.refreshSession("old-refresh-token"))
         .thenThrow(ApiException.of(503, "identity_provider_error", "Provider unavailable."));
 
@@ -119,7 +121,7 @@ class AuthenticationServiceTest {
             ApiException.class,
             failure -> assertThat(failure.code()).isEqualTo("identity_provider_error"));
 
-    verify(browserSessions).releaseRefresh(any(BrowserSessionRefresh.class));
+    verify(browserSessions).revokeRefresh(any(BrowserSessionRefresh.class));
   }
 
   @Test
@@ -198,6 +200,20 @@ class AuthenticationServiceTest {
   }
 
   @Test
+  void doesNotRevokeTheRotatedProviderSessionAfterLosingRefreshLeaseOwnership() {
+    when(identityProvider.refreshSession("old-refresh-token")).thenReturn(providerSession());
+    prepareAuthorization(AuthenticationMethod.OIDC, UserStatus.INVITED);
+    when(browserSessions.revokeRefresh(any(BrowserSessionRefresh.class))).thenReturn(false);
+
+    assertThatThrownBy(() -> service.refresh("old-refresh-token"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> assertThat(exception.code()).isEqualTo("user_invited"));
+
+    verify(identityProvider, never()).revokeSession("refresh-token");
+  }
+
+  @Test
   void rejectsAuthorizationTokenForAnotherSubjectAndRevokesTheProviderSession() {
     when(identityProvider.issuePasswordSession("user@example.com", "password-1"))
         .thenReturn(providerSession());
@@ -221,7 +237,12 @@ class AuthenticationServiceTest {
   @Test
   void readsCurrentAuthenticationWithoutIssuingOrRefreshingCredentials() {
     CurrentAuthentication current =
-        new CurrentAuthentication("subject-1", "session-1", ACCESS_EXPIRES_AT, List.of());
+        new CurrentAuthentication(
+            "subject-1",
+            "session-1",
+            ACCESS_EXPIRES_AT,
+            List.of(),
+            AuthenticationSource.BROWSER_SESSION);
     when(principals.findByKeycloakSubject("subject-1", "session-1", AuthenticationMethod.OIDC))
         .thenReturn(Optional.of(principal(UserStatus.ACTIVE, AuthenticationMethod.OIDC)));
 
@@ -234,9 +255,28 @@ class AuthenticationServiceTest {
   }
 
   @Test
+  void preservesExplicitBearerCompatibilityWithoutInventingBrowserSessionMetadata() {
+    CurrentAuthentication current =
+        new CurrentAuthentication(
+            "subject-1", null, ACCESS_EXPIRES_AT, List.of(), AuthenticationSource.BEARER);
+    when(principals.findByKeycloakSubject("subject-1", null, AuthenticationMethod.OIDC))
+        .thenReturn(Optional.of(principal(UserStatus.ACTIVE, AuthenticationMethod.OIDC)));
+    when(browserSessions.current(null, "subject-1")).thenReturn(Optional.empty());
+
+    var result = service.getCurrent(current);
+
+    assertThat(result.browserSession()).isNull();
+  }
+
+  @Test
   void rejectsCurrentSessionForInvitedUser() {
     CurrentAuthentication current =
-        new CurrentAuthentication("subject-1", "session-1", ACCESS_EXPIRES_AT, List.of());
+        new CurrentAuthentication(
+            "subject-1",
+            "session-1",
+            ACCESS_EXPIRES_AT,
+            List.of(),
+            AuthenticationSource.BROWSER_SESSION);
     when(principals.findByKeycloakSubject("subject-1", "session-1", AuthenticationMethod.OIDC))
         .thenReturn(Optional.of(principal(UserStatus.INVITED, AuthenticationMethod.OIDC)));
 

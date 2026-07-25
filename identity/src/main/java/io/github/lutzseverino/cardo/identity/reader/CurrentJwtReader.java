@@ -2,6 +2,7 @@ package io.github.lutzseverino.cardo.identity.reader;
 
 import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrantAuthorityReader;
 import io.github.lutzseverino.cardo.common.api.ApiException;
+import io.github.lutzseverino.cardo.identity.model.AuthenticationSource;
 import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -17,13 +18,14 @@ public class CurrentJwtReader {
 
   private final EffectiveGrantAuthorityReader grants;
 
-  public CurrentAuthentication current() {
+  public CurrentAuthentication current(AuthenticationSource source) {
     JwtAuthenticationToken jwt = currentToken();
     return new CurrentAuthentication(
         jwt.getName(),
         jwt.getToken().getClaimAsString("sid"),
         expiresAt(jwt),
-        grants.read(jwt.getAuthorities()));
+        grants.read(jwt.getAuthorities()),
+        source);
   }
 
   public String authorizationSubject() {

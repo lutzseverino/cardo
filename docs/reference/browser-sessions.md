@@ -88,7 +88,13 @@ object:
 The existing top-level `expiresAt` remains the expiry of the current Identity authorization
 credential. Login sets all browser-session timestamps. `GET /identity/sessions/current`, product
 requests, and other normal traffic do not renew idle lifetime. Session responses use
-`Cache-Control: no-store`.
+`Cache-Control: no-store`. A valid explicit bearer that was not issued through Cardo's
+browser-session flow remains supported by the current-principal endpoint and omits
+`browserSession`; the API never invents idle or absolute deadlines for a non-browser credential.
+
+A refresh lease is a fencing deadline, not a recovery timeout. Identity never reclaims an elapsed
+lease because the earlier provider request may still rotate its credential. An elapsed lease or
+ambiguous provider refresh outcome revokes the local browser session and requires reauthentication.
 
 Identity returns stable session failure codes: `session_idle_expired`,
 `session_absolute_expired`, `session_revoked`, `refresh_credential_required`,

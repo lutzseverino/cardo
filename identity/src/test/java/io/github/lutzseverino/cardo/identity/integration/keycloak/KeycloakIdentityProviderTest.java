@@ -293,6 +293,46 @@ class KeycloakIdentityProviderTest {
   }
 
   @Test
+  void rejectsAndRevokesAProviderSessionWithoutASessionIdentifier() {
+    RestClient.Builder rest = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
+    KeycloakIdentityProvider provider = provider(rest);
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/token"))
+        .andRespond(
+            withSuccess(
+                """
+                {"access_token":"provider-access","expires_in":300,
+                 "refresh_token":"provider-refresh","refresh_expires_in":3600}
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(
+            requestTo(
+                "https://keycloak.example/realms/cardo/protocol/openid-connect/token/introspect"))
+        .andRespond(
+            withSuccess(
+                """
+                {"active":true,"sub":"subject-1"}
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(requestTo("https://keycloak.example/realms/cardo/protocol/openid-connect/revoke"))
+        .andExpect(content().string(containsString("token=provider-refresh")))
+        .andRespond(withSuccess());
+
+    assertThatThrownBy(() -> provider.issuePasswordSession("user@example.com", "password-1"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> {
+              assertThat(failure.status()).isEqualTo(502);
+              assertThat(failure.code()).isEqualTo("identity_provider_session_missing");
+            });
+
+    server.verify();
+  }
+
+  @Test
   void revokesNewlyIssuedSessionWhenIntrospectionFails() {
     RestClient.Builder rest = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(rest).build();
