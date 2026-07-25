@@ -15,5 +15,4 @@ public record AuthenticatedPrincipal(
     OffsetDateTime userCreatedAt,
     OffsetDateTime userUpdatedAt,
     AuthenticationMethod authenticationMethod,
-    UUID authProviderId,
-    OffsetDateTime expiresAt) {}
+    UUID authProviderId) {}

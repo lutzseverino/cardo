@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.identity.config;
 
+import io.github.lutzseverino.cardo.identity.model.AuthenticationSource;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpMethod;
@@ -23,7 +24,11 @@ final class IdentitySessionBearerTokenResolver implements BearerTokenResolver {
       return null;
     }
     String token = authorizationHeader.resolve(request);
-    if (token != null || !acceptsAccessCookie(request)) {
+    if (token != null) {
+      AuthenticationSourceContext.set(request, AuthenticationSource.BEARER);
+      return token;
+    }
+    if (!acceptsAccessCookie(request)) {
       return token;
     }
     Cookie[] cookies = request.getCookies();
@@ -34,6 +39,7 @@ final class IdentitySessionBearerTokenResolver implements BearerTokenResolver {
       if (cookieName.equals(cookie.getName())
           && cookie.getValue() != null
           && !cookie.getValue().isBlank()) {
+        AuthenticationSourceContext.set(request, AuthenticationSource.BROWSER_SESSION);
         return cookie.getValue();
       }
     }

@@ -1,6 +1,7 @@
 package io.github.lutzseverino.cardo.identity.controller;
 
 import io.github.lutzseverino.cardo.identity.config.SessionProperties;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
 import io.github.lutzseverino.cardo.identity.model.SessionCredential;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,7 +9,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
@@ -21,27 +21,25 @@ class SessionCookiePolicy {
   private final SessionProperties properties;
   private final Clock clock;
 
-  @Autowired
-  SessionCookiePolicy(SessionProperties properties) {
-    this(properties, Clock.systemUTC());
-  }
-
   SessionCookiePolicy(SessionProperties properties, Clock clock) {
     this.properties = properties;
     this.clock = clock;
   }
 
-  ResponseCookie access(SessionCredential credential) {
+  ResponseCookie access(SessionCredential credential, BrowserSessionMetadata browserSession) {
     return create(
-        properties.accessCookieName(), ACCESS_PATH, credential.token(), credential.expiresAt());
+        properties.accessCookieName(),
+        ACCESS_PATH,
+        credential.token(),
+        earliest(credential.expiresAt(), browserSession.expiresAt()));
   }
 
-  ResponseCookie refresh(SessionCredential credential) {
+  ResponseCookie refresh(SessionCredential credential, BrowserSessionMetadata browserSession) {
     return create(
         properties.refreshCookieName(),
         properties.refreshCookiePath(),
         credential.token(),
-        credential.expiresAt());
+        earliest(credential.expiresAt(), browserSession.expiresAt()));
   }
 
   ResponseCookie expireAccess() {
@@ -88,6 +86,11 @@ class SessionCookiePolicy {
 
   private ResponseCookie expire(String name, String path) {
     return base(name, path, "").maxAge(Duration.ZERO).build();
+  }
+
+  private java.time.OffsetDateTime earliest(
+      java.time.OffsetDateTime credentialExpiry, java.time.OffsetDateTime sessionExpiry) {
+    return credentialExpiry.isBefore(sessionExpiry) ? credentialExpiry : sessionExpiry;
   }
 
   private ResponseCookie.ResponseCookieBuilder base(String name, String path, String value) {

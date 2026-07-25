@@ -40,12 +40,7 @@ public interface UserTransportMapper {
   @Mapping(target = "createdAt", source = "userCreatedAt")
   @Mapping(target = "updatedAt", source = "userUpdatedAt")
   @BeanMapping(
-      ignoreUnmappedSourceProperties = {
-        "sessionId",
-        "authenticationMethod",
-        "authProviderId",
-        "expiresAt"
-      })
+      ignoreUnmappedSourceProperties = {"sessionId", "authenticationMethod", "authProviderId"})
   UserResponse toResponse(AuthenticatedPrincipal principal);
 
   List<UserResponse> toResponses(List<UserResult> results);

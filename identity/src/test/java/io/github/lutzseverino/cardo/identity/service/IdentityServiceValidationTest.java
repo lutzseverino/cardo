@@ -130,9 +130,19 @@ class IdentityServiceValidationTest {
         IdentityProvider identityProvider,
         AuthenticatedPrincipalReader principals,
         RequestingPartyTokenClient requestingPartyTokens,
-        AuthorizationTokenReader authorizationTokens) {
+        AuthorizationTokenReader authorizationTokens,
+        BrowserSessionService browserSessions) {
       return new AuthenticationService(
-          identityProvider, principals, requestingPartyTokens, authorizationTokens);
+          identityProvider,
+          principals,
+          requestingPartyTokens,
+          authorizationTokens,
+          browserSessions);
+    }
+
+    @Bean
+    BrowserSessionService browserSessions() {
+      return mock(BrowserSessionService.class);
     }
   }
 }

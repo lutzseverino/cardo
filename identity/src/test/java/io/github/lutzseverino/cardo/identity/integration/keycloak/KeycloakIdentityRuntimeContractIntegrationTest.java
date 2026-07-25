@@ -27,10 +27,12 @@ import io.github.lutzseverino.cardo.authorization.resource.AuthorizationResource
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
 import io.github.lutzseverino.cardo.identity.model.AuthorizationTokenResult;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
 import io.github.lutzseverino.cardo.identity.reader.AuthenticatedPrincipalReader;
 import io.github.lutzseverino.cardo.identity.service.AuthenticationService;
+import io.github.lutzseverino.cardo.identity.service.BrowserSessionService;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
@@ -209,8 +211,7 @@ class KeycloakIdentityRuntimeContractIntegrationTest {
     when(principals.findByKeycloakSubject(
             org.mockito.ArgumentMatchers.eq(subject),
             org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.eq(AuthenticationMethod.PASSWORD),
-            org.mockito.ArgumentMatchers.any(OffsetDateTime.class)))
+            org.mockito.ArgumentMatchers.eq(AuthenticationMethod.PASSWORD)))
         .thenAnswer(
             invocation ->
                 Optional.of(
@@ -226,8 +227,19 @@ class KeycloakIdentityRuntimeContractIntegrationTest {
                         OffsetDateTime.now().minusDays(1),
                         OffsetDateTime.now(),
                         AuthenticationMethod.PASSWORD,
-                        UUID.randomUUID(),
-                        invocation.getArgument(3))));
+                        UUID.randomUUID())));
+    BrowserSessionService browserSessions = mock(BrowserSessionService.class);
+    when(browserSessions.start(
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.eq(subject),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(OffsetDateTime.class)))
+        .thenAnswer(
+            invocation -> {
+              OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+              return new BrowserSessionMetadata(
+                  now, now, now.plusMinutes(30), now.plusHours(8), true);
+            });
     List<Map<String, Object>> capturedPermissions = new ArrayList<>();
     var authorizationTokens =
         (io.github.lutzseverino.cardo.identity.reader.AuthorizationTokenReader)
@@ -260,7 +272,8 @@ class KeycloakIdentityRuntimeContractIntegrationTest {
                 keycloak.properties(false).baseUrl(),
                 keycloak.properties(false).realm(),
                 rest.clone()),
-            authorizationTokens);
+            authorizationTokens,
+            browserSessions);
 
     var session =
         authentication.authenticate("session-user@example.test", "S3cure-cardo-password!");

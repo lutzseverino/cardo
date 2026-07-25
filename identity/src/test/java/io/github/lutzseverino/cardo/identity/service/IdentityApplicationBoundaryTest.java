@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.lutzseverino.cardo.identity.config.IdentityRuntimeContractInitializer;
 import io.github.lutzseverino.cardo.identity.provider.IdentityRuntimeContract;
+import io.github.lutzseverino.cardo.identity.workflow.PurgeBrowserSessionsWorkflow;
 import io.github.lutzseverino.cardo.identity.workflow.ReconcileIdentityOperationsWorkflow;
 import io.github.lutzseverino.cardo.identity.workflow.ReconcileIdentityProviderMutationsWorkflow;
 import jakarta.persistence.Entity;
@@ -24,9 +25,11 @@ class IdentityApplicationBoundaryTest {
   void serviceContractsExcludeTransportPersistenceEntitiesAndProviderTypes() {
     assertApplicationBoundary(
         AuthenticationService.class,
+        BrowserSessionService.class,
         IdentityOperationService.class,
         IdentityProviderMutationService.class,
         UserService.class,
+        PurgeBrowserSessionsWorkflow.class,
         ReconcileIdentityOperationsWorkflow.class,
         ReconcileIdentityProviderMutationsWorkflow.class);
   }
@@ -36,6 +39,7 @@ class IdentityApplicationBoundaryTest {
     assertThat(scan(Service.class, "io.github.lutzseverino.cardo.identity.service"))
         .containsExactlyInAnyOrder(
             AuthenticationService.class,
+            BrowserSessionService.class,
             IdentityOperationService.class,
             IdentityProviderMutationService.class,
             UserService.class);
@@ -44,6 +48,7 @@ class IdentityApplicationBoundaryTest {
   @Test
   void servicesDoNotDependOnWorkflows() {
     assertNoWorkflowDependency(AuthenticationService.class);
+    assertNoWorkflowDependency(BrowserSessionService.class);
     assertNoWorkflowDependency(IdentityOperationService.class);
     assertNoWorkflowDependency(IdentityProviderMutationService.class);
     assertNoWorkflowDependency(UserService.class);

@@ -2,6 +2,7 @@ package io.github.lutzseverino.cardo.identity.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.lutzseverino.cardo.identity.model.AuthenticationSource;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -19,6 +20,7 @@ class IdentitySessionBearerTokenResolverTest {
     request.setCookies(new Cookie("cardo.session", "cookie-token"));
 
     assertThat(resolver.resolve(request)).isEqualTo("header-token");
+    assertThat(AuthenticationSourceContext.require(request)).isEqualTo(AuthenticationSource.BEARER);
   }
 
   @Test
@@ -27,6 +29,19 @@ class IdentitySessionBearerTokenResolverTest {
     request.setCookies(new Cookie("cardo.session", "cookie-token"));
 
     assertThat(resolver.resolve(request)).isEqualTo("cookie-token");
+    assertThat(AuthenticationSourceContext.require(request))
+        .isEqualTo(AuthenticationSource.BROWSER_SESSION);
+  }
+
+  @Test
+  void blankAuthorizationHeaderDoesNotReclassifyAnAccessCookieAsABearer() {
+    MockHttpServletRequest request = request("GET", "/api/v1/identity/sessions/current");
+    request.addHeader(HttpHeaders.AUTHORIZATION, "");
+    request.setCookies(new Cookie("cardo.session", "cookie-token"));
+
+    assertThat(resolver.resolve(request)).isEqualTo("cookie-token");
+    assertThat(AuthenticationSourceContext.require(request))
+        .isEqualTo(AuthenticationSource.BROWSER_SESSION);
   }
 
   @Test

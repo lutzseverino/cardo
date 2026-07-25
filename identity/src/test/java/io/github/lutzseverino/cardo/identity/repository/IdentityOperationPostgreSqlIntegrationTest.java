@@ -132,7 +132,7 @@ class IdentityOperationPostgreSqlIntegrationTest {
             jdbc.queryForList(
                 "select version from flyway_schema_history_identity where success order by installed_rank",
                 String.class))
-        .containsExactly("1", "2", "3", "4", "5", "6");
+        .containsExactly("1", "2", "3", "4", "5", "6", "7");
     assertThat(operations.findAll())
         .extracting(IdentityOperation::getStatus)
         .containsExactlyInAnyOrder(

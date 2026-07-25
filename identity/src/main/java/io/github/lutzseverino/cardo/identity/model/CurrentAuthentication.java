@@ -7,5 +7,6 @@ import java.util.List;
 public record CurrentAuthentication(
     String authorizationSubject,
     String sessionId,
-    OffsetDateTime expiresAt,
-    List<EffectiveGrant> grants) {}
+    OffsetDateTime authorizationExpiresAt,
+    List<EffectiveGrant> grants,
+    AuthenticationSource source) {}

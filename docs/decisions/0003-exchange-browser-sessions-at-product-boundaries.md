@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. Browser-session lifetime authority is refined by
+[ADR 0005](0005-own-browser-session-lifetimes-in-identity.md).
 
 ## Context
 
@@ -71,8 +72,8 @@ Production cookies use these invariants:
 
 Local HTTP development uses explicit non-prefixed names and disables `Secure`. Production startup
 must reject that local-only policy. Cookie lifetime never exceeds the corresponding token expiry;
-the provider session remains the source of truth for idle and absolute lifetime. The CSRF cookie is
-a browser-session cookie with no `Max-Age` or `Expires` attribute.
+Identity is the source of truth for Cardo's idle and absolute browser-session lifetime under ADR
+0005. The CSRF cookie is a browser-session cookie with no `Max-Age` or `Expires` attribute.
 
 Cardo uses a cookie-to-header CSRF token for browser requests. Public
 `GET /identity/sessions/csrf` materializes the CSRF cookie, and clients echo it as
@@ -134,6 +135,7 @@ requests; products do not replace the chain or recreate Cardo-owned beans.
   route would receive a long-lived credential that only Identity should handle.
 - Use parent-domain cookies for product subdomains. Rejected because sibling applications would
   share ambient credentials and weaken cookie isolation.
-- Introduce an opaque Cardo session store immediately. Rejected because provider sessions and
-  path-scoped refresh credentials meet the current requirement without adding a new durable secret
-  store and synchronous Identity lookup to every product request.
+- Introduce an opaque Cardo session store on every product request. Rejected because it would make
+  Identity availability and a synchronous database lookup part of every product authorization
+  path. ADR 0005 instead persists only hashed refresh-token correlation and authoritative lifetime
+  metadata for Identity session endpoints; product requests remain token-based.

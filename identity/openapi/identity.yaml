@@ -355,8 +355,13 @@ paths:
               $ref: "#/components/schemas/AuthenticateRequest"
       responses:
         "201":
-          description: Session created. Sets HTTP-only Identity access and refresh cookies.
+          description: Session created. Sets HTTP-only Identity access and refresh cookies capped by the browser-session deadline.
           headers:
+            Cache-Control:
+              description: Prevents browser-session metadata and credentials from being cached.
+              schema:
+                type: string
+                example: no-store
             Set-Cookie:
               schema:
                 type: string
@@ -376,6 +381,12 @@ paths:
                 $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: The provider session is already represented by a browser session.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
@@ -409,6 +420,12 @@ paths:
       responses:
         "200":
           description: Current authenticated principal.
+          headers:
+            Cache-Control:
+              description: Prevents browser-session metadata from being cached.
+              schema:
+                type: string
+                example: no-store
           content:
             application/json:
               schema:
@@ -447,7 +464,7 @@ paths:
     post:
       tags: [Sessions]
       operationId: refreshCurrentSession
-      summary: Refresh the provider session from its HTTP-only refresh cookie.
+      summary: Explicitly refresh the browser session and renew its idle deadline.
       security:
         - csrfCookie: []
           csrfHeader: []
@@ -455,6 +472,11 @@ paths:
         "200":
           description: Session refreshed. Replaces the HTTP-only access and refresh cookies.
           headers:
+            Cache-Control:
+              description: Prevents browser-session metadata and credentials from being cached.
+              schema:
+                type: string
+                example: no-store
             Set-Cookie:
               schema:
                 type: string
@@ -472,6 +494,12 @@ paths:
                 $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: Another refresh owns or superseded this browser-session refresh.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/openapi/errors.yaml#/components/schemas/ApiError"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
@@ -701,9 +729,38 @@ components:
           nullable: true
           format: uuid
         expiresAt:
+          description: Expiry of the Identity authorization credential, not the browser session.
           type: string
           nullable: true
           format: date-time
+        browserSession:
+          description: Authoritative browser-session metadata. Absent for a valid explicit bearer that was not issued through Cardo's browser-session flow.
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/BrowserSessionMetadataResponse"
+    BrowserSessionMetadataResponse:
+      type: object
+      required: [serverTime, sessionStartedAt, idleExpiresAt, absoluteExpiresAt, refreshable]
+      properties:
+        serverTime:
+          description: Identity server time used to interpret the session deadlines without trusting the browser clock.
+          type: string
+          format: date-time
+        sessionStartedAt:
+          description: Start of the browser session. Explicit refresh never changes this value.
+          type: string
+          format: date-time
+        idleExpiresAt:
+          description: Sliding deadline renewed only by the explicit refresh operation.
+          type: string
+          format: date-time
+        absoluteExpiresAt:
+          description: Fixed browser-session deadline that refresh cannot extend.
+          type: string
+          format: date-time
+        refreshable:
+          description: Whether Identity considers this browser session eligible for explicit refresh at serverTime.
+          type: boolean
     ResourceGrantResponse:
       type: object
       required: [resource, actions]

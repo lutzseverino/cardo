@@ -66,6 +66,12 @@ cardo:
       csrf-cookie-name: cardo.csrf
       refresh-cookie-path: ${cardo.api.base-path}/identity/sessions/current
       secure: false
+    browser-session:
+      idle-timeout: 30m
+      absolute-timeout: 8h
+      refresh-lease: 30s
+      retention: 7d
+      cleanup-delay: 1h
 ```
 
 Production requires explicit secure policy:
@@ -84,7 +90,9 @@ cardo:
 
 Set the refresh path to the browser-visible current-session path when a gateway rewrites the public
 prefix. Identity rejects production startup with insecure names or attributes. Cookie `Max-Age`
-comes from the corresponding credential expiry rather than configuration. The Identity RPT audience
+is capped by both the corresponding credential expiry and Identity's authoritative idle or
+absolute browser-session deadline. Only explicit refresh renews idle lifetime; current-session and
+product requests remain non-renewing and product traffic does not query the session table. The Identity RPT audience
 is the fixed resource catalog name `identity`; `cardo-identity` remains the separate confidential
 OAuth client. Browsers bootstrap the readable CSRF cookie with
 `GET /api/v1/identity/sessions/csrf` and echo it unchanged in `X-CSRF-TOKEN` for login, refresh, and

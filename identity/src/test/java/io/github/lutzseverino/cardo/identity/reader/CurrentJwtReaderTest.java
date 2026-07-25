@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrantAuthorityReader;
 import io.github.lutzseverino.cardo.authorization.grant.GrantedResource;
+import io.github.lutzseverino.cardo.identity.model.AuthenticationSource;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -39,11 +40,15 @@ class CurrentJwtReaderTest {
                 List.of(new SimpleGrantedAuthority("clinic:clinic:tenant-1:read")),
                 "subject-1"));
 
-    var current = new CurrentJwtReader(new EffectiveGrantAuthorityReader()).current();
+    var current =
+        new CurrentJwtReader(new EffectiveGrantAuthorityReader())
+            .current(AuthenticationSource.BROWSER_SESSION);
 
     assertThat(current.authorizationSubject()).isEqualTo("subject-1");
     assertThat(current.sessionId()).isEqualTo("session-1");
-    assertThat(current.expiresAt()).isEqualTo(OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
+    assertThat(current.authorizationExpiresAt())
+        .isEqualTo(OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
+    assertThat(current.source()).isEqualTo(AuthenticationSource.BROWSER_SESSION);
     assertThat(current.grants())
         .singleElement()
         .satisfies(
