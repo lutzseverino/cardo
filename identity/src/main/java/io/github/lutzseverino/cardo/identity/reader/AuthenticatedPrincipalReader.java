@@ -21,10 +21,7 @@ public class AuthenticatedPrincipalReader {
   }
 
   public Optional<AuthenticatedPrincipal> findByKeycloakSubject(
-      String keycloakSubject,
-      String sessionId,
-      AuthenticationMethod authenticationMethod,
-      OffsetDateTime expiresAt) {
+      String keycloakSubject, String sessionId, AuthenticationMethod authenticationMethod) {
     return jdbc
         .query(
             """
@@ -41,17 +38,14 @@ public class AuthenticatedPrincipalReader {
             from users u
             where u.keycloak_subject = ?
             """,
-            (rs, rowNum) -> map(rs, sessionId, authenticationMethod, expiresAt),
+            (rs, rowNum) -> map(rs, sessionId, authenticationMethod),
             keycloakSubject)
         .stream()
         .findFirst();
   }
 
   private AuthenticatedPrincipal map(
-      ResultSet rs,
-      String sessionId,
-      AuthenticationMethod authenticationMethod,
-      OffsetDateTime expiresAt)
+      ResultSet rs, String sessionId, AuthenticationMethod authenticationMethod)
       throws SQLException {
     return new AuthenticatedPrincipal(
         sessionId,
@@ -65,7 +59,6 @@ public class AuthenticatedPrincipalReader {
         rs.getObject("user_created_at", OffsetDateTime.class),
         rs.getObject("user_updated_at", OffsetDateTime.class),
         authenticationMethod,
-        null,
-        expiresAt);
+        null);
   }
 }

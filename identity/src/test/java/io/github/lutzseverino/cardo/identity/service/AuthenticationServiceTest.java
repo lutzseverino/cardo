@@ -2,6 +2,7 @@ package io.github.lutzseverino.cardo.identity.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,8 @@ import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
 import io.github.lutzseverino.cardo.identity.model.AuthorizationTokenResult;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionRefresh;
 import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
 import io.github.lutzseverino.cardo.identity.model.UserStatus;
 import io.github.lutzseverino.cardo.identity.provider.IdentityProvider;
@@ -39,9 +42,27 @@ class AuthenticationServiceTest {
   private final RequestingPartyTokenClient requestingPartyTokens =
       mock(RequestingPartyTokenClient.class);
   private final AuthorizationTokenReader authorizationTokens = mock(AuthorizationTokenReader.class);
+  private final BrowserSessionService browserSessions = mock(BrowserSessionService.class);
   private final AuthenticationService service =
       new AuthenticationService(
-          identityProvider, principals, requestingPartyTokens, authorizationTokens);
+          identityProvider,
+          principals,
+          requestingPartyTokens,
+          authorizationTokens,
+          browserSessions);
+
+  AuthenticationServiceTest() {
+    when(browserSessions.start("session-1", "subject-1", "refresh-token", REFRESH_EXPIRES_AT))
+        .thenReturn(browserSession());
+    BrowserSessionRefresh refresh =
+        new BrowserSessionRefresh("session-1", "subject-1", UUID.randomUUID());
+    when(browserSessions.claimRefresh("old-refresh-token")).thenReturn(refresh);
+    when(browserSessions.completeRefresh(
+            refresh, "session-1", "subject-1", "refresh-token", REFRESH_EXPIRES_AT))
+        .thenReturn(browserSession());
+    when(browserSessions.current("session-1", "subject-1"))
+        .thenReturn(Optional.of(browserSession()));
+  }
 
   @Test
   void establishesPasswordSessionFromProviderRefreshAndIdentityAudienceCredentials() {
@@ -74,6 +95,31 @@ class AuthenticationServiceTest {
     assertThat(result.refreshCredential().token()).isEqualTo("refresh-token");
     assertThat(result.authentication().principal().authenticationMethod())
         .isEqualTo(AuthenticationMethod.OIDC);
+  }
+
+  @Test
+  void classifiesProviderRejectionAsARevokedBrowserSession() {
+    when(identityProvider.refreshSession("old-refresh-token"))
+        .thenThrow(ApiException.of(401, "invalid_session", "Provider session expired."));
+
+    assertThatThrownBy(() -> service.refresh("old-refresh-token"))
+        .isInstanceOfSatisfying(
+            ApiException.class, failure -> assertThat(failure.code()).isEqualTo("session_revoked"));
+
+    verify(browserSessions).revokeRefresh(any(BrowserSessionRefresh.class));
+  }
+
+  @Test
+  void releasesRefreshLeaseWhenTheProviderIsUnavailable() {
+    when(identityProvider.refreshSession("old-refresh-token"))
+        .thenThrow(ApiException.of(503, "identity_provider_error", "Provider unavailable."));
+
+    assertThatThrownBy(() -> service.refresh("old-refresh-token"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> assertThat(failure.code()).isEqualTo("identity_provider_error"));
+
+    verify(browserSessions).releaseRefresh(any(BrowserSessionRefresh.class));
   }
 
   @Test
@@ -176,13 +222,14 @@ class AuthenticationServiceTest {
   void readsCurrentAuthenticationWithoutIssuingOrRefreshingCredentials() {
     CurrentAuthentication current =
         new CurrentAuthentication("subject-1", "session-1", ACCESS_EXPIRES_AT, List.of());
-    when(principals.findByKeycloakSubject(
-            "subject-1", "session-1", AuthenticationMethod.OIDC, ACCESS_EXPIRES_AT))
+    when(principals.findByKeycloakSubject("subject-1", "session-1", AuthenticationMethod.OIDC))
         .thenReturn(Optional.of(principal(UserStatus.ACTIVE, AuthenticationMethod.OIDC)));
 
     var result = service.getCurrent(current);
 
     assertThat(result.principal().keycloakSubject()).isEqualTo("subject-1");
+    assertThat(result.authorizationExpiresAt()).isEqualTo(ACCESS_EXPIRES_AT);
+    assertThat(result.browserSession()).isEqualTo(browserSession());
     verify(identityProvider, never()).refreshSession("identity-rpt");
   }
 
@@ -190,8 +237,7 @@ class AuthenticationServiceTest {
   void rejectsCurrentSessionForInvitedUser() {
     CurrentAuthentication current =
         new CurrentAuthentication("subject-1", "session-1", ACCESS_EXPIRES_AT, List.of());
-    when(principals.findByKeycloakSubject(
-            "subject-1", "session-1", AuthenticationMethod.OIDC, ACCESS_EXPIRES_AT))
+    when(principals.findByKeycloakSubject("subject-1", "session-1", AuthenticationMethod.OIDC))
         .thenReturn(Optional.of(principal(UserStatus.INVITED, AuthenticationMethod.OIDC)));
 
     assertThatThrownBy(() -> service.getCurrent(current))
@@ -204,6 +250,7 @@ class AuthenticationServiceTest {
   void revokesWithTheRefreshCredential() {
     service.revoke("refresh-token");
 
+    verify(browserSessions).revoke("refresh-token");
     verify(identityProvider).revokeSession("refresh-token");
   }
 
@@ -212,7 +259,7 @@ class AuthenticationServiceTest {
         .thenReturn(new RequestingPartyToken("identity-rpt"));
     when(authorizationTokens.read("identity-rpt"))
         .thenReturn(new AuthorizationTokenResult("subject-1", ACCESS_EXPIRES_AT, List.of()));
-    when(principals.findByKeycloakSubject("subject-1", "session-1", method, ACCESS_EXPIRES_AT))
+    when(principals.findByKeycloakSubject("subject-1", "session-1", method))
         .thenReturn(Optional.of(principal(status, method)));
   }
 
@@ -243,7 +290,15 @@ class AuthenticationServiceTest {
         OffsetDateTime.now(),
         OffsetDateTime.now(),
         method,
-        null,
-        ACCESS_EXPIRES_AT);
+        null);
+  }
+
+  private BrowserSessionMetadata browserSession() {
+    return new BrowserSessionMetadata(
+        ACCESS_EXPIRES_AT.minusMinutes(5),
+        ACCESS_EXPIRES_AT.minusMinutes(5),
+        REFRESH_EXPIRES_AT.minusHours(7),
+        REFRESH_EXPIRES_AT,
+        true);
   }
 }

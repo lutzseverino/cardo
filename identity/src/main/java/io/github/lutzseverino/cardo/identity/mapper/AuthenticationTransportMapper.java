@@ -29,7 +29,7 @@ public interface AuthenticationTransportMapper {
   @Mapping(target = "user", source = "principal")
   @Mapping(target = "authenticationMethod", source = "principal.authenticationMethod")
   @Mapping(target = "authProviderId", source = "principal.authProviderId")
-  @Mapping(target = "expiresAt", source = "principal.expiresAt")
+  @Mapping(target = "expiresAt", source = "authorizationExpiresAt")
   AuthenticatedPrincipalResponse toResponse(AuthenticationResult result);
 
   ResourceGrantResponse toResponse(EffectiveGrant grant);

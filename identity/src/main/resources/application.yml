@@ -47,6 +47,12 @@ cardo:
       csrf-cookie-name: ${IDENTITY_CSRF_COOKIE_NAME:cardo.csrf}
       refresh-cookie-path: ${IDENTITY_REFRESH_COOKIE_PATH:${cardo.api.base-path}/identity/sessions/current}
       secure: ${IDENTITY_SESSION_SECURE:false}
+    browser-session:
+      idle-timeout: ${IDENTITY_BROWSER_SESSION_IDLE_TIMEOUT:30m}
+      absolute-timeout: ${IDENTITY_BROWSER_SESSION_ABSOLUTE_TIMEOUT:8h}
+      refresh-lease: ${IDENTITY_BROWSER_SESSION_REFRESH_LEASE:30s}
+      retention: ${IDENTITY_BROWSER_SESSION_RETENTION:7d}
+      cleanup-delay: ${IDENTITY_BROWSER_SESSION_CLEANUP_DELAY:1h}
     keycloak:
       base-url: ${KEYCLOAK_BASE_URL:http://localhost:8080}
       realm: ${KEYCLOAK_REALM:cardo}

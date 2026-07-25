@@ -18,6 +18,7 @@ import io.github.lutzseverino.cardo.identity.mapper.AuthenticationTransportMappe
 import io.github.lutzseverino.cardo.identity.model.AuthenticateInput;
 import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
 import io.github.lutzseverino.cardo.identity.model.SessionCredential;
 import io.github.lutzseverino.cardo.identity.model.SessionResult;
 import io.github.lutzseverino.cardo.identity.reader.CurrentJwtReader;
@@ -60,6 +61,7 @@ class SessionControllerTest {
 
     assertThat(response.getStatusCode().value()).isEqualTo(201);
     assertThat(response.getBody()).isSameAs(body);
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
     assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
         .hasSize(2)
         .anySatisfy(cookie -> assertThat(cookie).startsWith("cardo.session=identity-rpt"))
@@ -77,8 +79,17 @@ class SessionControllerTest {
     var response = controller.refreshCurrentSession();
 
     assertThat(response.getStatusCode().value()).isEqualTo(200);
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
     assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).hasSize(2);
     verify(authentication).refresh("old-refresh");
+  }
+
+  @Test
+  void missingRefreshCredentialHasAStableReason() {
+    assertThatThrownBy(controller::refreshCurrentSession)
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            failure -> assertThat(failure.code()).isEqualTo("refresh_credential_required"));
   }
 
   @Test
@@ -123,8 +134,13 @@ class SessionControllerTest {
   }
 
   private SessionResult session() {
+    OffsetDateTime now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    BrowserSessionMetadata browserSession =
+        new BrowserSessionMetadata(
+            now, now.minusMinutes(1), now.plusHours(1), now.plusHours(8), true);
     AuthenticationResult result =
-        new AuthenticationResult(mock(AuthenticatedPrincipal.class), List.of());
+        new AuthenticationResult(
+            mock(AuthenticatedPrincipal.class), List.of(), now.plusMinutes(5), browserSession);
     return new SessionResult(
         result, credential("identity-rpt", 300), credential("rotated-refresh", 3600));
   }

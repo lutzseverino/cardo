@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.lutzseverino.cardo.identity.config.SessionProperties;
 import io.github.lutzseverino.cardo.identity.config.SessionProperties.Mode;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
 import io.github.lutzseverino.cardo.identity.model.SessionCredential;
 import jakarta.servlet.http.Cookie;
 import java.time.Clock;
@@ -22,8 +23,10 @@ class SessionCookiePolicyTest {
 
   @Test
   void createsProductionAccessAndRefreshCookiesFromCredentialExpiry() {
-    var access = cookies.access(credential("access-secret", Duration.ofMinutes(5)));
-    var refresh = cookies.refresh(credential("refresh-secret", Duration.ofHours(8)));
+    var access =
+        cookies.access(credential("access-secret", Duration.ofMinutes(5)), browserSession());
+    var refresh =
+        cookies.refresh(credential("refresh-secret", Duration.ofHours(8)), browserSession());
 
     assertThat(access.getName()).isEqualTo("__Host-cardo.session");
     assertThat(access.getPath()).isEqualTo("/");
@@ -35,7 +38,7 @@ class SessionCookiePolicyTest {
 
     assertThat(refresh.getName()).isEqualTo("__Secure-cardo.refresh");
     assertThat(refresh.getPath()).isEqualTo("/api/v1/identity/sessions/current");
-    assertThat(refresh.getMaxAge()).isEqualTo(Duration.ofHours(8));
+    assertThat(refresh.getMaxAge()).isEqualTo(Duration.ofHours(1));
   }
 
   @Test
@@ -85,7 +88,10 @@ class SessionCookiePolicyTest {
                 false),
             Clock.fixed(NOW, ZoneOffset.UTC));
 
-    assertThat(local.access(credential("access-secret", Duration.ofMinutes(5))).toString())
+    assertThat(
+            local
+                .access(credential("access-secret", Duration.ofMinutes(5)), browserSession())
+                .toString())
         .startsWith("cardo.session=")
         .doesNotContain("Secure");
   }
@@ -99,6 +105,12 @@ class SessionCookiePolicyTest {
   private SessionCredential credential(String token, Duration lifetime) {
     return new SessionCredential(
         token, OffsetDateTime.ofInstant(NOW.plus(lifetime), ZoneOffset.UTC));
+  }
+
+  private BrowserSessionMetadata browserSession() {
+    OffsetDateTime now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    return new BrowserSessionMetadata(
+        now, now.minusMinutes(1), now.plusHours(1), now.plusHours(8), true);
   }
 
   private SessionProperties productionProperties() {

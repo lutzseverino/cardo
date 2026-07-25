@@ -27,6 +27,11 @@ fails startup before traffic is served, and errors name the property without ech
 | Identity | `cardo.identity.session.csrf-cookie-name` | string | `cardo.csrf` | `__Host-cardo.csrf` | no | Required production host-prefixed CSRF cookie; distinct from session names. |
 | Identity | `cardo.identity.session.refresh-cookie-path` | string | `${cardo.api.base-path}/identity/sessions/current` | required | no | Must be an absolute path. |
 | Identity | `cardo.identity.session.secure` | boolean | `false` | `true` | no | All production session cookies must be Secure. |
+| Identity | `cardo.identity.browser-session.idle-timeout` | duration | `30m` | optional | no | Positive and shorter than the absolute timeout; renewed only by explicit refresh. |
+| Identity | `cardo.identity.browser-session.absolute-timeout` | duration | `8h` | optional | no | Positive fixed lifetime that refresh cannot extend. |
+| Identity | `cardo.identity.browser-session.refresh-lease` | duration | `30s` | optional | no | Positive lease that serializes provider refresh-token rotation. |
+| Identity | `cardo.identity.browser-session.retention` | duration | `7d` | optional | no | Positive retention after revocation or absolute expiry. |
+| Identity | `cardo.identity.browser-session.cleanup-delay` | duration | `1h` | optional | no | Positive scheduled retention-cleanup delay. |
 | Identity | `cardo.identity.keycloak.base-url` | URI | `http://localhost:8080` | required | no | Remote HTTPS; canonical localhost, loopback, and unspecified literals rejected. |
 | Identity | `cardo.identity.keycloak.realm` | string | `cardo` | required | no | Non-blank; forms the expected issuer. |
 | Identity | `cardo.identity.keycloak.client-id` | string | `cardo-identity` | required | no | Non-blank runtime client identity; must differ from the fixed `identity` authorization catalog client in every runtime mode. |

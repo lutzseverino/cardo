@@ -3,6 +3,7 @@ package io.github.lutzseverino.cardo.identity.config;
 import io.github.lutzseverino.cardo.common.runtime.NetworkEndpointSafety;
 import io.github.lutzseverino.cardo.identity.IdentityPermissions;
 import java.net.URI;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
@@ -17,6 +18,11 @@ import org.springframework.web.client.RestTemplate;
 
 @Configuration
 class IdentityRuntimeConfiguration {
+
+  @Bean
+  Clock identityClock() {
+    return Clock.systemUTC();
+  }
 
   @Bean
   InitializingBean identityProductionConfigurationPolicy(

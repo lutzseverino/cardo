@@ -1,5 +1,6 @@
 package io.github.lutzseverino.cardo.identity.service;
 
+import io.github.lutzseverino.cardo.authorization.grant.EffectiveGrant;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenClient;
 import io.github.lutzseverino.cardo.authorization.token.RequestingPartyTokenRequest;
 import io.github.lutzseverino.cardo.common.api.ApiException;
@@ -9,6 +10,8 @@ import io.github.lutzseverino.cardo.identity.model.AuthenticatedPrincipal;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationMethod;
 import io.github.lutzseverino.cardo.identity.model.AuthenticationResult;
 import io.github.lutzseverino.cardo.identity.model.AuthorizationTokenResult;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionMetadata;
+import io.github.lutzseverino.cardo.identity.model.BrowserSessionRefresh;
 import io.github.lutzseverino.cardo.identity.model.CurrentAuthentication;
 import io.github.lutzseverino.cardo.identity.model.SessionCredential;
 import io.github.lutzseverino.cardo.identity.model.SessionResult;
@@ -20,6 +23,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import java.time.OffsetDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -33,71 +37,122 @@ public class AuthenticationService {
   private final AuthenticatedPrincipalReader principals;
   private final RequestingPartyTokenClient requestingPartyTokens;
   private final AuthorizationTokenReader authorizationTokens;
+  private final BrowserSessionService browserSessions;
 
   public SessionResult authenticate(@Valid AuthenticateInput input) {
     return authenticate(input.email(), input.password());
   }
 
   public SessionResult authenticate(@NotBlank @Email String email, @NotBlank String password) {
-    return establish(
-        identityProvider.issuePasswordSession(email, password), AuthenticationMethod.PASSWORD);
+    IdentityProvider.IssuedSession providerSession =
+        identityProvider.issuePasswordSession(email, password);
+    try {
+      return establishNew(providerSession, AuthenticationMethod.PASSWORD);
+    } catch (RuntimeException failure) {
+      revokeAfterFailedEstablishment(providerSession.refreshToken(), failure);
+      throw failure;
+    }
   }
 
   public SessionResult refresh(@NotBlank String refreshToken) {
-    return establish(identityProvider.refreshSession(refreshToken), AuthenticationMethod.OIDC);
+    BrowserSessionRefresh refresh = browserSessions.claimRefresh(refreshToken);
+    IdentityProvider.IssuedSession providerSession;
+    try {
+      providerSession = identityProvider.refreshSession(refreshToken);
+    } catch (ApiException failure) {
+      if ("invalid_session".equals(failure.code())) {
+        browserSessions.revokeRefresh(refresh);
+        throw sessionRevoked(failure);
+      }
+      browserSessions.releaseRefresh(refresh);
+      throw failure;
+    } catch (RuntimeException failure) {
+      browserSessions.releaseRefresh(refresh);
+      throw failure;
+    }
+
+    try {
+      Authorization authorization = authorizePrincipal(providerSession, AuthenticationMethod.OIDC);
+      BrowserSessionMetadata browserSession =
+          browserSessions.completeRefresh(
+              refresh,
+              providerSession.sessionId(),
+              providerSession.subject(),
+              providerSession.refreshToken(),
+              providerSession.refreshExpiresAt());
+      return result(providerSession, authorization, browserSession);
+    } catch (RuntimeException failure) {
+      browserSessions.revokeRefresh(refresh);
+      revokeAfterFailedEstablishment(providerSession.refreshToken(), failure);
+      throw failure;
+    }
   }
 
   public AuthenticationResult getCurrent(CurrentAuthentication current) {
     AuthenticatedPrincipal principal =
-        principal(
-            current.authorizationSubject(),
-            current.sessionId(),
-            AuthenticationMethod.OIDC,
-            current.expiresAt());
+        principal(current.authorizationSubject(), current.sessionId(), AuthenticationMethod.OIDC);
     assertOperational(principal);
-    return new AuthenticationResult(principal, current.grants());
+    BrowserSessionMetadata browserSession =
+        browserSessions
+            .current(current.sessionId(), current.authorizationSubject())
+            .orElseThrow(
+                () -> ApiException.of(401, "session_revoked", "The browser session was revoked."));
+    return new AuthenticationResult(
+        principal, current.grants(), current.authorizationExpiresAt(), browserSession);
   }
 
   public void revoke(@NotBlank String refreshToken) {
+    browserSessions.revoke(refreshToken);
     identityProvider.revokeSession(refreshToken);
   }
 
-  private SessionResult establish(
+  private SessionResult establishNew(
       IdentityProvider.IssuedSession providerSession, AuthenticationMethod authenticationMethod) {
-    try {
-      String authorizationToken = authorize(providerSession.accessToken());
-      AuthorizationTokenResult authorization = authorizationTokens.read(authorizationToken);
-      if (!providerSession.subject().equals(authorization.subject())) {
-        throw ApiException.of(
-            502,
-            "identity_authorization_subject_mismatch",
-            "Identity provider authorization token did not match the authenticated subject.");
-      }
-      AuthenticatedPrincipal principal =
-          principal(
-              providerSession.subject(),
-              providerSession.sessionId(),
-              authenticationMethod,
-              authorization.expiresAt());
-      assertOperational(principal);
-      return new SessionResult(
-          new AuthenticationResult(principal, authorization.grants()),
-          new SessionCredential(authorizationToken, authorization.expiresAt()),
-          new SessionCredential(
-              providerSession.refreshToken(), providerSession.refreshExpiresAt()));
-    } catch (RuntimeException exception) {
-      revokeAfterFailedEstablishment(providerSession.refreshToken(), exception);
-      throw exception;
+    Authorization authorization = authorizePrincipal(providerSession, authenticationMethod);
+    BrowserSessionMetadata browserSession =
+        browserSessions.start(
+            providerSession.sessionId(),
+            providerSession.subject(),
+            providerSession.refreshToken(),
+            providerSession.refreshExpiresAt());
+    return result(providerSession, authorization, browserSession);
+  }
+
+  private Authorization authorizePrincipal(
+      IdentityProvider.IssuedSession providerSession, AuthenticationMethod authenticationMethod) {
+    String authorizationToken = authorize(providerSession.accessToken());
+    AuthorizationTokenResult authorization = authorizationTokens.read(authorizationToken);
+    if (!providerSession.subject().equals(authorization.subject())) {
+      throw ApiException.of(
+          502,
+          "identity_authorization_subject_mismatch",
+          "Identity provider authorization token did not match the authenticated subject.");
     }
+    AuthenticatedPrincipal principal =
+        principal(providerSession.subject(), providerSession.sessionId(), authenticationMethod);
+    assertOperational(principal);
+    return new Authorization(
+        authorizationToken, authorization.expiresAt(), authorization.grants(), principal);
+  }
+
+  private SessionResult result(
+      IdentityProvider.IssuedSession providerSession,
+      Authorization authorization,
+      BrowserSessionMetadata browserSession) {
+    return new SessionResult(
+        new AuthenticationResult(
+            authorization.principal(),
+            authorization.grants(),
+            authorization.expiresAt(),
+            browserSession),
+        new SessionCredential(authorization.token(), authorization.expiresAt()),
+        new SessionCredential(providerSession.refreshToken(), providerSession.refreshExpiresAt()));
   }
 
   private AuthenticatedPrincipal principal(
-      String subject,
-      String sessionId,
-      AuthenticationMethod authenticationMethod,
-      OffsetDateTime expiresAt) {
+      String subject, String sessionId, AuthenticationMethod authenticationMethod) {
     return principals
-        .findByKeycloakSubject(subject, sessionId, authenticationMethod, expiresAt)
+        .findByKeycloakSubject(subject, sessionId, authenticationMethod)
         .orElseThrow(
             () ->
                 ApiException.notFound(
@@ -145,4 +200,17 @@ public class AuthenticationService {
       failure.addSuppressed(exception);
     }
   }
+
+  private ApiException sessionRevoked(ApiException providerFailure) {
+    ApiException failure =
+        ApiException.of(401, "session_revoked", "The browser session was revoked.");
+    failure.addSuppressed(providerFailure);
+    return failure;
+  }
+
+  private record Authorization(
+      String token,
+      OffsetDateTime expiresAt,
+      List<EffectiveGrant> grants,
+      AuthenticatedPrincipal principal) {}
 }

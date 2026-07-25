@@ -34,3 +34,4 @@ Use the [decision template](../_templates/decision.template.md) for new decision
 - [Use Durable Identity Credential-Setup Sagas](0002-use-durable-identity-credential-setup-sagas.md)
 - [Exchange Browser Sessions At Product Boundaries](0003-exchange-browser-sessions-at-product-boundaries.md)
 - [Bind UMA Adapters To Catalog Owners](0004-bind-uma-adapters-to-catalog-owners.md)
+- [Own Browser-Session Lifetimes In Identity](0005-own-browser-session-lifetimes-in-identity.md)

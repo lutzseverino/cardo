@@ -28,8 +28,8 @@ across sibling product origins are not supported.
 
 | Purpose | Production name | Path | Browser access | SameSite | Lifetime |
 | --- | --- | --- | --- | --- | --- |
-| Identity access | `__Host-cardo.session` | `/` | HTTP only | `Lax` | No later than access-token expiry |
-| Provider refresh | `__Secure-cardo.refresh` | Configured public current-session path | HTTP only | `Lax` | No later than refresh-token expiry |
+| Identity access | `__Host-cardo.session` | `/` | HTTP only | `Lax` | No later than access-token or browser-session expiry |
+| Provider refresh | `__Secure-cardo.refresh` | Configured public current-session path | HTTP only | `Lax` | No later than refresh-token or browser-session expiry |
 | CSRF | `__Host-cardo.csrf` | `/` | Readable | `Lax` | Browser session; no `Max-Age` or `Expires` |
 
 All production cookies are `Secure` and omit `Domain`. Creation, rotation, and expiry use identical
@@ -44,8 +44,11 @@ and CSRF cookie names, `refresh-cookie-path`, and `secure` are explicit properti
 prefix. Production accepts only the names in the table and `Secure=true`; invalid policy fails
 startup.
 
-The provider session owns idle and absolute lifetime. A cookie `Max-Age` must not exceed the expiry
-of the credential stored in that cookie.
+Identity owns the browser session's idle and absolute lifetime in its existing datastore. It stores
+only the provider session identity, a SHA-256 refresh-credential fingerprint, timestamps,
+revocation state, and refresh-serialization lease; raw credentials are never persisted. A cookie
+`Max-Age` must not exceed either the expiry of the credential stored in that cookie or the earliest
+browser-session deadline.
 
 `cardo.identity.session.refresh-cookie-path` is the exact externally visible path shared by current
 session, refresh, and logout. Its direct-service default is
@@ -70,6 +73,28 @@ An explicit Authorization header takes precedence when both header and cookies a
 Identity access tokens are never accepted directly as product authorization tokens. Product RPTs
 are never written to browser cookies. Identity routes that accept an explicit bearer token require
 the same exact Identity-session audience as the cookie token.
+
+Authentication, current-session, and refresh responses contain an authoritative `browserSession`
+object:
+
+| Field | Meaning |
+| --- | --- |
+| `serverTime` | Identity's UTC time for evaluating the returned deadlines without trusting browser clock accuracy. |
+| `sessionStartedAt` | Fixed start of the browser session. |
+| `idleExpiresAt` | Sliding deadline renewed only by a successful explicit refresh. |
+| `absoluteExpiresAt` | Fixed deadline that no refresh can extend. |
+| `refreshable` | Whether the session is eligible for explicit refresh at `serverTime`. |
+
+The existing top-level `expiresAt` remains the expiry of the current Identity authorization
+credential. Login sets all browser-session timestamps. `GET /identity/sessions/current`, product
+requests, and other normal traffic do not renew idle lifetime. Session responses use
+`Cache-Control: no-store`.
+
+Identity returns stable session failure codes: `session_idle_expired`,
+`session_absolute_expired`, `session_revoked`, `refresh_credential_required`,
+`refresh_credential_invalid`, `session_refresh_in_progress`, and
+`session_refresh_superseded`. Provider unavailability remains a retryable upstream failure rather
+than being mislabeled as expiry.
 
 ## CSRF
 

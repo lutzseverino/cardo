@@ -43,7 +43,9 @@ public class SessionController implements SessionsApi {
   public ResponseEntity<AuthenticatedPrincipalResponse> getCurrentPrincipal() {
     CurrentAuthentication current = currentJwt.current();
     AuthenticationResult authentication = authenticationService.getCurrent(current);
-    return ResponseEntity.ok(mapper.toResponse(authentication));
+    return ResponseEntity.ok()
+        .cacheControl(CacheControl.noStore())
+        .body(mapper.toResponse(authentication));
   }
 
   @Override
@@ -60,7 +62,8 @@ public class SessionController implements SessionsApi {
             .refresh(request)
             .orElseThrow(
                 () ->
-                    ApiException.of(401, "authentication_required", "Authentication is required."));
+                    ApiException.of(
+                        401, "refresh_credential_required", "A refresh credential is required."));
     return response(HttpStatus.OK, authenticationService.refresh(refreshToken));
   }
 
@@ -73,10 +76,19 @@ public class SessionController implements SessionsApi {
   private ResponseEntity<AuthenticatedPrincipalResponse> response(
       HttpStatus status, SessionResult session) {
     HttpHeaders headers = new HttpHeaders();
-    headers.add(HttpHeaders.SET_COOKIE, cookies.access(session.accessCredential()).toString());
-    headers.add(HttpHeaders.SET_COOKIE, cookies.refresh(session.refreshCredential()).toString());
+    headers.add(
+        HttpHeaders.SET_COOKIE,
+        cookies
+            .access(session.accessCredential(), session.authentication().browserSession())
+            .toString());
+    headers.add(
+        HttpHeaders.SET_COOKIE,
+        cookies
+            .refresh(session.refreshCredential(), session.authentication().browserSession())
+            .toString());
     return ResponseEntity.status(status)
         .headers(headers)
+        .cacheControl(CacheControl.noStore())
         .body(mapper.toResponse(session.authentication()));
   }
 
