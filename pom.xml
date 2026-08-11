@@ -99,7 +99,7 @@
     <springdoc.version>3.0.3</springdoc.version>
     <spring-modulith.version>2.0.6</spring-modulith.version>
     <spotless.version>3.4.0</spotless.version>
-    <stripe-java.version>31.0.0</stripe-java.version>
+    <stripe-java.version>33.1.1</stripe-java.version>
     <cardo.consumer-dependency-enforcement.skip>true</cardo.consumer-dependency-enforcement.skip>
     <swagger-parser.version>2.1.45</swagger-parser.version>
   </properties>
