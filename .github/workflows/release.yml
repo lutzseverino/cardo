@@ -432,7 +432,7 @@ jobs:
           echo "json=$(jq --compact-output . "$RUNNER_TEMP/image-digests.json")" >>"$GITHUB_OUTPUT"
       - name: Attest release files
         if: steps.central.outputs.state == 'published'
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
             ${{ runner.temp }}/signed/central-bundle.zip
@@ -441,21 +441,21 @@ jobs:
             ${{ runner.temp }}/candidate/images/*-image.cyclonedx.json
       - name: Attest Identity image
         if: steps.central.outputs.state == 'published'
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/lutzseverino/cardo/identity
           subject-digest: ${{ fromJSON(steps.image-digests.outputs.json).identity }}
           push-to-registry: false
       - name: Attest Invite image
         if: steps.central.outputs.state == 'published'
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/lutzseverino/cardo/invite
           subject-digest: ${{ fromJSON(steps.image-digests.outputs.json).invite }}
           push-to-registry: false
       - name: Attest Billing image
         if: steps.central.outputs.state == 'published'
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/lutzseverino/cardo/billing
           subject-digest: ${{ fromJSON(steps.image-digests.outputs.json).billing }}
